@@ -1,0 +1,14 @@
+name = "tailspin"
+version = "0.1.0"
+defaultTargets = ["tailspin"]
+
+[[lean_lib]]
+name = "Tailspin"
+
+[[lean_exe]]
+name = "tailspin"
+root = "Main"
+
+[[require]]
+name = "mathlib4"
+git = "https://github.com/leanprover-community/mathlib4"
