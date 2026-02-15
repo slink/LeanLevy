@@ -53,6 +53,15 @@ theorem norm_fourierTransform_le (ξ : ℝ) :
 /-- The Fourier transform of a finite measure is continuous. -/
 theorem continuous_fourierTransform :
     Continuous (fourierTransform μ) := by
-  sorry
+  unfold fourierTransform
+  apply continuous_of_dominated (bound := fun _ => 1)
+  · intro ξ
+    exact (by fun_prop : Continuous fun x => exp (↑(ξ * x) * I)).aestronglyMeasurable
+  · intro ξ
+    filter_upwards with x
+    simp only [norm_exp_ofReal_mul_I, le_refl]
+  · exact integrable_const 1
+  · filter_upwards with x
+    exact by fun_prop
 
 end MeasureTheory.FiniteMeasure
