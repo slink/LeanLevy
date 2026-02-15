@@ -90,6 +90,30 @@ def HasStationaryIncrements [AddGroup ι] [MeasurableSpace Ω] [MeasurableSpace 
     (X : ι → Ω → E) (μ : Measure Ω) : Prop :=
   ∀ (s h : ι), IdentDistrib (increment X s (s + h)) (increment X 0 h) μ μ
 
+section IncrementIndependence
+
+variable [Preorder ι] [MeasurableSpace Ω] [MeasurableSpace E] [Sub E]
+
+/-- For a process with independent increments, two consecutive non-overlapping
+increments are pairwise independent. -/
+theorem HasIndependentIncrements.indepFun_increment
+    {X : ι → Ω → E} {μ : Measure Ω} (h : HasIndependentIncrements X μ)
+    {s t u : ι} (hst : s ≤ t) (htu : t ≤ u) :
+    IndepFun (increment X s t) (increment X t u) μ := by
+  -- Define the time sequence [s, t, u] : Fin 3 → ι
+  let τ : Fin 3 → ι := ![s, t, u]
+  -- Show the time sequence is monotone
+  have hmono : Monotone τ := Fin.monotone_iff_le_succ.mpr fun i => by
+    fin_cases i
+    · show s ≤ t; exact hst
+    · show t ≤ u; exact htu
+  -- Get iIndepFun for the two increments
+  have hind := h 2 τ hmono
+  -- Extract pairwise independence for indices 0 and 1
+  exact hind.indepFun (i := 0) (j := 1) (by decide)
+
+end IncrementIndependence
+
 section FiltrationAdapted
 
 variable {m : MeasurableSpace Ω} [Preorder ι]
