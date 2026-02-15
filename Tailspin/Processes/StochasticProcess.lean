@@ -119,7 +119,9 @@ section FiltrationAdapted
 variable {m : MeasurableSpace Ω} [Preorder ι]
   [TopologicalSpace E] [MeasurableSpace E] [BorelSpace E]
 variable [TopologicalSpace.MetrizableSpace E]
+variable [Sub E] [MeasurableSub₂ E]
 
+omit [Sub E] [MeasurableSub₂ E] in
 /-- A process is strongly adapted to its natural filtration. This is a convenience
 wrapper around `Filtration.stronglyAdapted_natural` specialized to processes
 with a single value type. -/
@@ -128,6 +130,16 @@ theorem stronglyAdapted_naturalFiltration
     StronglyAdapted
       (Filtration.natural (fun i => X i) hX) (fun i => X i) :=
   Filtration.stronglyAdapted_natural hX
+
+omit [TopologicalSpace E] [BorelSpace E] [TopologicalSpace.MetrizableSpace E] in
+/-- If `X` is adapted to filtration `𝓕`, then `increment X s t` is `𝓕 t`-measurable
+when `s ≤ t`. -/
+theorem Adapted.measurable_increment
+    {𝓕 : Filtration ι m} {X : ι → Ω → E}
+    (hX : Adapted 𝓕 (fun i => X i))
+    {s t : ι} (hst : s ≤ t) :
+    Measurable[𝓕 t] (increment X s t) :=
+  (hX t).sub ((hX s).mono (𝓕.mono hst) le_rfl)
 
 end FiltrationAdapted
 
