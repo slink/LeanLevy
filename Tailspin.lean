@@ -2,3 +2,4 @@
 -- Import modules here that should be built as part of the library.
 import Tailspin.Basic
 import Tailspin.Fourier.MeasureFourier
+import Tailspin.Probability.Characteristic
