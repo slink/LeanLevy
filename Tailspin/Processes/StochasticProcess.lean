@@ -90,4 +90,21 @@ def HasStationaryIncrements [AddGroup ι] [MeasurableSpace Ω] [MeasurableSpace 
     (X : ι → Ω → E) (μ : Measure Ω) : Prop :=
   ∀ (s h : ι), IdentDistrib (increment X s (s + h)) (increment X 0 h) μ μ
 
+section FiltrationAdapted
+
+variable {m : MeasurableSpace Ω} [Preorder ι]
+  [TopologicalSpace E] [MeasurableSpace E] [BorelSpace E]
+variable [TopologicalSpace.MetrizableSpace E]
+
+/-- A process is strongly adapted to its natural filtration. This is a convenience
+wrapper around `Filtration.stronglyAdapted_natural` specialized to processes
+with a single value type. -/
+theorem stronglyAdapted_naturalFiltration
+    {X : ι → Ω → E} (hX : ∀ i, StronglyMeasurable (X i)) :
+    StronglyAdapted
+      (Filtration.natural (fun i => X i) hX) (fun i => X i) :=
+  Filtration.stronglyAdapted_natural hX
+
+end FiltrationAdapted
+
 end ProbabilityTheory
