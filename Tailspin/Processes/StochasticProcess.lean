@@ -6,6 +6,8 @@ Authors: Tailspin Contributors
 import Mathlib.Probability.Independence.Basic
 import Mathlib.Probability.IdentDistrib
 import Mathlib.MeasureTheory.Group.Arithmetic
+import Mathlib.Probability.Process.Adapted
+import Mathlib.Probability.Process.Filtration
 
 /-!
 # Stochastic Processes
@@ -18,6 +20,12 @@ ordered type `ι` with values in a measurable group `E`:
   along any monotone partition are mutually independent.
 * `ProbabilityTheory.HasStationaryIncrements X μ` — the law of an increment
   depends only on the length `h`, not the starting point `s`.
+* `ProbabilityTheory.stronglyAdapted_naturalFiltration` — a process is adapted to
+  its natural filtration.
+* `ProbabilityTheory.HasIndependentIncrements.indepFun_increment` — consecutive
+  non-overlapping increments are pairwise independent.
+* `ProbabilityTheory.Adapted.measurable_increment` — increments of an adapted
+  process are measurable w.r.t. the filtration at the later time.
 -/
 
 open MeasureTheory
