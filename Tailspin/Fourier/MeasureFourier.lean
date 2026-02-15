@@ -5,6 +5,7 @@ Released under MIT license as described in the file LICENSE.
 import Mathlib.MeasureTheory.Measure.FiniteMeasure
 import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import Mathlib.Analysis.SpecialFunctions.Complex.Circle
+import Mathlib.Analysis.Complex.Trigonometric
 
 /-!
 # Fourier Transform of Finite Borel Measures
@@ -39,7 +40,15 @@ noncomputable def fourierTransform (ξ : ℝ) : ℂ :=
 /-- The Fourier transform of a finite measure is bounded by the total mass. -/
 theorem norm_fourierTransform_le (ξ : ℝ) :
     ‖fourierTransform μ ξ‖ ≤ ↑μ.mass := by
-  sorry
+  unfold fourierTransform
+  calc ‖∫ x : ℝ, exp (↑(ξ * x) * I) ∂(μ : Measure ℝ)‖
+      ≤ ∫ x : ℝ, ‖exp (↑(ξ * x) * I)‖ ∂(μ : Measure ℝ) :=
+        norm_integral_le_integral_norm _
+    _ = ∫ _ : ℝ, (1 : ℝ) ∂(μ : Measure ℝ) := by
+        congr 1; ext x; simp only [norm_exp_ofReal_mul_I]
+    _ = ↑μ.mass := by
+        rw [integral_const, smul_eq_mul, mul_one, Measure.real,
+            ← ennreal_mass, ENNReal.coe_toReal]
 
 /-- The Fourier transform of a finite measure is continuous. -/
 theorem continuous_fourierTransform :
