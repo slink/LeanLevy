@@ -28,6 +28,10 @@ a statement of Bochner's positive-definiteness theorem.
 * `MeasureTheory.ProbabilityMeasure.continuous_characteristicFun` — `φ` is continuous.
 * `MeasureTheory.ProbabilityMeasure.characteristicFun_positiveSemiDefinite` —
   the matrix `(φ(ξⱼ - ξₖ))` is positive semi-definite.
+* `MeasureTheory.FiniteMeasure.fourierTransform_conv` — the Fourier transform is
+  multiplicative under measure convolution.
+* `MeasureTheory.ProbabilityMeasure.characteristicFun_conv` — the characteristic function
+  is multiplicative under measure convolution.
 -/
 
 open MeasureTheory Complex ComplexConjugate
@@ -43,6 +47,13 @@ theorem fourierTransform_eq_charFun (μ : FiniteMeasure ℝ) (ξ : ℝ) :
   congr 1; ext x
   push_cast
   ring
+
+/-- The Fourier transform is multiplicative under measure convolution:
+`μ̂ ∗ ν(ξ) = μ̂(ξ) · ν̂(ξ)`. -/
+theorem fourierTransform_conv (μ ν : FiniteMeasure ℝ) (ξ : ℝ) :
+    fourierTransform μ ξ * fourierTransform ν ξ =
+    charFun ((μ : Measure ℝ) ∗ (ν : Measure ℝ)) ξ := by
+  rw [fourierTransform_eq_charFun, fourierTransform_eq_charFun, charFun_conv]
 
 end MeasureTheory.FiniteMeasure
 
@@ -141,5 +152,12 @@ theorem characteristicFun_positiveSemiDefinite
       ≤ ∫ a, (f a).re ∂(μ : Measure ℝ) := integral_nonneg fun x => alg x
     _ = (∫ a, f a ∂(μ : Measure ℝ)).re :=
         (@RCLike.reCLM ℂ _).integral_comp_comm hI
+
+/-- The characteristic function is multiplicative under measure convolution:
+`φ_{μ ∗ ν}(ξ) = φ_μ(ξ) · φ_ν(ξ)`. -/
+theorem characteristicFun_conv (μ ν : ProbabilityMeasure ℝ) (ξ : ℝ) :
+    characteristicFun μ ξ * characteristicFun ν ξ =
+    charFun ((μ : Measure ℝ) ∗ (ν : Measure ℝ)) ξ := by
+  simp only [characteristicFun_def, charFun_conv]
 
 end MeasureTheory.ProbabilityMeasure
