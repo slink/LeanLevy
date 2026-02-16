@@ -7,6 +7,7 @@ import Tailspin.Processes.StochasticProcess
 import Tailspin.Processes.Cadlag
 import Mathlib.MeasureTheory.Measure.CharacteristicFunction
 import Mathlib.Probability.Independence.CharacteristicFunction
+import Mathlib.Analysis.SpecialFunctions.Complex.Log
 
 /-!
 # Lévy Processes
@@ -83,13 +84,19 @@ theorem identDistrib_increment {X : ℝ≥0 → Ω → E} {μ : Measure Ω}
 
 /-! ### Characteristic exponent -/
 
-/-- The **characteristic exponent** of a Lévy process, defined as the complex logarithm of the
-characteristic function of the time-1 marginal: `Ψ(ξ) = log(𝔼[exp(i⟨X₁, ξ⟩)])`. -/
+/-- The **characteristic exponent** of a Lévy process, defined as the limit
+`Ψ(ξ) = lim_{t→0+} log(φ(t))/t` where `φ(t) = charFun(μ.map(X t)) ξ`.
+
+For small `t > 0`, the characteristic function `φ(t)` is near 1 (since `φ(0) = 1` and `φ` is
+right-continuous), so the principal branch logarithm is well-defined and continuous. The limit
+exists because `log(φ(t))/t` is eventually constant (equal to the true exponent `c` satisfying
+`φ(t) = exp(tc)` for all `t`). -/
 noncomputable def charExponent
     [Inner ℝ E]
     {X : ℝ≥0 → Ω → E} {μ : Measure Ω}
     (_ : IsLevyProcess X μ) : E → ℂ :=
-  fun ξ => Complex.log (charFun (μ.map (X 1)) ξ)
+  fun ξ => limUnder (𝓝[>] (0 : ℝ≥0))
+    (fun t => Complex.log (charFun (μ.map (X t)) ξ) / ↑(t : ℝ))
 
 /-! ### Helper lemmas for Lévy–Khintchine factorisation -/
 
@@ -226,6 +233,16 @@ private theorem lk_charFun_ne_zero
   have := tendsto_nhds_unique this tendsto_const_nhds
   exact one_ne_zero this
 
+/-- Natural multiplicativity: `φ(n·s) = φ(s)^n`. -/
+private theorem lk_charFun_nat_mul
+    (h : IsLevyProcess X μ) (hX : ∀ t, Measurable (X t)) (n : ℕ) (s : ℝ≥0) (ξ : E) :
+    charFun (μ.map (X ((n : ℝ≥0) * s))) ξ = (charFun (μ.map (X s)) ξ) ^ n := by
+  induction n with
+  | zero => simp [show (0 : ℝ≥0) * s = 0 from zero_mul s, lk_charFun_zero h]
+  | succ n ih =>
+    rw [show ((n + 1 : ℕ) : ℝ≥0) * s = s + (n : ℝ≥0) * s from by push_cast; ring,
+        lk_charFun_mul h hX, ih, pow_succ, mul_comm]
+
 end LKHelpers
 
 /-- **Lévy–Khintchine factorisation**: the characteristic function of the time-`t` marginal
@@ -236,36 +253,239 @@ theorem charFun_eq_exp_mul
     {X : ℝ≥0 → Ω → E} {μ : Measure Ω} [IsProbabilityMeasure μ]
     (h : IsLevyProcess X μ) (hX : ∀ t, Measurable (X t)) (t : ℝ≥0) (ξ : E) :
     charFun (μ.map (X t)) ξ = exp (↑(t : ℝ) * h.charExponent ξ) := by
-  set φ : ℝ≥0 → ℂ := fun t => charFun (μ.map (X t)) ξ
-  set ψ : ℂ := h.charExponent ξ
-  -- φ(1) = exp(ψ)
-  have hφ1_ne : φ 1 ≠ 0 := lk_charFun_ne_zero h hX 1 ξ
-  have hexp_ψ : exp ψ = φ 1 := exp_log hφ1_ne
-  -- φ(n) = φ(1)^n for natural n
-  have hφ_nat : ∀ n : ℕ, φ (n : ℝ≥0) = (φ 1) ^ n := by
-    intro n; induction n with
-    | zero => show charFun _ ξ = _; simp [lk_charFun_zero h]
-    | succ n ih =>
-      show charFun (μ.map (X ((n + 1 : ℕ) : ℝ≥0))) ξ = _
-      rw [show ((n + 1 : ℕ) : ℝ≥0) = 1 + (n : ℝ≥0) from by push_cast; ring,
-        lk_charFun_mul h hX]
-      change φ 1 * φ (n : ℝ≥0) = _
-      rw [ih, pow_succ, mul_comm]
-  -- φ(k/n) = φ(1/n)^k
+  set φ : ℝ≥0 → ℂ := fun t => charFun (μ.map (X t)) ξ with hφ_def
+  -- Basic properties
+  have hφ0 : φ 0 = 1 := lk_charFun_zero h ξ
+  have hφ_ne : ∀ t, φ t ≠ 0 := fun t => lk_charFun_ne_zero h hX t ξ
+  have hφ_mul : ∀ s k, φ (s + k) = φ s * φ k :=
+    fun s k => lk_charFun_mul h hX s k ξ
+  have hφ_pow : ∀ (n : ℕ) (s : ℝ≥0), φ ((n : ℝ≥0) * s) = (φ s) ^ n :=
+    fun n s => lk_charFun_nat_mul h hX n s ξ
   have hφ_rat : ∀ (k n : ℕ), φ ((k : ℝ≥0) / (n : ℝ≥0)) = (φ (1 / (n : ℝ≥0))) ^ k :=
     fun k n => lk_charFun_rat_pow h hX k n ξ
-  -- φ(1/n)^n = φ(1) for positive n
-  have hφ_root : ∀ n : ℕ, 0 < n → (φ (1 / (n : ℝ≥0))) ^ n = φ 1 := by
+  -- 𝓝[≥] 0 = 𝓝 0 in ℝ≥0 (all elements are ≥ 0)
+  have hIci_eq : 𝓝[≥] (0 : ℝ≥0) = 𝓝 0 := by
+    rw [show Set.Ici (0 : ℝ≥0) = Set.univ from
+      Set.eq_univ_of_forall (fun x => zero_le x), nhdsWithin_univ]
+  -- φ → 1 as t → 0 in ℝ≥0
+  have hφ_tendsto0 : Tendsto φ (𝓝 (0 : ℝ≥0)) (𝓝 1) := by
+    rw [← hIci_eq, ← hφ0]; exact lk_charFun_rightCts h hX 0 ξ
+  -- ═══════════════════════════════════════════════════════
+  -- PHASE 1: Find δ > 0 with 0 < re(φ(t)) for t < δ
+  -- ═══════════════════════════════════════════════════════
+  obtain ⟨δ, hδ_pos, hδ_re⟩ : ∃ δ : ℝ≥0, 0 < δ ∧ ∀ t : ℝ≥0, t < δ → 0 < (φ t).re := by
+    have hmem : {z : ℂ | 0 < z.re} ∈ 𝓝 (1 : ℂ) :=
+      (isOpen_lt continuous_const Complex.continuous_re).mem_nhds (by simp)
+    obtain ⟨ε, hε_pos, hε_sub⟩ := Metric.eventually_nhds_iff.mp (hφ_tendsto0.eventually hmem)
+    refine ⟨⟨ε, hε_pos.le⟩, ?_, fun t ht => hε_sub ?_⟩
+    · exact_mod_cast hε_pos
+    · simp only [NNReal.dist_eq, NNReal.coe_zero, sub_zero, abs_of_nonneg t.coe_nonneg]
+      exact_mod_cast ht
+  -- ═══════════════════════════════════════════════════════
+  -- PHASE 2: Log-additivity for t < δ
+  -- ═══════════════════════════════════════════════════════
+  -- When 0 < re(φ(t)), |arg(φ(t))| < π/2
+  have harg_small : ∀ t : ℝ≥0, t < δ → |arg (φ t)| < Real.pi / 2 :=
+    fun t ht => abs_arg_lt_pi_div_two_iff.mpr (Or.inl (hδ_re t ht))
+  -- log(φ(s) * φ(t)) = log(φ(s)) + log(φ(t)) when s, t < δ
+  have hlog_mul : ∀ s t : ℝ≥0, s < δ → t < δ →
+      log (φ s * φ t) = log (φ s) + log (φ t) := by
+    intro s t hs ht
+    apply log_mul (hφ_ne s) (hφ_ne t)
+    constructor
+    · have h1 := (abs_lt.mp (harg_small s hs)).1
+      have h2 := (abs_lt.mp (harg_small t ht)).1
+      linarith
+    · have h1 := (abs_lt.mp (harg_small s hs)).2
+      have h2 := (abs_lt.mp (harg_small t ht)).2
+      linarith
+  -- log(φ(n*s)) = n * log(φ(s)) when n*s < δ
+  have hlog_pow : ∀ (n : ℕ) (s : ℝ≥0), (n : ℝ≥0) * s < δ →
+      log (φ ((n : ℝ≥0) * s)) = ↑(n : ℤ) * log (φ s) := by
+    intro n; induction n with
+    | zero => intro s _; simp [show (0 : ℝ≥0) * s = 0 from zero_mul s, hφ0, log_one]
+    | succ n ih =>
+      intro s hs
+      have hs_lt : s < δ := lt_of_le_of_lt
+        (le_mul_of_one_le_left s.2 (by exact_mod_cast Nat.succ_pos n)) hs
+      have hns_lt : (n : ℝ≥0) * s < δ := lt_of_le_of_lt
+        (mul_le_mul_of_nonneg_right (by exact_mod_cast Nat.le_succ n) s.2) hs
+      rw [show ((n + 1 : ℕ) : ℝ≥0) * s = s + (n : ℝ≥0) * s from by push_cast; ring]
+      rw [show φ (s + (n : ℝ≥0) * s) = φ s * φ ((n : ℝ≥0) * s) from hφ_mul _ _]
+      rw [hlog_mul s ((n : ℝ≥0) * s) hs_lt hns_lt, ih s hns_lt]
+      push_cast; ring
+  -- ═══════════════════════════════════════════════════════
+  -- PHASE 3: Define the exponent c and prove constancy
+  -- ═══════════════════════════════════════════════════════
+  obtain ⟨N, hN_pos, hN_small⟩ : ∃ N : ℕ, 0 < N ∧ (1 : ℝ≥0) / (N : ℝ≥0) < δ := by
+    obtain ⟨n, hn⟩ := exists_nat_gt ((δ : ℝ)⁻¹)
+    have hn_pos : 0 < n := by
+      exact_mod_cast lt_trans (inv_pos.mpr (by positivity : (0 : ℝ) < δ)) hn
+    refine ⟨n, hn_pos, ?_⟩
+    rw [show (1 : ℝ≥0) / (n : ℝ≥0) < δ ↔ ((1 : ℝ) / (n : ℝ) < (δ : ℝ)) from by
+      rw [← NNReal.coe_lt_coe]; simp]
+    rw [one_div]
+    calc (↑n : ℝ)⁻¹ = 1 / ↑n := (one_div _).symm
+      _ < 1 / (δ : ℝ)⁻¹ :=
+          one_div_lt_one_div_of_lt (inv_pos.mpr (by positivity : (0 : ℝ) < ↑δ)) hn
+      _ = ↑δ := by rw [one_div, inv_inv]
+  set c : ℂ := ↑(N : ℤ) * log (φ (1 / (N : ℝ≥0))) with hc_def
+  -- n * log(φ(1/n)) = c for all n with 1/n < δ and n > 0
+  have hconst : ∀ n : ℕ, 0 < n → (1 : ℝ≥0) / (n : ℝ≥0) < δ →
+      ↑(n : ℤ) * log (φ (1 / (n : ℝ≥0))) = c := by
+    intro n hn hn_lt
+    have hn_ne : (n : ℝ≥0) ≠ 0 := Nat.cast_ne_zero.mpr (by omega)
+    have hN_ne : (N : ℝ≥0) ≠ 0 := Nat.cast_ne_zero.mpr (by omega)
+    -- Key identities in ℝ≥0
+    have hNnN : (N : ℝ≥0) * (1 / ((n * N : ℕ) : ℝ≥0)) = 1 / (n : ℝ≥0) := by
+      rw [Nat.cast_mul, one_div, one_div, mul_inv, mul_comm (n : ℝ≥0)⁻¹,
+          ← mul_assoc, mul_inv_cancel₀ hN_ne, one_mul]
+    have hnnN : (n : ℝ≥0) * (1 / ((n * N : ℕ) : ℝ≥0)) = 1 / (N : ℝ≥0) := by
+      rw [Nat.cast_mul, one_div, one_div, mul_inv, ← mul_assoc,
+          mul_inv_cancel₀ hn_ne, one_mul]
+    -- Apply hlog_pow in both directions
+    have h1 := hlog_pow N (1 / ((n * N : ℕ) : ℝ≥0)) (by rw [hNnN]; exact hn_lt)
+    rw [hNnN] at h1
+    have h2 := hlog_pow n (1 / ((n * N : ℕ) : ℝ≥0)) (by rw [hnnN]; exact hN_small)
+    rw [hnnN] at h2
+    -- n * log(φ(1/n)) = n * N * log(φ(1/(nN))) = N * log(φ(1/N)) = c
+    calc ↑(n : ℤ) * log (φ (1 / (n : ℝ≥0)))
+        = ↑(n : ℤ) * (↑(N : ℤ) * log (φ (1 / ((n * N : ℕ) : ℝ≥0)))) := by rw [h1]
+      _ = ↑(N : ℤ) * (↑(n : ℤ) * log (φ (1 / ((n * N : ℕ) : ℝ≥0)))) := by ring
+      _ = ↑(N : ℤ) * log (φ (1 / (N : ℝ≥0))) := by rw [h2]
+  -- ═══════════════════════════════════════════════════════
+  -- PHASE 4: Rational formula φ(k/n) = exp(c * k/n)
+  -- ═══════════════════════════════════════════════════════
+  -- Helper: φ(1/n) = exp(c/n) for all n > 0
+  have hφ_inv_exp : ∀ n : ℕ, 0 < n → φ (1 / (n : ℝ≥0)) = exp (c / ↑(n : ℕ)) := by
     intro n hn
-    have := hφ_rat n n
-    rw [show (n : ℝ≥0) / (n : ℝ≥0) = 1 from div_self (Nat.cast_ne_zero.mpr (by omega))] at this
-    rw [← this]
-  -- Both φ and t ↦ exp(t*ψ) are right-continuous and agree on ℚ≥0.
-  -- The remaining gap: showing φ(1/n) = exp(ψ/n) (not just an arbitrary nth root of exp(ψ)).
-  -- This requires a branch-cut argument: for large n, φ(1/n) is near 1, so log(φ(1/n)) is in
-  -- the principal branch, and n*log(φ(1/n)) = ψ + 2πik forces k=0 by a size estimate.
-  -- Once φ agrees with exp(t*ψ) on ℚ≥0, density + right-continuity gives equality everywhere.
-  sorry
+    have hn_ne : (n : ℝ≥0) ≠ 0 := Nat.cast_ne_zero.mpr (by omega)
+    have hN_ne : (N : ℝ≥0) ≠ 0 := Nat.cast_ne_zero.mpr (by omega)
+    have hnN_pos : 0 < n * N := Nat.mul_pos hn hN_pos
+    have hnN_ne : (n * N : ℕ) ≠ 0 := by omega
+    -- 1/(nN) < δ since N ≤ nN and 1/N < δ
+    have hnN_small : (1 : ℝ≥0) / ((n * N : ℕ) : ℝ≥0) < δ :=
+      lt_of_le_of_lt
+        (one_div_le_one_div_of_le (Nat.cast_pos.mpr hN_pos)
+          (by exact_mod_cast Nat.le_mul_of_pos_left N hn))
+        hN_small
+    -- (nN) * log(φ(1/(nN))) = c
+    have hlog_nN := hconst (n * N) hnN_pos hnN_small
+    -- φ(1/(nN)) = exp(c/(nN))
+    have hφ_nN : φ (1 / ((n * N : ℕ) : ℝ≥0)) = exp (c / ↑(n * N : ℕ)) := by
+      rw [← exp_log (hφ_ne _)]; congr 1
+      have hne : (↑(n * N : ℕ) : ℂ) ≠ 0 := Nat.cast_ne_zero.mpr hnN_ne
+      have hmul : (↑(n * N : ℕ) : ℂ) * log (φ (1 / ↑(n * N))) = c := by exact_mod_cast hlog_nN
+      rw [mul_comm] at hmul
+      exact (div_eq_of_eq_mul hne hmul.symm).symm
+    -- φ(1/n) = φ(N/(nN)) = φ(1/(nN))^N
+    have hNnN : (N : ℝ≥0) * (1 / ((n * N : ℕ) : ℝ≥0)) = 1 / (n : ℝ≥0) := by
+      rw [Nat.cast_mul, one_div, one_div, mul_inv, mul_comm (n : ℝ≥0)⁻¹,
+          ← mul_assoc, mul_inv_cancel₀ hN_ne, one_mul]
+    rw [← hNnN, hφ_pow N, hφ_nN, ← exp_nat_mul]; congr 1
+    push_cast [Nat.cast_mul]
+    field_simp [show (n : ℂ) ≠ 0 from Nat.cast_ne_zero.mpr (by omega),
+                show (N : ℂ) ≠ 0 from Nat.cast_ne_zero.mpr (by omega)]
+  -- Rational formula: φ(k/n) = exp(c * k/n)
+  have hrat_exp : ∀ (k n : ℕ), 0 < n →
+      φ ((k : ℝ≥0) / (n : ℝ≥0)) = exp (c * ↑((k : ℝ) / (n : ℝ))) := by
+    intro k n hn
+    rw [hφ_rat k n, hφ_inv_exp n hn, ← exp_nat_mul]; congr 1
+    push_cast
+    field_simp [show (n : ℂ) ≠ 0 from Nat.cast_ne_zero.mpr (by omega)]
+  -- ═══════════════════════════════════════════════════════
+  -- PHASE 5: Extension to all t via right-continuity + density
+  -- ═══════════════════════════════════════════════════════
+  have hext : ∀ t : ℝ≥0, φ t = exp (c * ↑(t : ℝ)) := by
+    intro t
+    -- Work with ℝ-valued ceiling sequence f(m) = ⌈t*(m+1)⌉₊/(m+1)
+    have hf_ge : ∀ m : ℕ, (t : ℝ) ≤ ↑⌈(t : ℝ) * ↑(m + 1)⌉₊ / ↑(m + 1) :=
+      fun m => (le_div_iff₀ (by positivity : (0 : ℝ) < ↑(m + 1))).mpr (Nat.le_ceil _)
+    have hf_le : ∀ m : ℕ, (↑⌈(t : ℝ) * ↑(m + 1)⌉₊ : ℝ) / ↑(m + 1) ≤ (t : ℝ) + 1 / ↑(m + 1) :=
+      fun m => by
+        have hm_pos : (0 : ℝ) < ↑(m + 1) := by positivity
+        calc (↑⌈(t : ℝ) * ↑(m + 1)⌉₊ : ℝ) / ↑(m + 1)
+            ≤ ((t : ℝ) * ↑(m + 1) + 1) / ↑(m + 1) :=
+              div_le_div_of_nonneg_right (Nat.ceil_lt_add_one (by positivity)).le hm_pos.le
+          _ = (t : ℝ) + 1 / ↑(m + 1) := by
+              rw [add_div, mul_div_cancel_right₀ _ (ne_of_gt hm_pos)]
+    have hf_tendsto : Tendsto (fun m : ℕ => (↑⌈(t : ℝ) * ↑(m + 1)⌉₊ : ℝ) / ↑(m + 1))
+        atTop (𝓝 (t : ℝ)) := by
+      have h_upper : Tendsto (fun m : ℕ => (t : ℝ) + 1 / ↑(m + 1)) atTop (𝓝 (t : ℝ)) := by
+        have h0 : Tendsto (fun m : ℕ => (1 : ℝ) / (↑(m + 1) : ℝ)) atTop (𝓝 0) :=
+          (tendsto_const_nhds (x := (1 : ℝ))).div_atTop
+            ((tendsto_natCast_atTop_atTop (R := ℝ)).comp (tendsto_add_atTop_nat 1))
+        have := (tendsto_const_nhds (x := (t : ℝ))).add h0
+        rwa [add_zero] at this
+      exact tendsto_of_tendsto_of_tendsto_of_le_of_le tendsto_const_nhds h_upper
+        hf_ge hf_le
+    -- Lift to NNReal for right-continuity argument
+    -- g m = ⌈t*(m+1)⌉₊/(m+1) as NNReal
+    let g : ℕ → ℝ≥0 := fun m =>
+      (⌈(t : ℝ) * ↑(m + 1)⌉₊ : ℝ≥0) / ((m + 1 : ℕ) : ℝ≥0)
+    have hg_coe : ∀ m, (g m : ℝ) = ↑⌈(t : ℝ) * ↑(m + 1)⌉₊ / ↑(m + 1) := fun m => by
+      show NNReal.toReal _ = _; rw [NNReal.coe_div, NNReal.coe_natCast, NNReal.coe_natCast]
+    have hg_ge : ∀ m, t ≤ g m := fun m =>
+      NNReal.coe_le_coe.mp (by rw [hg_coe]; exact hf_ge m)
+    have hg_real : Tendsto (fun m => (g m : ℝ)) atTop (𝓝 (t : ℝ)) :=
+      hf_tendsto.congr (fun m => (hg_coe m).symm)
+    -- g m → t in 𝓝[≥] t
+    have hg_nhds : Tendsto g atTop (𝓝[≥] t) :=
+      tendsto_nhdsWithin_iff.mpr
+        ⟨NNReal.tendsto_coe.mp hg_real, Eventually.of_forall fun m => hg_ge m⟩
+    -- φ(g m) → φ(t) via right-continuity
+    have hφ_lim : Tendsto (fun m => φ (g m)) atTop (𝓝 (φ t)) :=
+      (lk_charFun_rightCts h hX t ξ).comp hg_nhds
+    -- φ(g m) = exp(c * g m) by hrat_exp
+    have hg_eq : ∀ m, φ (g m) = exp (c * ↑(g m : ℝ)) := fun m => by
+      rw [hg_coe]; exact hrat_exp _ _ (by omega)
+    -- exp(c * g m) → exp(c * t) via continuity
+    have hexp_lim : Tendsto (fun m => exp (c * ↑(g m : ℝ))) atTop (𝓝 (exp (c * ↑(t : ℝ)))) :=
+      (continuous_exp.tendsto _).comp
+        (tendsto_const_nhds.mul ((continuous_ofReal.tendsto _).comp hg_real))
+    -- Conclude by uniqueness of limits
+    rw [show (fun m => φ (g m)) = (fun m => exp (c * ↑(g m : ℝ))) from funext hg_eq] at hφ_lim
+    exact tendsto_nhds_unique hφ_lim hexp_lim
+  -- ═══════════════════════════════════════════════════════
+  -- PHASE 6: charExponent = c
+  -- ═══════════════════════════════════════════════════════
+  have hce : h.charExponent ξ = c := by
+    simp only [charExponent]
+    apply Filter.Tendsto.limUnder_eq
+    -- For small t > 0, log(φ t)/t = log(exp(ct))/t = ct/t = c
+    set δ₂ : ℝ≥0 := ⟨Real.pi / (|c.im| + 1), by positivity⟩
+    apply tendsto_const_nhds.congr'
+    filter_upwards [self_mem_nhdsWithin,
+      nhdsWithin_le_nhds (Iio_mem_nhds (show (0 : ℝ≥0) < δ₂ from by
+        change (0 : ℝ) < Real.pi / (|c.im| + 1); positivity))]
+      with t (ht_pos : 0 < t) (ht_small : t < δ₂)
+    symm; change log (φ t) / ↑↑t = c
+    have ht_real_pos : (0 : ℝ) < (t : ℝ) := by exact_mod_cast ht_pos
+    rw [hext t]
+    -- Need: log(exp(c * ↑t)) = c * ↑t, then divide by ↑t
+    have him : (c * ↑(t : ℝ)).im = c.im * (t : ℝ) := by
+      simp [Complex.mul_im, Complex.ofReal_re, Complex.ofReal_im]
+    have him_bound : |c.im * (t : ℝ)| < Real.pi := by
+      by_cases hc : c.im = 0
+      · simp [hc, Real.pi_pos]
+      · have ht_lt : (t : ℝ) < Real.pi / (|c.im| + 1) := by exact_mod_cast ht_small
+        calc |c.im * (t : ℝ)|
+            = |c.im| * (t : ℝ) := by rw [abs_mul, abs_of_nonneg ht_real_pos.le]
+          _ < |c.im| * (Real.pi / (|c.im| + 1)) :=
+              mul_lt_mul_of_pos_left ht_lt (abs_pos.mpr hc)
+          _ ≤ Real.pi := by
+              have hne : |c.im| + 1 ≠ 0 := by linarith [abs_nonneg c.im]
+              calc |c.im| * (Real.pi / (|c.im| + 1))
+                  ≤ (|c.im| + 1) * (Real.pi / (|c.im| + 1)) :=
+                    mul_le_mul_of_nonneg_right (le_add_of_nonneg_right zero_le_one)
+                      (div_nonneg Real.pi_pos.le (by linarith [abs_nonneg c.im]))
+                _ = Real.pi := mul_div_cancel₀ Real.pi hne
+    rw [log_exp (by rw [him]; linarith [(abs_lt.mp him_bound).1])
+                (by rw [him]; linarith [(abs_lt.mp him_bound).2]),
+        mul_div_cancel_right₀ c (by exact_mod_cast ne_of_gt ht_real_pos : (↑(t:ℝ) : ℂ) ≠ 0)]
+  -- Conclusion
+  show φ t = exp (↑(t : ℝ) * h.charExponent ξ)
+  rw [hce, mul_comm, hext t]
 
 end IsLevyProcess
 
