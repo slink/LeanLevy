@@ -1,6 +1,7 @@
 /-
-Copyright (c) 2026. All rights reserved.
+Copyright (c) 2026 LeanLevy Contributors. All rights reserved.
 Released under MIT license as described in the file LICENSE.
+Authors: LeanLevy Contributors
 -/
 import Mathlib.Probability.Distributions.Poisson
 import Mathlib.Probability.ProbabilityMassFunction.Integrals
