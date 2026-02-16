@@ -5,6 +5,7 @@ Released under MIT license as described in the file LICENSE.
 import Tailspin.Processes.LevyProcess
 import Tailspin.Probability.Poisson
 import Mathlib.Probability.ProbabilityMassFunction.Integrals
+import Mathlib.Probability.Independence.CharacteristicFunction
 
 /-!
 # Poisson Process
@@ -13,7 +14,7 @@ This file defines the Poisson process as a structure predicate and derives key p
 
 * `ProbabilityTheory.IsPoissonProcess` — a counting process `N : ℝ≥0 → Ω → ℕ` is a Poisson
   process with rate `r` if it starts at zero, has independent increments (via ℤ embedding),
-  and each increment `N(s+h) - N(s)` has Poisson(r·h) distribution.
+  each increment `N(s+h) - N(s)` has Poisson(r·h) distribution, and a.e. sample path is càdlàg.
 
 * `ProbabilityTheory.IsPoissonProcess.hasStationaryIncrements` — stationary increments follow
   from the Poisson increment assumption.
@@ -50,7 +51,8 @@ variable {Ω : Type*} [MeasurableSpace Ω]
 /-- A counting process `N : ℝ≥0 → Ω → ℕ` is a **Poisson process** with rate `rate` if:
 1. It starts at zero: `N 0 = 0`.
 2. Its ℤ-valued embedding has independent increments.
-3. Each increment `N(s+h) - N(s)` has Poisson(`rate * h`) distribution. -/
+3. Each increment `N(s+h) - N(s)` has Poisson(`rate * h`) distribution.
+4. Almost every sample path (ℤ-embedded) is càdlàg. -/
 structure IsPoissonProcess (N : ℝ≥0 → Ω → ℕ) (rate : ℝ≥0) (μ : Measure Ω) : Prop where
   /-- The process starts at zero. -/
   start_zero : N 0 = fun _ => 0
@@ -59,6 +61,8 @@ structure IsPoissonProcess (N : ℝ≥0 → Ω → ℕ) (rate : ℝ≥0) (μ : M
   /-- Each increment has Poisson distribution. -/
   increment_poisson : ∀ (s h : ℝ≥0),
     μ.map (fun ω => N (s + h) ω - N s ω) = poissonMeasure (rate * h)
+  /-- Almost every sample path is càdlàg (right-continuous with left limits). -/
+  cadlag_paths : ∀ᵐ ω ∂μ, IsCadlag (fun t => (N t ω : ℤ))
 
 /-! ## Derived lemmas -/
 
@@ -76,11 +80,139 @@ agree using `increment_poisson`. -/
 theorem hasStationaryIncrements (h : IsPoissonProcess N rate μ) :
     HasStationaryIncrements (fun t ω => (N t ω : ℤ)) μ := by
   intro s k
-  -- Both increments have the same pushforward measure.
-  -- Strategy: both equal (poissonMeasure (rate * k)).map (Nat.cast : ℕ → ℤ).
-  -- This requires showing the ℤ increment = ℕ increment cast to ℤ,
-  -- which needs monotonicity of N.
-  sorry
+  -- Notation: Xℤ t ω = (N t ω : ℤ)
+  set Xℤ : ℝ≥0 → Ω → ℤ := fun t ω => (N t ω : ℤ) with hXℤ_def
+  -- Derive IsProbabilityMeasure μ from increment_poisson
+  have hprob : IsProbabilityMeasure μ := by
+    have hmapeq : μ.map (fun ω => N (0 + 0) ω - N 0 ω) = poissonMeasure (rate * 0) :=
+      h.increment_poisson 0 0
+    haveI : IsProbabilityMeasure (μ.map (fun ω => N (0 + 0) ω - N 0 ω)) := hmapeq ▸ inferInstance
+    exact Measure.isProbabilityMeasure_of_map (fun ω => N (0 + 0) ω - N 0 ω)
+  -- Int.cast : ℤ → ℝ is a MeasurableEmbedding (injective + discrete σ-algebra)
+  have hmembed : MeasurableEmbedding (Int.cast : ℤ → ℝ) :=
+    ⟨Int.cast_injective, measurable_from_top,
+      fun {t} _ => (t.to_countable.image _).measurableSet⟩
+  -- N t is AEMeasurable for any t (from increment_poisson giving a probability measure)
+  have haem_N : ∀ t : ℝ≥0, AEMeasurable (N t) μ := by
+    intro t
+    apply AEMeasurable.of_map_ne_zero
+    rw [show N t = fun ω => N (0 + t) ω - N 0 ω from by
+      ext ω; simp [congr_fun h.start_zero ω]]
+    rw [h.increment_poisson 0 t]
+    exact IsProbabilityMeasure.ne_zero _
+  -- ℝ-valued abbreviations
+  set Ns : Ω → ℝ := fun ω => (N s ω : ℝ)
+  set Nsk : Ω → ℝ := fun ω => (N (s + k) ω : ℝ)
+  set Nk : Ω → ℝ := fun ω => (N k ω : ℝ)
+  set diffR : Ω → ℝ := Nsk - Ns
+  -- AEMeasurability for ℝ-valued functions
+  have haem_Ns : AEMeasurable Ns μ :=
+    (measurable_from_top (α := ℕ)).comp_aemeasurable (haem_N s)
+  have haem_Nsk : AEMeasurable Nsk μ :=
+    (measurable_from_top (α := ℕ)).comp_aemeasurable (haem_N (s + k))
+  have haem_Nk : AEMeasurable Nk μ :=
+    (measurable_from_top (α := ℕ)).comp_aemeasurable (haem_N k)
+  have haem_diffR : AEMeasurable diffR μ := haem_Nsk.sub haem_Ns
+  -- AEMeasurability for ℤ-valued increments
+  have haem_Xℤ : ∀ t : ℝ≥0, AEMeasurable (Xℤ t) μ := fun t =>
+    (measurable_from_top (α := ℕ)).comp_aemeasurable (haem_N t)
+  have haem_incr_sk : AEMeasurable (increment Xℤ s (s + k)) μ :=
+    (haem_Xℤ (s + k)).sub (haem_Xℤ s)
+  have haem_incr_0k : AEMeasurable (increment Xℤ 0 k) μ :=
+    (haem_Xℤ k).sub (haem_Xℤ 0)
+  -- Step 1: Independence of (Xℤ s) and (increment Xℤ s (s+k)), then compose to ℝ
+  have hindep_ℤ : IndepFun (Xℤ s) (increment Xℤ s (s + k)) μ := by
+    have h0 : increment Xℤ 0 s = Xℤ s := by
+      ext ω; simp [increment_apply, hXℤ_def, congr_fun h.start_zero ω]
+    rw [← h0]
+    exact h.indep_increments.indepFun_increment (zero_le s) le_self_add
+  have hNs_eq : Ns = (Int.cast : ℤ → ℝ) ∘ Xℤ s := by ext ω; simp [Ns, hXℤ_def]
+  have hdiffR_eq : diffR = (Int.cast : ℤ → ℝ) ∘ increment Xℤ s (s + k) := by
+    ext ω; simp [diffR, Nsk, Ns, increment_apply, hXℤ_def]
+  have hindep_ℝ : IndepFun Ns diffR μ := by
+    rw [hNs_eq, hdiffR_eq]
+    exact hindep_ℤ.comp hmembed.measurable hmembed.measurable
+  -- Step 2: Nsk = Ns + diffR
+  have hdecomp : Nsk = Ns + diffR := by ext ω; simp [Nsk, Ns, diffR, Pi.add_apply, Pi.sub_apply]
+  -- Step 3: CharFun factorization via independence
+  have hcf_prod : charFun (μ.map Nsk) = charFun (μ.map Ns) * charFun (μ.map diffR) := by
+    rw [hdecomp]; exact hindep_ℝ.charFun_map_add_eq_mul haem_Ns haem_diffR
+  -- Step 4: Compute charFun of Nt (inlined from charFun_eq / map_natCast_eq)
+  -- First prove the charFun formula for the Poisson measure pushed to ℝ
+  have hcf_poisson : ∀ (r : ℝ≥0) (ξ : ℝ),
+      charFun ((poissonMeasure r).map (Nat.cast : ℕ → ℝ)) ξ =
+      cexp (↑(r : ℝ) * (cexp (↑ξ * I) - 1)) := by
+    intro r ξ
+    rw [charFun_apply_real]
+    rw [integral_map (by fun_prop : Measurable (Nat.cast : ℕ → ℝ)).aemeasurable
+      (by fun_prop : Continuous (fun x : ℝ => cexp (↑ξ * ↑x * I))).aestronglyMeasurable]
+    change ∫ n, cexp (↑ξ * ↑(n : ℝ) * I) ∂(poissonPMF r).toMeasure = _
+    have hint : Integrable (fun n : ℕ => cexp (↑ξ * ↑(n : ℝ) * I)) (poissonPMF r).toMeasure := by
+      apply (integrable_const (1 : ℝ)).mono'
+      · exact (by fun_prop : Continuous (fun n : ℕ => cexp (↑ξ * ↑(n : ℝ) * I))).measurable.aestronglyMeasurable
+      · filter_upwards with n
+        rw [show (↑ξ : ℂ) * ↑(n : ℝ) * I = ↑(ξ * ↑n) * I from by push_cast; ring,
+          norm_exp_ofReal_mul_I]
+    rw [PMF.integral_eq_tsum _ _ hint]
+    simp_rw [poissonPMF_toReal, RCLike.real_smul_eq_coe_mul]
+    convert poissonCharFun_eq r ξ using 1
+    unfold poissonCharFun
+    congr 1; ext n; exact mul_comm _ _
+  -- Now prove charFun of N t marginal
+  have hcf_Nt : ∀ t : ℝ≥0, ∀ ξ : ℝ,
+      charFun (μ.map (fun ω => (N t ω : ℝ))) ξ =
+      cexp (↑(rate * t : ℝ≥0) * (cexp (↑ξ * I) - 1)) := by
+    intro t ξ
+    have hfun : (fun ω => (N t ω : ℝ)) =
+        (Nat.cast : ℕ → ℝ) ∘ (fun ω => N (0 + t) ω - N 0 ω) := by
+      ext ω
+      simp only [zero_add, Function.comp_apply, Nat.cast_inj]
+      have : N 0 ω = 0 := congr_fun h.start_zero ω
+      omega
+    have hae : AEMeasurable (fun ω => N (0 + t) ω - N 0 ω) μ :=
+      AEMeasurable.of_map_ne_zero (by
+        rw [h.increment_poisson 0 t]; exact IsProbabilityMeasure.ne_zero _)
+    rw [hfun, ← AEMeasurable.map_map_of_aemeasurable
+      (by fun_prop : Measurable (Nat.cast : ℕ → ℝ)).aemeasurable hae,
+      h.increment_poisson 0 t]
+    exact hcf_poisson (rate * t) ξ
+  -- Step 5: Show charFun of diffR equals charFun of Nk
+  have hcf_diff_eq : charFun (μ.map diffR) = charFun (μ.map Nk) := by
+    ext ξ
+    have hprod := congr_fun hcf_prod ξ
+    rw [Pi.mul_apply, hcf_Nt (s + k) ξ, hcf_Nt s ξ] at hprod
+    have hne : cexp (↑(rate * s : ℝ≥0) * (cexp (↑ξ * I) - 1)) ≠ 0 := Complex.exp_ne_zero _
+    have hsolve : charFun (μ.map diffR) ξ =
+        cexp (↑(rate * k : ℝ≥0) * (cexp (↑ξ * I) - 1)) := by
+      have hmul : cexp (↑↑(rate * s) * (cexp (↑ξ * I) - 1)) * charFun (μ.map diffR) ξ =
+          cexp (↑↑(rate * s) * (cexp (↑ξ * I) - 1)) *
+            cexp (↑↑(rate * k) * (cexp (↑ξ * I) - 1)) := by
+        rw [← hprod, ← Complex.exp_add]; congr 1; push_cast; ring
+      exact mul_left_cancel₀ hne hmul
+    rw [hsolve]
+    exact (hcf_Nt k ξ).symm
+  -- Step 6: Conclude ℝ-valued measures are equal
+  haveI : IsFiniteMeasure (μ.map diffR) := inferInstance
+  haveI : IsFiniteMeasure (μ.map Nk) := inferInstance
+  have hmap_R : μ.map diffR = μ.map Nk := Measure.ext_of_charFun hcf_diff_eq
+  -- Step 7: Lift to ℤ-valued measures
+  -- diffR = Int.cast ∘ (increment Xℤ s (s+k)) and Nk = Int.cast ∘ (increment Xℤ 0 k)
+  have hNk_eq : Nk = (Int.cast : ℤ → ℝ) ∘ increment Xℤ 0 k := by
+    ext ω; simp [Nk, increment_apply, hXℤ_def, congr_fun h.start_zero ω]
+  -- Rewrite hmap_R in terms of composed maps
+  have hmap_composed : (μ.map (increment Xℤ s (s + k))).map (Int.cast : ℤ → ℝ) =
+      (μ.map (increment Xℤ 0 k)).map (Int.cast : ℤ → ℝ) := by
+    rw [AEMeasurable.map_map_of_aemeasurable hmembed.measurable.aemeasurable haem_incr_sk,
+      AEMeasurable.map_map_of_aemeasurable hmembed.measurable.aemeasurable haem_incr_0k]
+    show μ.map ((Int.cast : ℤ → ℝ) ∘ increment Xℤ s (s + k)) =
+         μ.map ((Int.cast : ℤ → ℝ) ∘ increment Xℤ 0 k)
+    rw [← hdiffR_eq, ← hNk_eq]
+    exact hmap_R
+  -- Apply MeasurableEmbedding.map_injective to lift to ℤ
+  have hmap_Z : μ.map (increment Xℤ s (s + k)) = μ.map (increment Xℤ 0 k) :=
+    hmembed.map_injective hmap_composed
+  -- Wrap in IdentDistrib
+  exact ⟨haem_incr_sk, haem_incr_0k, hmap_Z⟩
 
 /-- A Poisson process (ℤ-embedded) is a Lévy process. -/
 theorem isLevyProcess (h : IsPoissonProcess N rate μ) :
@@ -92,11 +224,7 @@ theorem isLevyProcess (h : IsPoissonProcess N rate μ) :
     simp
   indep_increments := h.indep_increments
   stationary_increments := h.hasStationaryIncrements
-  cadlag_ae := by
-    -- Path regularity: a counting process with independent Poisson increments
-    -- has a.s. càdlàg paths. This requires showing that the jumps are isolated
-    -- and the process is non-decreasing with right-continuous paths.
-    sorry
+  cadlag_ae := h.cadlag_paths
 
 end IsPoissonProcess
 
@@ -175,6 +303,7 @@ finite-dimensional distributions into a process on a canonical path space. -/
 theorem exists_poissonProcess (rate : ℝ≥0) :
     ∃ (Ω : Type) (_ : MeasurableSpace Ω) (μ : Measure Ω) (N : ℝ≥0 → Ω → ℕ),
       IsPoissonProcess N rate μ := by
-  sorry -- Kolmogorov extension theorem
+  sorry -- Requires Kolmogorov extension theorem (not in mathlib v4.28.0-rc1).
+         -- See Mathlib.Probability.Cylinder.IsProjectiveMeasureFamily for partial infrastructure.
 
 end ProbabilityTheory

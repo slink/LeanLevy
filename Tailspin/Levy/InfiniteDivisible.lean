@@ -31,8 +31,7 @@ Lévy processes.
 
 ## Sorry audit
 
-Two sorries remain:
-* `IsLevyProcess.isInfinitelyDivisible_marginal` — partition bookkeeping with `ℝ≥0`.
+One sorry remains:
 * `levyKhintchine_representation` — deep analytic theorem (Fourier analysis + Lévy measures).
 -/
 
@@ -197,18 +196,60 @@ theorem IsLevyProcess.charFun_marginal_nat_pow
 
 /-- Every marginal `μ.map (X t)` of a Lévy process is infinitely divisible.
 
-**Strategy (sorry'd):** Partition `[0, t]` into `n` equal pieces of length `t/n`,
-use independent stationary increments to write the marginal as an `n`-fold convolution
-of `μ.map (X (t/n))`. The bookkeeping with `ℝ≥0` arithmetic and `iIndepFun` extraction
-is extensive. -/
+Partition `[0, t]` into `n` equal pieces of length `δ = t/n`. By induction on `k`, we show
+`μ.map (X (k * δ)) = ν.iteratedConv k` where `ν = μ.map (X δ)`. The induction step decomposes
+`X(δ + k*δ) = X(δ) + (X(δ + k*δ) - X(δ))`, uses independent increments to factor the
+pushforward as a convolution, and stationary increments to identify the increment law. -/
 theorem IsLevyProcess.isInfinitelyDivisible_marginal
     {E : Type*} [NormedAddCommGroup E] [InnerProductSpace ℝ E]
     [MeasurableSpace E] [BorelSpace E] [SecondCountableTopology E]
     [MeasurableAdd₂ E]
     {X : ℝ≥0 → Ω → E} {μ : Measure Ω} [IsProbabilityMeasure μ]
-    (h : IsLevyProcess X μ) (t : ℝ≥0) :
+    (h : IsLevyProcess X μ) (hX : ∀ t, Measurable (X t)) (t : ℝ≥0) :
     IsInfinitelyDivisible (μ.map (X t)) := by
-  sorry -- Partition [0,t] into n equal pieces, use independent stationary increments
+  intro n hn
+  set δ : ℝ≥0 := t / ↑n with hδ_def
+  set ν := μ.map (X δ) with hν_def
+  haveI : IsProbabilityMeasure ν :=
+    Measure.isProbabilityMeasure_map (hX δ).aemeasurable
+  refine ⟨ν, inferInstance, ?_⟩
+  -- Key: n * δ = t
+  have hn_ne : (n : ℝ≥0) ≠ 0 := Nat.cast_ne_zero.mpr (by omega)
+  have ht_eq : ↑n * δ = t := by
+    simp [hδ_def, mul_div_cancel₀ t hn_ne]
+  rw [← ht_eq]
+  -- Prove by induction: ∀ k, μ.map (X (↑k * δ)) = ν.iteratedConv k
+  suffices key : ∀ k : ℕ, μ.map (X (↑k * δ)) = ν.iteratedConv k from key n
+  intro k
+  induction k with
+  | zero =>
+    simp only [Nat.cast_zero, zero_mul, iteratedConv_zero]
+    rw [h.start_zero, Measure.map_const, measure_univ, one_smul]
+  | succ k ih =>
+    -- (k+1) * δ = δ + k * δ
+    have hcast : (↑(k + 1) : ℝ≥0) * δ = δ + ↑k * δ := by push_cast; ring
+    rw [hcast, iteratedConv_succ]
+    -- Decompose: X(δ + k*δ) = X(δ) + increment X δ (δ + k*δ)
+    have h_decomp : X (δ + ↑k * δ) = X δ + increment X δ (δ + ↑k * δ) := by
+      ext ω; simp only [Pi.add_apply, increment_apply]; abel
+    -- Independence: X δ ⊥ increment X δ (δ + k*δ)
+    have h_incr_eq : increment X 0 δ = X δ := increment_zero_eq' h.start_zero _
+    have h_indep : IndepFun (X δ) (increment X δ (δ + ↑k * δ)) μ := by
+      have := h.indepFun_increment (s := 0) (t := δ) (u := δ + ↑k * δ) (zero_le _) le_self_add
+      rwa [h_incr_eq] at this
+    -- Convolution via independence
+    have hmI : AEMeasurable (increment X δ (δ + ↑k * δ)) μ :=
+      (measurable_increment (hX _) (hX _)).aemeasurable
+    have h_conv : μ.map (X (δ + ↑k * δ)) =
+        μ.map (X δ) ∗ μ.map (increment X δ (δ + ↑k * δ)) := by
+      rw [h_decomp]
+      exact h_indep.map_add_eq_map_conv_map₀ (hX _).aemeasurable hmI
+    -- Stationarity: μ.map (increment X δ (δ + k*δ)) = μ.map (X (k*δ))
+    have h_stat : μ.map (increment X δ (δ + ↑k * δ)) = μ.map (X (↑k * δ)) := by
+      have hid := h.identDistrib_increment δ (↑k * δ)
+      have h_incr0 : increment X 0 (↑k * δ) = X (↑k * δ) := increment_zero_eq' h.start_zero _
+      rw [hid.map_eq, h_incr0]
+    rw [h_conv, h_stat, ih]
 
 /-! ## Section 6: Lévy-Khintchine representation -/
 
