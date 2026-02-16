@@ -1,12 +1,12 @@
-name = "tailspin"
+name = "leanlevy"
 version = "0.1.0"
-defaultTargets = ["tailspin"]
+defaultTargets = ["leanlevy"]
 
 [[lean_lib]]
-name = "Tailspin"
+name = "LeanLevy"
 
 [[lean_exe]]
-name = "tailspin"
+name = "leanlevy"
 root = "Main"
 
 [[require]]

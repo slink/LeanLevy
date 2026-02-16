@@ -2,8 +2,8 @@
 Copyright (c) 2026. All rights reserved.
 Released under MIT license as described in the file LICENSE.
 -/
-import Tailspin.Processes.LevyProcess
-import Tailspin.Probability.Poisson
+import LeanLevy.Processes.LevyProcess
+import LeanLevy.Probability.Poisson
 import Mathlib.Probability.ProbabilityMassFunction.Integrals
 import Mathlib.Probability.Independence.CharacteristicFunction
 

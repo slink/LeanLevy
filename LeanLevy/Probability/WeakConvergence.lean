@@ -2,7 +2,7 @@
 Copyright (c) 2026. All rights reserved.
 Released under MIT license as described in the file LICENSE.
 -/
-import Tailspin.Probability.Characteristic
+import LeanLevy.Probability.Characteristic
 import Mathlib.MeasureTheory.Measure.Portmanteau
 import Mathlib.MeasureTheory.Measure.Tight
 import Mathlib.MeasureTheory.Measure.Prokhorov

@@ -1,4 +1,4 @@
-import Tailspin
+import LeanLevy
 
 def main : IO Unit :=
   IO.println s!"Hello, {hello}!"

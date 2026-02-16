@@ -6,7 +6,7 @@ import Mathlib.Probability.Distributions.Poisson
 import Mathlib.Probability.ProbabilityMassFunction.Integrals
 import Mathlib.Topology.Algebra.InfiniteSum.NatInt
 import Mathlib.Topology.Algebra.InfiniteSum.Ring
-import Tailspin.Probability.Characteristic
+import LeanLevy.Probability.Characteristic
 
 /-!
 # Poisson Distribution: Expectation, Variance, and Characteristic Function

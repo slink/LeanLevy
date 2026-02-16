@@ -2,7 +2,7 @@
 Copyright (c) 2026. All rights reserved.
 Released under MIT license as described in the file LICENSE.
 -/
-import Tailspin.Fourier.MeasureFourier
+import LeanLevy.Fourier.MeasureFourier
 import Mathlib.MeasureTheory.Measure.CharacteristicFunction
 import Mathlib.MeasureTheory.Measure.ProbabilityMeasure
 
