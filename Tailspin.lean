@@ -8,3 +8,4 @@ import Tailspin.Processes.StochasticProcess
 import Tailspin.Processes.Cadlag
 import Tailspin.Processes.LevyProcess
 import Tailspin.Processes.PoissonProcess
+import Tailspin.Levy.InfiniteDivisible
