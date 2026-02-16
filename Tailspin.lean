@@ -5,3 +5,6 @@ import Tailspin.Fourier.MeasureFourier
 import Tailspin.Probability.Characteristic
 import Tailspin.Probability.Poisson
 import Tailspin.Processes.StochasticProcess
+import Tailspin.Processes.Cadlag
+import Tailspin.Processes.LevyProcess
+import Tailspin.Processes.PoissonProcess
