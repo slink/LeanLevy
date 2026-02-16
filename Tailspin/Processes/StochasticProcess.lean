@@ -86,7 +86,7 @@ def HasIndependentIncrements [Preorder ι] [MeasurableSpace Ω] [MeasurableSpace
 
 /-- A process `X` has **stationary increments** with respect to a measure `μ` if
 the distribution of `X(s + h) - X(s)` depends only on `h`, not on `s`. -/
-def HasStationaryIncrements [AddGroup ι] [MeasurableSpace Ω] [MeasurableSpace E] [Sub E]
+def HasStationaryIncrements [AddMonoid ι] [MeasurableSpace Ω] [MeasurableSpace E] [Sub E]
     (X : ι → Ω → E) (μ : Measure Ω) : Prop :=
   ∀ (s h : ι), IdentDistrib (increment X s (s + h)) (increment X 0 h) μ μ
 
