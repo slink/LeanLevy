@@ -243,6 +243,23 @@ private theorem lk_charFun_nat_mul
     rw [show ((n + 1 : ℕ) : ℝ≥0) * s = s + (n : ℝ≥0) * s from by push_cast; ring,
         lk_charFun_mul h hX, ih, pow_succ, mul_comm]
 
+/-- The characteristic function at time 0 is identically 1. -/
+theorem charFun_marginal_zero (h : IsLevyProcess X μ) (ξ : E) :
+    charFun (μ.map (X 0)) ξ = 1 :=
+  lk_charFun_zero h ξ
+
+/-- Right-continuity of t ↦ charFun(μ.map(X t)) ξ. -/
+theorem tendsto_charFun_marginal (h : IsLevyProcess X μ) (hX : ∀ t, Measurable (X t))
+    (t₀ : ℝ≥0) (ξ : E) :
+    Tendsto (fun t => charFun (μ.map (X t)) ξ) (𝓝[≥] t₀) (𝓝 (charFun (μ.map (X t₀)) ξ)) :=
+  lk_charFun_rightCts h hX t₀ ξ
+
+/-- The characteristic function of any marginal is nonvanishing. -/
+theorem charFun_marginal_ne_zero (h : IsLevyProcess X μ) (hX : ∀ t, Measurable (X t))
+    (t : ℝ≥0) (ξ : E) :
+    charFun (μ.map (X t)) ξ ≠ 0 :=
+  lk_charFun_ne_zero h hX t ξ
+
 end LKHelpers
 
 /-- **Lévy–Khintchine factorisation**: the characteristic function of the time-`t` marginal
