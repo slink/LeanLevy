@@ -5,6 +5,8 @@ Authors: LeanLevy Contributors
 -/
 import LeanLevy.Processes.LevyProcess
 import Mathlib.Analysis.SpecialFunctions.Complex.Log
+import Mathlib.Analysis.SpecialFunctions.Pow.Complex
+import Mathlib.Analysis.Normed.Module.Connected
 
 /-!
 # Local Characteristic Exponent
@@ -150,5 +152,234 @@ noncomputable def levyLocalCharExponent
 theorem continuousOn_levyLocalCharExponent (h : IsLevyProcess X μ) (hX : ∀ t, Measurable (X t)) :
     ContinuousOn (h.levyLocalCharExponent hX) (h.levyGoodDomain hX) :=
   LocalLog.continuousOn_localCharExponent (continuous_charFun_one hX)
+
+/-! ### Semigroup properties
+
+All derived as short corollaries of `charFun_eq_exp_mul`. -/
+
+section Semigroup
+
+variable {Ω E : Type*} [MeasurableSpace Ω] [NormedAddCommGroup E] [InnerProductSpace ℝ E]
+  [MeasurableSpace E] [BorelSpace E] [SecondCountableTopology E] [MeasurableAdd₂ E]
+  {X : ℝ≥0 → Ω → E} {μ : Measure Ω} [IsProbabilityMeasure μ]
+
+/-- Multiplicativity of the characteristic function: `φ(s+t)(ξ) = φ(s)(ξ) · φ(t)(ξ)`. -/
+theorem charFun_marginal_mul (h : IsLevyProcess X μ) (hX : ∀ t, Measurable (X t))
+    (s t : ℝ≥0) (ξ : E) :
+    charFun (μ.map (X (s + t))) ξ =
+      charFun (μ.map (X s)) ξ * charFun (μ.map (X t)) ξ := by
+  rw [h.charFun_eq_exp_mul hX (s + t) ξ, h.charFun_eq_exp_mul hX s ξ,
+      h.charFun_eq_exp_mul hX t ξ, ← exp_add]
+  congr 1; push_cast [NNReal.coe_add]; ring
+
+/-- Power formula: `φ(n)(ξ) = φ(1)(ξ)^n`. -/
+@[simp]
+theorem charFun_marginal_pow' (h : IsLevyProcess X μ) (hX : ∀ t, Measurable (X t))
+    (n : ℕ) (ξ : E) :
+    charFun (μ.map (X (n : ℝ≥0))) ξ = (charFun (μ.map (X 1)) ξ) ^ n := by
+  rw [h.charFun_eq_exp_mul hX n ξ, h.charFun_eq_exp_mul hX 1 ξ, ← exp_nat_mul]
+  congr 1; push_cast; ring
+
+/-- Natural multiplication formula: `φ(n·s)(ξ) = φ(s)(ξ)^n`. -/
+theorem charFun_marginal_nat_mul (h : IsLevyProcess X μ) (hX : ∀ t, Measurable (X t))
+    (n : ℕ) (s : ℝ≥0) (ξ : E) :
+    charFun (μ.map (X ((n : ℝ≥0) * s))) ξ = (charFun (μ.map (X s)) ξ) ^ n := by
+  rw [h.charFun_eq_exp_mul hX ((n : ℝ≥0) * s) ξ, h.charFun_eq_exp_mul hX s ξ, ← exp_nat_mul]
+  congr 1; push_cast; ring
+
+/-- Rational power formula: `φ(k/n)(ξ) = φ(1/n)(ξ)^k`. -/
+theorem charFun_marginal_rat_pow (h : IsLevyProcess X μ) (hX : ∀ t, Measurable (X t))
+    (k n : ℕ) (ξ : E) :
+    charFun (μ.map (X ((k : ℝ≥0) / (n : ℝ≥0)))) ξ =
+      (charFun (μ.map (X ((1 : ℝ≥0) / (n : ℝ≥0)))) ξ) ^ k := by
+  rw [h.charFun_eq_exp_mul hX _ ξ, h.charFun_eq_exp_mul hX _ ξ, ← exp_nat_mul]
+  congr 1; push_cast; ring
+
+/-! ### Characteristic exponent at origin -/
+
+/-- The characteristic exponent vanishes at `ξ = 0`. -/
+theorem charExponent_zero (h : IsLevyProcess X μ) (hX : ∀ t, Measurable (X t)) :
+    h.charExponent (0 : E) = 0 := by
+  simp only [charExponent]
+  apply Filter.Tendsto.limUnder_eq
+  apply tendsto_const_nhds.congr'
+  filter_upwards [self_mem_nhdsWithin] with t (ht : 0 < t)
+  have : charFun (μ.map (X t)) (0 : E) = 1 := by
+    haveI : IsProbabilityMeasure (μ.map (X t)) :=
+      Measure.isProbabilityMeasure_map (hX t).aemeasurable
+    simp [charFun_zero]
+  rw [this, Complex.log_one, zero_div]
+
+/-! ### Local-global exponent connection -/
+
+set_option maxHeartbeats 400000 in
+/-- On a ball around the origin, the local characteristic exponent (via `Complex.log`)
+agrees with the characteristic exponent (defined as a limit). The proof uses a power-of-2
+induction with a connectedness argument: at each step, a continuous square root on a
+connected domain that equals 1 at the origin must be identically 1. -/
+theorem levyLocalCharExponent_eq_charExponent
+    (h : IsLevyProcess X μ) (hX : ∀ t, Measurable (X t)) :
+    ∃ ε > 0, ∀ ξ ∈ Metric.ball (0 : E) ε,
+      h.levyLocalCharExponent hX ξ = h.charExponent ξ := by
+  obtain ⟨ε, hε_pos, hball⟩ := LocalLog.exists_ball_subset_goodDomain
+    (continuous_charFun_one hX) (charFun_one_zero h hX)
+  refine ⟨ε, hε_pos, fun ξ hξ => ?_⟩
+  set ψ := h.levyLocalCharExponent hX
+  set B := Metric.ball (0 : E) ε
+  set G := h.levyGoodDomain hX
+  have hψ_cont : ContinuousOn ψ G := h.continuousOn_levyLocalCharExponent hX
+  have hG_open : IsOpen G := h.isOpen_levyGoodDomain hX
+  have hB_preconn : IsPreconnected B := Metric.isPreconnected_ball
+  have h0B : (0 : E) ∈ B := Metric.mem_ball_self hε_pos
+  have hψ0 : ψ 0 = 0 := by
+    show Complex.log (charFun (μ.map (X 1)) 0) = 0
+    rw [charFun_one_zero h hX, Complex.log_one]
+  -- Key claim by induction: charFun(X(1/2^n))(ξ') = exp(ψ(ξ')/2^n) on the ball
+  suffices key : ∀ n : ℕ, ∀ ξ' ∈ B,
+      charFun (μ.map (X ((1 : ℝ≥0) / (2 : ℝ≥0) ^ n))) ξ' =
+        exp (ψ ξ' / (2 : ℂ) ^ n) by
+    -- From key + charFun_eq_exp_mul: exp((Ψ(ξ)-ψ(ξ))/2^n) = 1 for all n
+    have hexp_eq : ∀ n : ℕ,
+        exp ((h.charExponent ξ - ψ ξ) / (2 : ℂ) ^ n) = 1 := by
+      intro n
+      have h1 := key n ξ hξ
+      have h2 := h.charFun_eq_exp_mul hX ((1 : ℝ≥0) / (2 : ℝ≥0) ^ n) ξ
+      rw [h1] at h2
+      rw [sub_div, exp_sub, div_eq_one_iff_eq (exp_ne_zero _)]
+      convert h2.symm using 2; push_cast; ring
+    -- d/2^n ∈ 2πiℤ for all n ⟹ 2^n ∣ k₀ for all n ⟹ k₀ = 0
+    set d := h.charExponent ξ - ψ ξ
+    obtain ⟨k₀, hk₀⟩ := Complex.exp_eq_one_iff.mp (hexp_eq 0)
+    simp only [pow_zero, div_one] at hk₀
+    -- hk₀ : d = ↑k₀ * (2 * ↑Real.pi * I)
+    have hpow_dvd : ∀ n : ℕ, (2 : ℤ) ^ n ∣ k₀ := by
+      intro n
+      obtain ⟨m_n, hm_n⟩ := Complex.exp_eq_one_iff.mp (hexp_eq n)
+      have h2piI_ne : (2 * ↑Real.pi * I : ℂ) ≠ 0 :=
+        mul_ne_zero (mul_ne_zero two_ne_zero (ofReal_ne_zero.mpr Real.pi_ne_zero)) I_ne_zero
+      have h2n_ne : (2 : ℂ) ^ n ≠ 0 := pow_ne_zero _ two_ne_zero
+      have hcast : (↑k₀ : ℂ) = ↑m_n * (2 : ℂ) ^ n := by
+        apply mul_right_cancel₀ h2piI_ne
+        calc (↑k₀ : ℂ) * (2 * ↑Real.pi * I)
+            = d := hk₀.symm
+          _ = d / (2 : ℂ) ^ n * (2 : ℂ) ^ n := (div_mul_cancel₀ d h2n_ne).symm
+          _ = ↑m_n * (2 * ↑Real.pi * I) * (2 : ℂ) ^ n := by rw [hm_n]
+          _ = ↑m_n * (2 : ℂ) ^ n * (2 * ↑Real.pi * I) := by ring
+      refine ⟨m_n, ?_⟩
+      have : k₀ = m_n * (2 : ℤ) ^ n := by
+        have : (↑k₀ : ℂ) = (↑(m_n * (2 : ℤ) ^ n) : ℂ) := by push_cast; exact hcast
+        exact_mod_cast this
+      linarith [mul_comm m_n ((2 : ℤ) ^ n)]
+    have hk₀_zero : k₀ = 0 := by
+      by_contra hne
+      have hpos : 0 < k₀.natAbs := Int.natAbs_pos.mpr hne
+      have hnat_dvd : 2 ^ k₀.natAbs ∣ k₀.natAbs := by
+        have h := Int.natAbs_dvd_natAbs.mpr (hpow_dvd k₀.natAbs)
+        simp only [Int.natAbs_pow] at h
+        exact h
+      exact absurd (Nat.le_of_dvd hpos hnat_dvd) (not_le.mpr k₀.natAbs.lt_two_pow_self)
+    have hd_zero : h.charExponent ξ - ψ ξ = 0 := by
+      show d = 0; rw [hk₀, hk₀_zero, Int.cast_zero, zero_mul]
+    exact (sub_eq_zero.mp hd_zero).symm
+  -- Prove key claim by induction on n
+  intro n
+  induction n with
+  | zero =>
+    intro ξ' hξ'
+    simp only [pow_zero, div_one]
+    exact (Complex.exp_log (charFun_marginal_ne_zero h hX 1 ξ')).symm
+  | succ n ih =>
+    intro ξ' hξ'
+    -- Define f(η) = charFun(X(1/2^{n+1}))(η) * exp(-ψ(η)/2^{n+1}), show f²=1, f(0)=1
+    set f : E → ℂ := fun η =>
+      charFun (μ.map (X ((1 : ℝ≥0) / (2 : ℝ≥0) ^ (n + 1)))) η *
+        exp (-(ψ η / (2 : ℂ) ^ (n + 1)))
+    -- f is continuous on G
+    have hf_cont : ContinuousOn f G := by
+      apply ContinuousOn.mul
+      · exact (MeasureTheory.continuous_charFun (ν :=
+            μ.map (X ((1 : ℝ≥0) / (2 : ℝ≥0) ^ (n + 1))))).continuousOn.mono
+          (Set.subset_univ _)
+      · exact (hψ_cont.div_const _).neg.cexp
+    -- f² = 1 on B (using charFun_marginal_mul and ih)
+    have hf_sq : ∀ η ∈ B, f η ^ 2 = 1 := by
+      intro η hη
+      have h_sq_cf : charFun (μ.map (X ((1 : ℝ≥0) / (2 : ℝ≥0) ^ (n + 1)))) η ^ 2 =
+          charFun (μ.map (X ((1 : ℝ≥0) / (2 : ℝ≥0) ^ n))) η := by
+        rw [h.charFun_eq_exp_mul hX _ η, h.charFun_eq_exp_mul hX _ η, sq, ← exp_add]
+        congr 1; push_cast; ring
+      simp only [f, mul_pow, ← exp_nat_mul]
+      rw [h_sq_cf, ih η hη]
+      have : (2 : ℕ) * -(ψ η / (2 : ℂ) ^ (n + 1)) = -(ψ η / (2 : ℂ) ^ n) := by
+        rw [show (2 : ℂ) ^ (n + 1) = 2 * (2 : ℂ) ^ n from by ring]; field_simp; ring
+      rw [this, exp_neg, mul_inv_cancel₀ (exp_ne_zero _)]
+    -- f(0) = 1
+    set t_half := (1 : ℝ≥0) / (2 : ℝ≥0) ^ (n + 1) with ht_half_def
+    have hf_zero : f 0 = 1 := by
+      simp only [f, hψ0, zero_div, neg_zero, exp_zero, mul_one]
+      change charFun (μ.map (X t_half)) 0 = 1
+      haveI : IsProbabilityMeasure (μ.map (X t_half)) :=
+        Measure.isProbabilityMeasure_map (hX t_half).aemeasurable
+      simp [charFun_zero]
+    -- Connectedness: f ∈ {1,-1}, continuous on B ⊆ G (open), connected → f ≡ 1
+    suffices hf1 : f ξ' = 1 by
+      have hmul : charFun (μ.map (X ((1 : ℝ≥0) / (2 : ℝ≥0) ^ (n + 1)))) ξ' *
+          exp (-(ψ ξ' / (2 : ℂ) ^ (n + 1))) = 1 := hf1
+      have : charFun (μ.map (X ((1 : ℝ≥0) / (2 : ℝ≥0) ^ (n + 1)))) ξ' =
+          charFun (μ.map (X ((1 : ℝ≥0) / (2 : ℝ≥0) ^ (n + 1)))) ξ' *
+          (exp (-(ψ ξ' / (2 : ℂ) ^ (n + 1))) * exp (ψ ξ' / (2 : ℂ) ^ (n + 1))) := by
+        rw [← exp_add, neg_add_cancel, exp_zero, mul_one]
+      rw [this, ← mul_assoc, hmul, one_mul]
+    by_contra hne
+    have hf_val : f ξ' = -1 := by
+      have hfact : (f ξ' - 1) * (f ξ' + 1) = 0 := by
+        have : (f ξ' - 1) * (f ξ' + 1) = f ξ' ^ 2 - 1 := by ring
+        rw [this, hf_sq ξ' hξ', sub_self]
+      exact (mul_eq_zero.mp hfact).resolve_left (sub_ne_zero.mpr hne) |>
+        eq_neg_of_add_eq_zero_left
+    -- Use IsPreconnected of B with open sets U = f⁻¹(B(1,1)) ∩ G, V = f⁻¹(B(-1,1)) ∩ G
+    set U := G ∩ f ⁻¹' Metric.ball (1 : ℂ) 1
+    set V := G ∩ f ⁻¹' Metric.ball (-1 : ℂ) 1
+    have hU_open : IsOpen U := hf_cont.isOpen_inter_preimage hG_open Metric.isOpen_ball
+    have hV_open : IsOpen V := hf_cont.isOpen_inter_preimage hG_open Metric.isOpen_ball
+    have hBUV : B ⊆ U ∪ V := by
+      intro η hη
+      have hηG := hball hη
+      have hη_sq := hf_sq η hη
+      have hfact : (f η - 1) * (f η + 1) = 0 := by
+        have : (f η - 1) * (f η + 1) = f η ^ 2 - 1 := by ring
+        rw [this, hη_sq, sub_self]
+      rcases mul_eq_zero.mp hfact with h1 | h2
+      · left; exact ⟨hηG, by rw [Set.mem_preimage, sub_eq_zero.mp h1]; exact Metric.mem_ball_self one_pos⟩
+      · right; exact ⟨hηG, by rw [Set.mem_preimage, eq_neg_of_add_eq_zero_left h2]; simp [Metric.mem_ball]⟩
+    have hBU : (B ∩ U).Nonempty :=
+      ⟨0, h0B, hball h0B, by rw [Set.mem_preimage, hf_zero]; exact Metric.mem_ball_self one_pos⟩
+    have hBV : (B ∩ V).Nonempty :=
+      ⟨ξ', hξ', hball hξ', by rw [Set.mem_preimage, hf_val]; simp [Metric.mem_ball]⟩
+    obtain ⟨z, hzB, hzU, hzV⟩ := hB_preconn U V hU_open hV_open hBUV hBU hBV
+    -- B(1,1) ∩ B(-1,1) = ∅ by triangle inequality: contradiction
+    have hz1 : dist (f z) 1 < 1 := hzU.2
+    have hz2 : dist (f z) (-1) < 1 := hzV.2
+    linarith [dist_triangle_left (1 : ℂ) (-1) (f z),
+      show dist (1 : ℂ) (-1) = 2 from by simp [dist_eq_norm]; norm_num]
+
+/-! ### Complex power formulation -/
+
+/-- On a ball around the origin, the characteristic function satisfies the complex power law:
+`φ_t(ξ) = φ₁(ξ) ^ (↑t : ℂ)` for all `t : ℝ≥0`. -/
+theorem charFun_marginal_cpow (h : IsLevyProcess X μ) (hX : ∀ t, Measurable (X t)) :
+    ∃ ε > 0, ∀ ξ ∈ Metric.ball (0 : E) ε, ∀ t : ℝ≥0,
+      charFun (μ.map (X t)) ξ = (charFun (μ.map (X 1)) ξ) ^ (↑(t : ℝ) : ℂ) := by
+  obtain ⟨ε, hε, hball⟩ := h.levyLocalCharExponent_eq_charExponent hX
+  refine ⟨ε, hε, fun ξ hξ t => ?_⟩
+  have hne : charFun (μ.map (X 1)) ξ ≠ 0 := charFun_marginal_ne_zero h hX 1 ξ
+  rw [Complex.cpow_def_of_ne_zero hne, h.charFun_eq_exp_mul hX t ξ]
+  congr 1
+  -- levyLocalCharExponent ξ = log(φ₁(ξ)) by definition, and equals charExponent ξ on the ball
+  have hψ_eq := hball ξ hξ
+  simp only [levyLocalCharExponent, LocalLog.localCharExponent] at hψ_eq
+  rw [← hψ_eq]; ring
+
+end Semigroup
 
 end ProbabilityTheory.IsLevyProcess
