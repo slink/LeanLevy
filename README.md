@@ -24,6 +24,16 @@ A Lean 4 formalization of Lévy processes, built on top of mathlib.
 - Independent and stationary increments
 - Increment independence from the natural filtration
 
+**Finite-dimensional distributions** (`LeanLevy/Processes/FiniteDimensional.lean`)
+- Joint law at finitely many times as a pushforward measure
+- Marginalization: restricting to a subset of times recovers the sub-distribution
+- Projective consistency (`IsProjectiveMeasureFamily`)
+
+**Projective families** (`LeanLevy/Processes/ProjectiveFamily.lean`)
+- Bundled structure: measure family + consistency + probability
+- Projection and composition lemmas (functoriality)
+- Constructor from stochastic processes
+
 **Càdlàg paths** (`LeanLevy/Processes/Cadlag.lean`)
 - Right-continuity with left limits
 - Monotone ℕ-valued functions are càdlàg when right-continuous
@@ -75,6 +85,8 @@ LeanLevy/
 │   └── WeakConvergence.lean
 ├── Processes/
 │   ├── Cadlag.lean
+│   ├── FiniteDimensional.lean
+│   ├── ProjectiveFamily.lean
 │   ├── LevyProcess.lean
 │   ├── PoissonProcess.lean
 │   └── StochasticProcess.lean
