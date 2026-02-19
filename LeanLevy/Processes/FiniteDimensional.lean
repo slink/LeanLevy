@@ -77,4 +77,24 @@ theorem finiteDimDistribution_restrict (hX : ∀ t, Measurable (X t))
   rw [Measure.map_map (Finset.measurable_restrict₂ hJI) (measurable_finiteDimMap hX I)]
   rfl
 
+/-- The finite-dimensional distributions of a measurable process form a
+projective measure family: marginalizing from a larger time set to a smaller
+subset always recovers the distribution at the smaller set.
+
+This connects the process to mathlib's projective limit machinery
+(`IsProjectiveMeasureFamily`), which is the key ingredient for the
+Kolmogorov extension theorem. -/
+theorem isProjectiveMeasureFamily_finiteDimDistribution
+    (hX : ∀ t, Measurable (X t)) :
+    IsProjectiveMeasureFamily (α := fun (_ : ℝ≥0) => E)
+      (finiteDimDistribution X μ) :=
+  fun _ _ hJI => (finiteDimDistribution_restrict hX hJI).symm
+
+/-- The finite-dimensional distribution of a process under a probability
+measure is itself a probability measure. -/
+theorem isProbabilityMeasure_finiteDimDistribution
+    [IsProbabilityMeasure μ] (hX : ∀ t, Measurable (X t)) (I : Finset ℝ≥0) :
+    IsProbabilityMeasure (finiteDimDistribution X μ I) :=
+  Measure.isProbabilityMeasure_map (measurable_finiteDimMap hX I).aemeasurable
+
 end ProbabilityTheory
