@@ -58,4 +58,23 @@ theorem finiteDimMap_apply (I : Finset ℝ≥0) (ω : Ω) (i : I) :
     finiteDimMap X I ω i = X i ω :=
   rfl
 
+variable {X} {μ}
+
+/-- The sampling map is measurable when each component `X t` is measurable. -/
+@[fun_prop]
+theorem measurable_finiteDimMap (hX : ∀ t, Measurable (X t)) (I : Finset ℝ≥0) :
+    Measurable (finiteDimMap X I) := by
+  exact measurable_pi_lambda _ (fun i => hX i)
+
+/-- Marginalizing the finite-dimensional distribution from times `I` to a
+subset `J ⊆ I` recovers the distribution at `J`. This is the key step
+for the projective consistency condition. -/
+theorem finiteDimDistribution_restrict (hX : ∀ t, Measurable (X t))
+    {I J : Finset ℝ≥0} (hJI : J ⊆ I) :
+    (finiteDimDistribution X μ I).map (Finset.restrict₂ (π := fun _ => E) hJI) =
+      finiteDimDistribution X μ J := by
+  simp only [finiteDimDistribution]
+  rw [Measure.map_map (Finset.measurable_restrict₂ hJI) (measurable_finiteDimMap hX I)]
+  rfl
+
 end ProbabilityTheory
