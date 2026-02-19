@@ -129,6 +129,35 @@ theorem ceilApprox_ge (t : ℝ≥0) (m : ℕ) : t ≤ ceilApprox t m :=
     rw [NNReal.coe_div, NNReal.coe_natCast, NNReal.coe_natCast]
     exact (le_div_iff₀ (by positivity : (0 : ℝ) < ↑(m + 1))).mpr (Nat.le_ceil _))
 
+/-- Real coercion of `ceilApprox`. -/
+theorem ceilApprox_coe (t : ℝ≥0) (m : ℕ) :
+    (ceilApprox t m : ℝ) = ↑⌈(t : ℝ) * ↑(m + 1)⌉₊ / ↑(m + 1) := by
+  show NNReal.toReal _ = _
+  simp only [ceilApprox]
+  rw [NNReal.coe_div, NNReal.coe_natCast, NNReal.coe_natCast]
+
+/-- The ceiling approximation converges to `t`. -/
+theorem tendsto_ceilApprox (t : ℝ≥0) :
+    Tendsto (ceilApprox t) atTop (𝓝 t) := by
+  rw [← NNReal.tendsto_coe]
+  have hf_ge : ∀ m : ℕ, (t : ℝ) ≤ (ceilApprox t m : ℝ) :=
+    fun m => NNReal.coe_le_coe.mpr (ceilApprox_ge t m)
+  have hf_le : ∀ m : ℕ, (ceilApprox t m : ℝ) ≤ (t : ℝ) + 1 / ↑(m + 1) := fun m => by
+    rw [ceilApprox_coe]
+    have hm_pos : (0 : ℝ) < ↑(m + 1) := by positivity
+    calc (↑⌈(t : ℝ) * ↑(m + 1)⌉₊ : ℝ) / ↑(m + 1)
+        ≤ ((t : ℝ) * ↑(m + 1) + 1) / ↑(m + 1) :=
+          div_le_div_of_nonneg_right (Nat.ceil_lt_add_one (by positivity)).le hm_pos.le
+      _ = (t : ℝ) + 1 / ↑(m + 1) := by
+          rw [add_div, mul_div_cancel_right₀ _ (ne_of_gt hm_pos)]
+  have h_upper : Tendsto (fun m : ℕ => (t : ℝ) + 1 / ↑(m + 1)) atTop (𝓝 (t : ℝ)) := by
+    have h0 : Tendsto (fun m : ℕ => (1 : ℝ) / (↑(m + 1) : ℝ)) atTop (𝓝 0) :=
+      (tendsto_const_nhds (x := (1 : ℝ))).div_atTop
+        ((tendsto_natCast_atTop_atTop (R := ℝ)).comp (tendsto_add_atTop_nat 1))
+    have := (tendsto_const_nhds (x := (t : ℝ))).add h0
+    rwa [add_zero] at this
+  exact tendsto_of_tendsto_of_tendsto_of_le_of_le tendsto_const_nhds h_upper hf_ge hf_le
+
 end DensityExtension
 
 /-! ### Lévy process specialisation -/
