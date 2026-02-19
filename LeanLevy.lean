@@ -7,6 +7,7 @@ import LeanLevy.Probability.Poisson
 import LeanLevy.Processes.StochasticProcess
 import LeanLevy.Processes.Cadlag
 import LeanLevy.Processes.FiniteDimensional
+import LeanLevy.Processes.ProjectiveFamily
 import LeanLevy.Processes.LevyProcess
 import LeanLevy.Processes.PoissonProcess
 import LeanLevy.Levy.CharacteristicExponent
