@@ -169,6 +169,30 @@ theorem ceilApprox_isRat (t : ℝ≥0) (m : ℕ) :
     ceilApprox t m = (⌈(t : ℝ) * ↑(m + 1)⌉₊ : ℝ≥0) / ((m + 1 : ℕ) : ℝ≥0) :=
   rfl
 
+set_option maxHeartbeats 800000 in
+/-- If `f` is right-continuous, `g` is continuous, both from `ℝ≥0` to a T₂ space, and
+they agree on all ℕ/ℕ rationals `k/(n+1)`, then `f = g` everywhere. -/
+theorem eq_of_rightCts_of_continuous_of_eqOn_ratNNReal {β : Type*}
+    [TopologicalSpace β] [T2Space β]
+    {f g : ℝ≥0 → β}
+    (hf : ∀ t, ContinuousWithinAt f (Set.Ici t) t)
+    (hg : Continuous g)
+    (heq : ∀ (k n : ℕ), f ((k : ℝ≥0) / ((n + 1 : ℕ) : ℝ≥0)) =
+      g ((k : ℝ≥0) / ((n + 1 : ℕ) : ℝ≥0))) :
+    f = g := by
+  ext t
+  -- ceilApprox gives a sequence of k/(m+1) rationals ≥ t converging to t
+  have htends_within := tendsto_ceilApprox_nhdsWithin_Ici t
+  have htends := tendsto_ceilApprox t
+  have hf_lim : Tendsto (f ∘ ceilApprox t) atTop (𝓝 (f t)) :=
+    Filter.Tendsto.comp (hf t) htends_within
+  have hg_lim : Tendsto (g ∘ ceilApprox t) atTop (𝓝 (g t)) :=
+    Filter.Tendsto.comp (hg.continuousAt (x := t)) htends
+  have heq_seq : f ∘ ceilApprox t = g ∘ ceilApprox t := by
+    ext m; exact heq ⌈(t : ℝ) * ↑(m + 1)⌉₊ m
+  rw [heq_seq] at hf_lim
+  exact tendsto_nhds_unique hf_lim hg_lim
+
 end DensityExtension
 
 /-! ### Lévy process specialisation -/
