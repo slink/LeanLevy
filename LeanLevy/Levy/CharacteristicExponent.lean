@@ -471,4 +471,30 @@ theorem charFun_marginal_cpow (h : IsLevyProcess X μ) (hX : ∀ t, Measurable (
 
 end Semigroup
 
+/-! ### Lévy exponential formula
+
+The function `F(t, ξ) := exp(t · Ψ(ξ))` packaged as a named definition,
+with continuity in `t` and the equivalence with the characteristic function. -/
+
+section LevyExpFormula
+
+variable {Ω E : Type*} [MeasurableSpace Ω] [NormedAddCommGroup E] [InnerProductSpace ℝ E]
+  [MeasurableSpace E] [BorelSpace E] [SecondCountableTopology E] [MeasurableAdd₂ E]
+  {X : ℝ≥0 → Ω → E} {μ : Measure Ω} [IsProbabilityMeasure μ]
+
+/-- The Lévy exponential formula: `F(t, ξ) := exp(t · Ψ(ξ))` where `Ψ` is the
+characteristic exponent. -/
+noncomputable def levyExpFormula (h : IsLevyProcess X μ)
+    (_hX : ∀ t, Measurable (X t)) (t : ℝ≥0) (ξ : E) : ℂ :=
+  exp (↑(t : ℝ) * h.charExponent ξ)
+
+/-- The characteristic function of the time-`t` marginal equals the Lévy exponential
+formula. This is a clean restatement of `charFun_eq_exp_mul`. -/
+theorem charFun_eq_levyExpFormula (h : IsLevyProcess X μ) (hX : ∀ t, Measurable (X t))
+    (t : ℝ≥0) (ξ : E) :
+    charFun (μ.map (X t)) ξ = h.levyExpFormula hX t ξ :=
+  h.charFun_eq_exp_mul hX t ξ
+
+end LevyExpFormula
+
 end ProbabilityTheory.IsLevyProcess
