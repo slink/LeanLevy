@@ -495,6 +495,24 @@ theorem charFun_eq_levyExpFormula (h : IsLevyProcess X μ) (hX : ∀ t, Measurab
     charFun (μ.map (X t)) ξ = h.levyExpFormula hX t ξ :=
   h.charFun_eq_exp_mul hX t ξ
 
+/-- The Lévy exponential formula is continuous in `t` for fixed `ξ`. -/
+theorem continuous_levyExpFormula_t (h : IsLevyProcess X μ)
+    (hX : ∀ t, Measurable (X t)) (ξ : E) :
+    Continuous (fun t : ℝ≥0 => h.levyExpFormula hX t ξ) := by
+  simp only [levyExpFormula]
+  exact continuous_exp.comp
+    ((continuous_ofReal.comp NNReal.continuous_coe).mul continuous_const)
+
+/-- The characteristic function is continuous in `t` for fixed `ξ`.
+This strengthens right-continuity (`tendsto_charFun_marginal`) to full continuity. -/
+theorem continuous_charFun_marginal_t (h : IsLevyProcess X μ)
+    (hX : ∀ t, Measurable (X t)) (ξ : E) :
+    Continuous (fun t : ℝ≥0 => charFun (μ.map (X t)) ξ) := by
+  have : (fun t => charFun (μ.map (X t)) ξ) = fun t => h.levyExpFormula hX t ξ :=
+    funext (fun t => h.charFun_eq_levyExpFormula hX t ξ)
+  rw [this]
+  exact h.continuous_levyExpFormula_t hX ξ
+
 end LevyExpFormula
 
 end ProbabilityTheory.IsLevyProcess
