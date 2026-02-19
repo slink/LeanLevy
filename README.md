@@ -36,6 +36,12 @@ A Lean 4 formalization of Lévy processes, built on top of mathlib.
 - Definition as a counting process with independent Poisson-distributed increments
 - Shown to be a Lévy process
 
+**Characteristic exponent** (`LeanLevy/Levy/CharacteristicExponent.lean`)
+- Local log construction (branch-cut safe) and local-global exponent agreement
+- Semigroup API: multiplicativity, power formulas, complex power law `φ_t(ξ) = φ₁(ξ)^t`
+- Ceiling-sequence density lemma: right-continuous + continuous functions agreeing on ℕ/ℕ rationals are equal
+- Lévy exponential formula `F(t,ξ) = exp(tΨ(ξ))` with full continuity in `t`
+
 **Infinite divisibility** (`LeanLevy/Levy/InfiniteDivisible.lean`)
 - Iterated convolution, with characteristic function formula
 - Poisson distribution is infinitely divisible
@@ -43,9 +49,8 @@ A Lean 4 formalization of Lévy processes, built on top of mathlib.
 
 ## Incomplete
 
-Three results remain sorry'd:
+Two results remain sorry'd:
 
-- **`charFun_eq_exp_mul`** — The exponential formula `φ_{X_t}(ξ) = exp(tΨ(ξ))` is proved for rational times but extending to all reals requires a branch-cut argument for complex logarithms that isn't closed yet.
 - **`exists_poissonProcess`** — Existence of a Poisson process. Needs the Kolmogorov extension theorem, which isn't in mathlib yet.
 - **`levyKhintchine_representation`** — The full Lévy–Khintchine representation theorem. Not yet attempted.
 
@@ -74,5 +79,6 @@ LeanLevy/
 │   ├── PoissonProcess.lean
 │   └── StochasticProcess.lean
 └── Levy/
+    ├── CharacteristicExponent.lean
     └── InfiniteDivisible.lean
 ```
