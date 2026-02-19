@@ -158,6 +158,17 @@ theorem tendsto_ceilApprox (t : ℝ≥0) :
     rwa [add_zero] at this
   exact tendsto_of_tendsto_of_tendsto_of_le_of_le tendsto_const_nhds h_upper hf_ge hf_le
 
+/-- The ceiling approximation converges to `t` within `𝓝[≥] t`. -/
+theorem tendsto_ceilApprox_nhdsWithin_Ici (t : ℝ≥0) :
+    Tendsto (ceilApprox t) atTop (𝓝[≥] t) :=
+  tendsto_nhdsWithin_iff.mpr
+    ⟨tendsto_ceilApprox t, Eventually.of_forall fun m => ceilApprox_ge t m⟩
+
+/-- Each `ceilApprox t m` is a ratio of natural numbers with positive denominator. -/
+theorem ceilApprox_isRat (t : ℝ≥0) (m : ℕ) :
+    ceilApprox t m = (⌈(t : ℝ) * ↑(m + 1)⌉₊ : ℝ≥0) / ((m + 1 : ℕ) : ℝ≥0) :=
+  rfl
+
 end DensityExtension
 
 /-! ### Lévy process specialisation -/
