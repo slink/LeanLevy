@@ -36,13 +36,6 @@ Lévy–Khintchine factorisation `charFun (μ.map (X t)) ξ = exp(t · Ψ(ξ))`.
   only on the lag.
 * `ProbabilityTheory.IsLevyProcess.charFun_eq_exp_mul` — Lévy–Khintchine factorisation.
 
-## Sorry audit
-
-One sorry remains:
-* `charFun_eq_exp_mul` — the helper lemmas (multiplicativity, non-vanishing, rational powers,
-  right-continuity) are all fully proved. The remaining sorry is the extension from rational
-  to all real times, which requires a branch-cut argument for complex logarithms showing
-  that `φ(1/n) = exp(ψ/n)` (not just an arbitrary nth root of `exp(ψ)`).
 -/
 
 open MeasureTheory Complex Filter Topology
@@ -244,6 +237,7 @@ private theorem lk_charFun_nat_mul
         lk_charFun_mul h hX, ih, pow_succ, mul_comm]
 
 /-- The characteristic function at time 0 is identically 1. -/
+@[simp]
 theorem charFun_marginal_zero (h : IsLevyProcess X μ) (ξ : E) :
     charFun (μ.map (X 0)) ξ = 1 :=
   lk_charFun_zero h ξ

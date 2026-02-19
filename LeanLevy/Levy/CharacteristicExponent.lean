@@ -260,6 +260,7 @@ variable {Ω E : Type*} [MeasurableSpace Ω] [NormedAddCommGroup E] [InnerProduc
   {X : ℝ≥0 → Ω → E} {μ : Measure Ω} [IsProbabilityMeasure μ]
 
 /-- Multiplicativity of the characteristic function: `φ(s+t)(ξ) = φ(s)(ξ) · φ(t)(ξ)`. -/
+@[simp]
 theorem charFun_marginal_mul (h : IsLevyProcess X μ) (hX : ∀ t, Measurable (X t))
     (s t : ℝ≥0) (ξ : E) :
     charFun (μ.map (X (s + t))) ξ =
@@ -294,6 +295,7 @@ theorem charFun_marginal_rat_pow (h : IsLevyProcess X μ) (hX : ∀ t, Measurabl
 /-! ### Characteristic exponent at origin -/
 
 /-- The characteristic exponent vanishes at `ξ = 0`. -/
+@[simp]
 theorem charExponent_zero (h : IsLevyProcess X μ) (hX : ∀ t, Measurable (X t)) :
     h.charExponent (0 : E) = 0 := by
   simp only [charExponent]
@@ -497,6 +499,7 @@ noncomputable def levyExpFormula (h : IsLevyProcess X μ)
 
 /-- The characteristic function of the time-`t` marginal equals the Lévy exponential
 formula. This is a clean restatement of `charFun_eq_exp_mul`. -/
+@[simp]
 theorem charFun_eq_levyExpFormula (h : IsLevyProcess X μ) (hX : ∀ t, Measurable (X t))
     (t : ℝ≥0) (ξ : E) :
     charFun (μ.map (X t)) ξ = h.levyExpFormula hX t ξ :=
