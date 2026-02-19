@@ -106,6 +106,31 @@ end MetricBall
 
 end LocalLog
 
+/-! ### Density extension from rationals to reals
+
+A general-purpose ceiling-sequence construction and density lemma for extending
+equality from ℕ/ℕ rationals in `ℝ≥0` to all of `ℝ≥0`, given right-continuity
+on one side and continuity on the other. Independent of Lévy processes. -/
+
+namespace DensityExtension
+
+open Filter Topology
+
+/-- Ceiling approximation from above: `ceilApprox t m = ⌈t * (m+1)⌉₊ / (m+1)` as `ℝ≥0`.
+This gives a sequence of ℕ/ℕ rationals converging to `t` from above. -/
+noncomputable def ceilApprox (t : ℝ≥0) (m : ℕ) : ℝ≥0 :=
+  (⌈(t : ℝ) * ↑(m + 1)⌉₊ : ℝ≥0) / ((m + 1 : ℕ) : ℝ≥0)
+
+/-- The ceiling approximation is always `≥ t`. -/
+theorem ceilApprox_ge (t : ℝ≥0) (m : ℕ) : t ≤ ceilApprox t m :=
+  NNReal.coe_le_coe.mp (by
+    show (t : ℝ) ≤ _
+    simp only [ceilApprox]
+    rw [NNReal.coe_div, NNReal.coe_natCast, NNReal.coe_natCast]
+    exact (le_div_iff₀ (by positivity : (0 : ℝ) < ↑(m + 1))).mpr (Nat.le_ceil _))
+
+end DensityExtension
+
 /-! ### Lévy process specialisation -/
 
 namespace ProbabilityTheory.IsLevyProcess
