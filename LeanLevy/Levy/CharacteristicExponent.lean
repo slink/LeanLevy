@@ -30,12 +30,19 @@ We use a **general framework + Lévy specialisation**:
 * `LocalLog.localCharExponent` — `Complex.log ∘ φ`.
 * `IsLevyProcess.levyGoodDomain` — the good domain for the time-1 characteristic function.
 * `IsLevyProcess.levyLocalCharExponent` — the local characteristic exponent.
+* `DensityExtension.ceilApprox` — ceiling-sequence approximation of `ℝ≥0` by ℕ/ℕ rationals.
+* `IsLevyProcess.levyExpFormula` — the exponential formula `F(t, ξ) := exp(t · Ψ(ξ))`.
 
 ## Main results
 
 * `LocalLog.continuousOn_localCharExponent` — `log ∘ φ` is continuous on the good domain.
 * `LocalLog.exists_ball_subset_goodDomain` — an open ball around 0 lies in the good domain.
 * `IsLevyProcess.continuousOn_levyLocalCharExponent` — continuity of the local exponent.
+* `DensityExtension.eq_of_rightCts_of_continuous_of_eqOn_ratNNReal` — if a right-continuous
+  and a continuous function on `ℝ≥0` agree on all ℕ/ℕ rationals, they are equal.
+* `IsLevyProcess.continuous_levyExpFormula_t` — continuity of the exponential formula in `t`.
+* `IsLevyProcess.continuous_charFun_marginal_t` — the characteristic function is continuous in `t`.
+* `IsLevyProcess.charFun_eq_levyExpFormula` — `φ_t(ξ) = exp(t · Ψ(ξ))` (clean restatement).
 -/
 
 open MeasureTheory Complex Filter Topology
