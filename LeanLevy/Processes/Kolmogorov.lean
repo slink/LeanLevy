@@ -4,6 +4,10 @@ Released under MIT license as described in the file LICENSE.
 Authors: LeanLevy Contributors
 -/
 import Mathlib.MeasureTheory.Constructions.Projective
+import Mathlib.MeasureTheory.Constructions.ProjectiveFamilyContent
+import Mathlib.MeasureTheory.Measure.Regular
+import Mathlib.MeasureTheory.Measure.RegularityCompacts
+import Mathlib.Topology.MetricSpace.Polish
 import LeanLevy.Processes.ProjectiveFamily
 
 /-!
@@ -15,7 +19,7 @@ the full product (path) space `∀ i, α i` whose finite-dimensional marginals m
 the given family.
 
 This file states the theorem and defines the extended measure as a noncomputable
-definition. The proof is sorry'd — the classical argument proceeds via:
+definition. The classical argument proceeds via:
 
 1. **Content on cylinders**: assign `pf.measure I S` to each `cylinder I S`.
    Projective consistency ensures well-definedness.
@@ -53,14 +57,11 @@ namespace ProbabilityTheory
 
 namespace ProjectiveFamily
 
-variable {ι : Type*} {α : ι → Type*} [∀ i, MeasurableSpace (α i)]
-
--- Note: The actual proofs of the Kolmogorov extension theorem require
--- `[∀ i, TopologicalSpace (α i)]`, `PolishSpace (α i)`, and
--- `BorelSpace (α i)` for each `i`. These assumptions will be added to each
--- definition and theorem when the sorry's are filled in. For the skeleton,
--- we omit them since the proofs are sorry'd and the type signatures do not
--- require them.
+variable {ι : Type*} {α : ι → Type*}
+  [∀ i, MeasurableSpace (α i)]
+  [∀ i, TopologicalSpace (α i)]
+  [∀ i, PolishSpace (α i)]
+  [∀ i, BorelSpace (α i)]
 
 /-- The **Kolmogorov extension** of a projective family: a probability measure on the
 product space `∀ i, α i` whose finite-dimensional marginals match `pf.measure`.
@@ -69,8 +70,7 @@ The construction proceeds by defining a content on `measurableCylinders α`,
 proving σ-additivity via tightness of measures on Polish spaces, and applying the
 Carathéodory extension theorem.
 
-**Assumptions for the actual proof** (not yet needed for the sorry'd skeleton):
-each `α i` must carry `TopologicalSpace`, `PolishSpace`, and `BorelSpace` instances. -/
+Each `α i` must carry `TopologicalSpace`, `PolishSpace`, and `BorelSpace` instances. -/
 noncomputable def kolmogorovExtension (pf : ProjectiveFamily ι α) : Measure (∀ i, α i) :=
   sorry
   -- TODO proof outline:
