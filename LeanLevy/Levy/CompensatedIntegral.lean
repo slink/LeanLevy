@@ -77,4 +77,30 @@ theorem norm_levyCompensatedIntegrand_le (ξ x : ℝ) :
     ‖levyCompensatedIntegrand ξ x‖ ≤ (2 + ξ ^ 2) * min 1 (x ^ 2) := by
   sorry
 
+/-- The Lebesgue integral of `‖levyCompensatedIntegrand ξ ·‖ₑ` against a Lévy measure is finite. -/
+theorem lintegral_enorm_levyCompensatedIntegrand_lt_top
+    {ν : Measure ℝ} (hν : IsLevyMeasure ν) (ξ : ℝ) :
+    ∫⁻ x, ‖levyCompensatedIntegrand ξ x‖ₑ ∂ν < ⊤ := by
+  have hC : (0 : ℝ) ≤ 2 + ξ ^ 2 := by positivity
+  calc ∫⁻ x, ‖levyCompensatedIntegrand ξ x‖ₑ ∂ν
+      = ∫⁻ x, ENNReal.ofReal ‖levyCompensatedIntegrand ξ x‖ ∂ν := by
+        simp only [ofReal_norm_eq_enorm]
+    _ ≤ ∫⁻ x, ENNReal.ofReal ((2 + ξ ^ 2) * min 1 (x ^ 2)) ∂ν := by
+        apply lintegral_mono
+        intro x
+        exact ENNReal.ofReal_le_ofReal (norm_levyCompensatedIntegrand_le ξ x)
+    _ = ∫⁻ x, ENNReal.ofReal (2 + ξ ^ 2) * ENNReal.ofReal (min 1 (x ^ 2)) ∂ν := by
+        congr 1; ext x
+        rw [← ENNReal.ofReal_mul hC]
+    _ = ENNReal.ofReal (2 + ξ ^ 2) * ∫⁻ x, ENNReal.ofReal (min 1 (x ^ 2)) ∂ν := by
+        rw [lintegral_const_mul' _ _ ENNReal.ofReal_ne_top]
+    _ < ⊤ := ENNReal.mul_lt_top ofReal_lt_top hν.lintegral_min_one_sq_lt_top
+
+/-- The compensated integrand is Bochner integrable against a Lévy measure. -/
+theorem integrable_levyCompensatedIntegrand
+    {ν : Measure ℝ} (hν : IsLevyMeasure ν) (ξ : ℝ) :
+    Integrable (levyCompensatedIntegrand ξ) ν :=
+  ⟨(measurable_levyCompensatedIntegrand ξ).aestronglyMeasurable,
+    lintegral_enorm_levyCompensatedIntegrand_lt_top hν ξ⟩
+
 end ProbabilityTheory
