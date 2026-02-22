@@ -31,6 +31,7 @@ characteristic exponent is well-defined.
 * `ProbabilityTheory.IsLevyMeasure.lintegral_min_one_sq_lt_top` — the integral condition.
 * `ProbabilityTheory.IsLevyMeasure.measure_setOf_abs_ge_lt_top` — `ν {x | ε ≤ |x|} < ⊤` for `ε > 0`.
 * `ProbabilityTheory.IsLevyMeasure.measure_compl_Ioo_lt_top` — `ν (Ioo (-1) 1)ᶜ < ⊤`.
+* `ProbabilityTheory.IsLevyMeasure.sigmaFinite` — every Lévy measure is σ-finite.
 * `ProbabilityTheory.isLevyMeasure_zero` — the zero measure is a Levy measure.
 -/
 
@@ -98,6 +99,33 @@ theorem measure_compl_Ioo_lt_top (hν : IsLevyMeasure ν) :
   cases hx with
   | inl h => exact le_trans (by linarith) (neg_le_abs x)
   | inr h => exact le_trans h (le_abs_self x)
+
+/-- Every Lévy measure is σ-finite. -/
+theorem sigmaFinite (hν : IsLevyMeasure ν) : SigmaFinite ν := by
+  constructor
+  exact ⟨{
+    set := fun n => {x : ℝ | (1 : ℝ) / (↑(n + 1) : ℝ) ≤ |x|} ∪ {0}
+    set_mem := fun _ => trivial
+    finite := fun n => by
+      calc ν ({x : ℝ | 1 / (↑(n + 1) : ℝ) ≤ |x|} ∪ {0})
+          ≤ ν {x : ℝ | 1 / (↑(n + 1) : ℝ) ≤ |x|} + ν {0} := measure_union_le _ _
+        _ = ν {x : ℝ | 1 / (↑(n + 1) : ℝ) ≤ |x|} + 0 := by rw [hν.zero_singleton]
+        _ = ν {x : ℝ | 1 / (↑(n + 1) : ℝ) ≤ |x|} := add_zero _
+        _ < ⊤ := hν.measure_setOf_abs_ge_lt_top (by positivity)
+    spanning := by
+      ext x
+      simp only [mem_iUnion, mem_union, mem_setOf_eq, mem_singleton_iff, mem_univ, iff_true]
+      by_cases hx : x = 0
+      · exact ⟨0, Or.inr hx⟩
+      · have habs : 0 < |x| := abs_pos.mpr hx
+        obtain ⟨n, hn⟩ := exists_nat_gt (1 / |x|)
+        refine ⟨n, Or.inl ?_⟩
+        rw [div_le_iff₀ (Nat.cast_pos.mpr (Nat.succ_pos n))]
+        have h1 : 1 / |x| < ↑n := hn
+        rw [div_lt_iff₀ habs] at h1
+        have h2 : (↑n : ℝ) ≤ ↑(n + 1) := by exact_mod_cast Nat.le_succ n
+        nlinarith
+  }⟩
 
 end IsLevyMeasure
 
