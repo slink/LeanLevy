@@ -7,6 +7,7 @@ import LeanLevy.Processes.LevyProcess
 import LeanLevy.Probability.Poisson
 import Mathlib.Probability.ProbabilityMassFunction.Integrals
 import Mathlib.Probability.Independence.CharacteristicFunction
+import LeanLevy.Processes.Kolmogorov
 
 /-!
 # Poisson Process
@@ -295,16 +296,104 @@ theorem IsPoissonProcess.charFun_eq {N : ℝ≥0 → Ω → ℕ} {rate : ℝ≥0
   rw [h.map_natCast_eq t]
   exact charFun_poissonMeasure_eq (rate * t) ξ
 
+/-! ## Poisson process projective family -/
+
+/-- The finite-dimensional distribution of a Poisson process with rate `rate`
+at times `I : Finset ℝ≥0`. For sorted times `t₁ ≤ ⋯ ≤ tₙ`, this is the
+pushforward of the product `⨂ₖ poissonMeasure(rate * Δtₖ)` under the
+cumulative-sum map from increments to values.
+
+**Dependencies for filling this sorry:**
+- `Measure.pi` for the product of independent Poisson measures
+- `Finset.sort` to order the times
+- A measurable cumulative-sum transformation -/
+noncomputable def poissonProcessFDD (rate : ℝ≥0) (I : Finset ℝ≥0) :
+    Measure (∀ j : I, ℕ) :=
+  sorry
+
+/-- The Poisson FDDs form a projective family: marginalizing from `I` to `J ⊆ I`
+recovers the FDD at `J`. Follows from the Poisson convolution property
+`Poisson(a) * Poisson(b) = Poisson(a + b)` for independent variables, which lets
+us merge adjacent increments when dropping times.
+
+**Dependencies:** `poissonProcessFDD` definition, Poisson convolution. -/
+theorem isProjectiveMeasureFamily_poissonProcessFDD (rate : ℝ≥0) :
+    IsProjectiveMeasureFamily (α := fun (_ : ℝ≥0) => ℕ) (poissonProcessFDD rate) :=
+  sorry
+
+/-- Each Poisson FDD is a probability measure (product of probability measures
+pushed forward by a measurable map).
+
+**Dependencies:** `poissonProcessFDD` definition, `isProbabilityMeasure_poissonMeasure`. -/
+instance isProbabilityMeasure_poissonProcessFDD (rate : ℝ≥0) (I : Finset ℝ≥0) :
+    IsProbabilityMeasure (poissonProcessFDD rate I) :=
+  sorry
+
+/-- The projective family for a Poisson process with rate `rate`.
+Input to `ProjectiveFamily.kolmogorovExtension`. -/
+noncomputable def poissonProjectiveFamily (rate : ℝ≥0) :
+    ProjectiveFamily ℝ≥0 (fun _ : ℝ≥0 => ℕ) where
+  measure := poissonProcessFDD rate
+  consistent := isProjectiveMeasureFamily_poissonProcessFDD rate
+  prob := isProbabilityMeasure_poissonProcessFDD rate
+
 /-! ## Existence -/
 
 /-- There exists a probability space supporting a Poisson process with any rate.
 
-This requires the Kolmogorov extension theorem to build a consistent family of
-finite-dimensional distributions into a process on a canonical path space. -/
+**Construction:**
+- Path space: `Ω := ∀ (_ : ℝ≥0), ℕ`
+- Process: `N t ω := if t = 0 then 0 else ω t` (the `if` gives pointwise `N 0 = 0`)
+- Measure: `(poissonProjectiveFamily rate).kolmogorovExtension`
+
+**Dependency graph:**
+```
+poissonProcessFDD ──→ isProjectiveMeasureFamily_poissonProcessFDD
+                  ──→ isProbabilityMeasure_poissonProcessFDD
+                         │
+                         v
+                  poissonProjectiveFamily
+                         │
+                         v
+                  kolmogorovExtension  (sorry'd in Kolmogorov.lean)
+                         │
+                         v
+              ┌──────────┼──────────┬────────────┐
+              v          v          v            v
+          start_zero  indep_incr  incr_poisson  cadlag
+          (proved!)   (sorry)     (sorry)       (sorry)
+```
+-/
 theorem exists_poissonProcess (rate : ℝ≥0) :
     ∃ (Ω : Type) (_ : MeasurableSpace Ω) (μ : Measure Ω) (N : ℝ≥0 → Ω → ℕ),
       IsPoissonProcess N rate μ := by
-  sorry -- Requires Kolmogorov extension theorem (not in mathlib v4.28.0-rc1).
-         -- See Mathlib.Probability.Cylinder.IsProjectiveMeasureFamily for partial infrastructure.
+  -- Canonical path space with Kolmogorov extension measure
+  refine ⟨∀ _ : ℝ≥0, ℕ, inferInstance,
+    (poissonProjectiveFamily rate).kolmogorovExtension,
+    fun t ω => if t = 0 then 0 else ω t, ?_⟩
+  exact {
+    start_zero := by ext ω; simp
+    indep_increments := by
+      sorry
+      -- Independent increments of `fun t ω => ((if t = 0 then 0 else ω t : ℕ) : ℤ)`.
+      -- Follows from the product structure of poissonProcessFDD and
+      -- kolmogorovExtension_apply_cylinder recovering the FDD on cylinder sets.
+      -- Dependencies: poissonProcessFDD, kolmogorovExtension_apply_cylinder.
+    increment_poisson := by
+      sorry
+      -- `μ.map (fun ω => N(s+h) ω - N s ω) = poissonMeasure (rate * h)`.
+      -- Factor through the projection to {s, s+h}: by kolmogorovExtension_apply_cylinder,
+      -- the marginal at {s, s+h} equals poissonProcessFDD rate {s, s+h}, whose
+      -- increment marginal is Poisson(rate * h) by construction.
+      -- Dependencies: poissonProcessFDD, kolmogorovExtension_apply_cylinder.
+    cadlag_paths := by
+      sorry
+      -- A.e. càdlàg paths for `fun t => ((if t = 0 then 0 else ω t : ℕ) : ℤ)`.
+      -- Hardest field. Strategy:
+      -- 1. Show a.s. paths are non-decreasing (ℕ-valued increments are non-negative).
+      -- 2. Show a.s. right-continuity: P(Poisson(rate·h) ≥ 1) → 0 as h → 0.
+      -- 3. Left limits exist by monotonicity + ℤ-valued.
+      -- Dependencies: increment_poisson, Poisson tail bounds.
+  }
 
 end ProbabilityTheory
