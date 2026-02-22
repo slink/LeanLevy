@@ -351,8 +351,9 @@ pushed forward by a measurable map).
 
 **Dependencies:** `poissonProcessFDD` definition, `isProbabilityMeasure_poissonMeasure`. -/
 instance isProbabilityMeasure_poissonProcessFDD (rate : ℝ≥0) (I : Finset ℝ≥0) :
-    IsProbabilityMeasure (poissonProcessFDD rate I) :=
-  sorry
+    IsProbabilityMeasure (poissonProcessFDD rate I) := by
+  unfold poissonProcessFDD
+  exact Measure.isProbabilityMeasure_map (Measurable.of_discrete).aemeasurable
 
 /-- `ℕ` is a Polish space (closed embedding into `ℝ`, which is Polish). -/
 instance : PolishSpace ℕ := Nat.isClosedEmbedding_coe_real.polishSpace
