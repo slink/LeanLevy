@@ -298,18 +298,43 @@ theorem IsPoissonProcess.charFun_eq {N : ℝ≥0 → Ω → ℕ} {rate : ℝ≥0
 
 /-! ## Poisson process projective family -/
 
+/-- The time gap (increment) at position `k` in the sorted enumeration of `I`.
+For `k = 0` this is `t₀ - 0`; for `k > 0` this is `tₖ - tₖ₋₁`. -/
+noncomputable def poissonProcessGap (I : Finset ℝ≥0) (k : Fin I.card) : ℝ≥0 :=
+  let e := I.orderIsoOfFin rfl
+  (e k : ℝ≥0) - if h : (k : ℕ) = 0 then 0 else (e ⟨k - 1, by omega⟩ : ℝ≥0)
+
+/-- The cumulative sum map: given increments `d : Fin n → ℕ`, compute values
+`v k = d 0 + d 1 + ⋯ + d k = ∑ j in Finset.range (k + 1), d ⟨j, ⋯⟩`. -/
+noncomputable def poissonProcessCumSum {n : ℕ} (d : Fin n → ℕ) (k : Fin n) : ℕ :=
+  ∑ j : Fin (k.val + 1), d ⟨j.val, by omega⟩
+
+/-- The reindexing map from `Fin I.card → ℕ` to `∀ j : I, ℕ`, using the
+order-preserving bijection `Finset.orderIsoOfFin`. -/
+noncomputable def poissonProcessReindex (I : Finset ℝ≥0) (f : Fin I.card → ℕ) : I → ℕ :=
+  fun j => f ((I.orderIsoOfFin rfl).symm j)
+
+/-- The combined map from increment space to value space: cumulative sum
+followed by reindexing. -/
+noncomputable def poissonProcessIncrToVal (I : Finset ℝ≥0) :
+    (Fin I.card → ℕ) → (I → ℕ) :=
+  poissonProcessReindex I ∘ poissonProcessCumSum
+
 /-- The finite-dimensional distribution of a Poisson process with rate `rate`
-at times `I : Finset ℝ≥0`. For sorted times `t₁ ≤ ⋯ ≤ tₙ`, this is the
-pushforward of the product `⨂ₖ poissonMeasure(rate * Δtₖ)` under the
+at times `I : Finset ℝ≥0`. For sorted times `0 = t₀ < t₁ ≤ ⋯ ≤ tₙ`, this is
+the pushforward of the product `⨂ₖ poissonMeasure(rate * Δtₖ)` under the
 cumulative-sum map from increments to values.
 
-**Dependencies for filling this sorry:**
-- `Measure.pi` for the product of independent Poisson measures
-- `Finset.sort` to order the times
-- A measurable cumulative-sum transformation -/
+The construction proceeds as:
+1. Sort `I` via `Finset.orderIsoOfFin` to get `e : Fin n ≃o I`.
+2. Compute time gaps `Δtₖ = tₖ - tₖ₋₁` (with `t₋₁ = 0`).
+3. Build the product measure `Measure.pi (fun k => poissonMeasure (rate * Δtₖ))`.
+4. Push forward through `poissonProcessIncrToVal`, which applies cumulative
+   summation and reindexes from `Fin n` to `I`. -/
 noncomputable def poissonProcessFDD (rate : ℝ≥0) (I : Finset ℝ≥0) :
-    Measure (∀ j : I, ℕ) :=
-  sorry
+    Measure (I → ℕ) :=
+  let incrMeasure : Fin I.card → Measure ℕ := fun k => poissonMeasure (rate * poissonProcessGap I k)
+  (Measure.pi incrMeasure).map (poissonProcessIncrToVal I)
 
 /-- The Poisson FDDs form a projective family: marginalizing from `I` to `J ⊆ I`
 recovers the FDD at `J`. Follows from the Poisson convolution property
