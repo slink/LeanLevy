@@ -57,12 +57,24 @@ A Lean 4 formalization of Lévy processes, built on top of mathlib.
 - Poisson distribution is infinitely divisible
 - Lévy process marginals are infinitely divisible
 
+**Lévy measures** (`LeanLevy/Levy/LevyMeasure.lean`)
+- `IsLevyMeasure` predicate: `ν({0}) = 0` and `∫ min(1, x²) dν < ∞`
+- Finite mass on `{x | ε ≤ |x|}`, σ-finiteness
+
+**Compensated integrand** (`LeanLevy/Levy/CompensatedIntegral.lean`)
+- `levyCompensatedIntegrand ξ x = exp(ixξ) − 1 − ixξ·1_{|x|<1}`
+- Pointwise norm bound, measurability, Bochner integrability under a Lévy measure
+
+**Lévy–Khintchine representation** (`LeanLevy/Levy/LevyKhintchine.lean`)
+- `LevyKhintchineTriple` structure: drift, Gaussian variance, Lévy measure
+- Statement of the representation theorem
+
 ## Incomplete
 
 Two results remain sorry'd:
 
 - **`exists_poissonProcess`** — Existence of a Poisson process. Needs the Kolmogorov extension theorem, which isn't in mathlib yet.
-- **`levyKhintchine_representation`** — The full Lévy–Khintchine representation theorem. Not yet attempted.
+- **`levyKhintchine_representation`** — The Lévy–Khintchine representation theorem.
 
 ## Building
 
@@ -87,10 +99,14 @@ LeanLevy/
 │   ├── Cadlag.lean
 │   ├── FiniteDimensional.lean
 │   ├── ProjectiveFamily.lean
+│   ├── Kolmogorov.lean
 │   ├── LevyProcess.lean
 │   ├── PoissonProcess.lean
 │   └── StochasticProcess.lean
 └── Levy/
     ├── CharacteristicExponent.lean
-    └── InfiniteDivisible.lean
+    ├── CompensatedIntegral.lean
+    ├── InfiniteDivisible.lean
+    ├── LevyKhintchine.lean
+    └── LevyMeasure.lean
 ```
