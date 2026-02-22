@@ -6,6 +6,7 @@ Authors: LeanLevy Contributors
 import LeanLevy.Processes.LevyProcess
 import LeanLevy.Processes.PoissonProcess
 import LeanLevy.Levy.LevyMeasure
+import LeanLevy.Levy.CompensatedIntegral
 import Mathlib.MeasureTheory.Group.Convolution
 import Mathlib.Probability.Independence.CharacteristicFunction
 
@@ -282,7 +283,8 @@ end LevyKhintchineTriple
 
 /-- **Lévy-Khintchine representation theorem**: every infinitely divisible probability measure
 on `ℝ` has a characteristic function of the form
-`exp(ibξ − σ²ξ²/2 + ∫ (e^{ixξ} − 1 − ixξ·1_{|x|≤1}) dν(x))`.
+`exp(ibξ − σ²ξ²/2 + ∫ f(ξ,x) dν(x))` where `f` is the compensated integrand
+`exp(ixξ) − 1 − ixξ·1_{|x|<1}`.
 
 This is a deep analytic result requiring Fourier analysis and Lévy measure theory. -/
 theorem levyKhintchine_representation
@@ -291,8 +293,7 @@ theorem levyKhintchine_representation
       charFun μ ξ = Complex.exp (
         ↑T.drift * ↑ξ * Complex.I
         - ↑(T.gaussianVariance : ℝ) * ↑ξ ^ 2 / 2
-        + ∫ x, (Complex.exp (↑x * ↑ξ * Complex.I) - 1
-          - ↑x * ↑ξ * Complex.I * if |x| ≤ 1 then 1 else 0) ∂T.levyMeasure) := by
+        + ∫ x, levyCompensatedIntegrand ξ x ∂T.levyMeasure) := by
   sorry -- Deep analytic theorem (Fourier analysis + Lévy measure theory)
 
 end ProbabilityTheory
