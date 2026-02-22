@@ -5,6 +5,8 @@ Authors: LeanLevy Contributors
 -/
 import Mathlib.MeasureTheory.Measure.MeasureSpace
 import Mathlib.MeasureTheory.Integral.Lebesgue.Basic
+import Mathlib.MeasureTheory.Integral.Lebesgue.Markov
+import Mathlib.Topology.Order.Basic
 
 /-!
 # Levy Measures
@@ -27,6 +29,8 @@ characteristic exponent is well-defined.
 
 * `ProbabilityTheory.IsLevyMeasure.zero_singleton` — `ν {0} = 0`.
 * `ProbabilityTheory.IsLevyMeasure.lintegral_min_one_sq_lt_top` — the integral condition.
+* `ProbabilityTheory.IsLevyMeasure.measure_setOf_abs_ge_lt_top` — `ν {x | ε ≤ |x|} < ⊤` for `ε > 0`.
+* `ProbabilityTheory.IsLevyMeasure.measure_compl_Ioo_lt_top` — `ν (Ioo (-1) 1)ᶜ < ⊤`.
 * `ProbabilityTheory.isLevyMeasure_zero` — the zero measure is a Levy measure.
 -/
 
@@ -59,6 +63,41 @@ theorem zero_singleton (hν : IsLevyMeasure ν) : ν {0} = 0 :=
 theorem lintegral_min_one_sq_lt_top (hν : IsLevyMeasure ν) :
     ∫⁻ x, ENNReal.ofReal (min 1 (x ^ 2)) ∂ν < ⊤ :=
   hν.2
+
+/-- A Lévy measure has finite mass on `{x | ε ≤ |x|}` for any `ε > 0`. -/
+theorem measure_setOf_abs_ge_lt_top (hν : IsLevyMeasure ν) {ε : ℝ} (hε : 0 < ε) :
+    ν {x | ε ≤ |x|} < ⊤ := by
+  set c := ENNReal.ofReal (min 1 (ε ^ 2))
+  set f := fun x : ℝ => ENNReal.ofReal (min 1 (x ^ 2))
+  -- c is positive since ε > 0
+  have hε2 : 0 < min 1 (ε ^ 2) := lt_min one_pos (sq_pos_of_pos hε)
+  have hc_pos : 0 < c := ENNReal.ofReal_pos.mpr hε2
+  -- The integrand is measurable
+  have hf_meas : Measurable f := by
+    apply ENNReal.measurable_ofReal.comp
+    exact measurable_const.min (measurable_id'.pow_const 2)
+  -- {x | ε ≤ |x|} ⊆ {x | c ≤ f x}
+  have hSub : {x : ℝ | ε ≤ |x|} ⊆ {x : ℝ | c ≤ f x} := by
+    intro x hx
+    simp only [mem_setOf_eq] at hx ⊢
+    apply ENNReal.ofReal_le_ofReal
+    exact min_le_min le_rfl ((sq_abs x).symm ▸ pow_le_pow_left₀ hε.le hx 2)
+  -- Markov: c * ν {x | c ≤ f x} ≤ ∫⁻ f dν
+  have hMarkov := mul_meas_ge_le_lintegral hf_meas c (μ := ν)
+  -- c * ν(S) ≤ ∫⁻ f dν < ⊤
+  have hle : c * ν {x | ε ≤ |x|} ≤ ∫⁻ x, f x ∂ν :=
+    le_trans (mul_le_mul_right (measure_mono hSub) c) hMarkov
+  exact lt_top_of_mul_ne_top_right (ne_top_of_le_ne_top hν.2.ne hle) hc_pos.ne'
+
+/-- A Lévy measure has finite mass outside `Ioo (-1) 1`. -/
+theorem measure_compl_Ioo_lt_top (hν : IsLevyMeasure ν) :
+    ν (Ioo (-1) 1)ᶜ < ⊤ := by
+  apply (measure_mono _).trans_lt (measure_setOf_abs_ge_lt_top hν one_pos)
+  intro x hx
+  simp only [mem_compl_iff, mem_Ioo, not_and_or, not_lt, mem_setOf_eq] at hx ⊢
+  cases hx with
+  | inl h => exact le_trans (by linarith) (neg_le_abs x)
+  | inr h => exact le_trans h (le_abs_self x)
 
 end IsLevyMeasure
 
