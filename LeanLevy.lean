@@ -15,3 +15,4 @@ import LeanLevy.Levy.CharacteristicExponent
 import LeanLevy.Levy.InfiniteDivisible
 import LeanLevy.Levy.CompensatedIntegral
 import LeanLevy.Levy.LevyMeasure
+import LeanLevy.Levy.LevyKhintchine
