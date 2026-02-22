@@ -47,6 +47,20 @@ theorem levyCompensatedIntegrand_zero_right (ξ : ℝ) :
     levyCompensatedIntegrand ξ 0 = 0 := by
   simp [levyCompensatedIntegrand]
 
+/-- The compensated integrand is measurable in `x` for fixed `ξ`. -/
+@[fun_prop]
+theorem measurable_levyCompensatedIntegrand (ξ : ℝ) :
+    Measurable (levyCompensatedIntegrand ξ) := by
+  unfold levyCompensatedIntegrand
+  apply Measurable.sub
+  · apply Measurable.sub
+    · exact (((Complex.measurable_ofReal).mul measurable_const).mul measurable_const).cexp
+    · exact measurable_const
+  · apply Measurable.mul
+    · exact (Complex.measurable_ofReal.mul measurable_const).mul measurable_const
+    · exact measurable_const.ite
+        (isOpen_Iio.preimage continuous_abs |>.measurableSet) measurable_const
+
 /-- For `|x| ≥ 1`, `‖f(ξ,x)‖ ≤ 2`. -/
 theorem norm_levyCompensatedIntegrand_le_two {ξ x : ℝ} (hx : 1 ≤ |x|) :
     ‖levyCompensatedIntegrand ξ x‖ ≤ 2 := by
