@@ -123,9 +123,94 @@ private theorem content_tendsto_zero (pf : ProjectiveFamily ι α)
     intro n
     by_contra h_empty; rw [Set.not_nonempty_iff_eq_empty] at h_empty
     suffices pf.measure (J n) (T n) < ε from absurd (h_lower n) (not_le.2 this)
-    -- The measure bound is: T_n ⊆ (T_n \ K_n) ∪ ⋃_{k<n} restrict₂⁻¹(T_k \ K_k)
-    -- and the deficits sum to less than ε via geometric series
-    sorry
+    -- Since L n = ∅, K_n ∩ ⋂ k, restrict₂⁻¹(K_k) = ∅, so
+    -- T_n ⊆ (T_n \ K_n) ∪ ⋃ k : Fin n, restrict₂⁻¹(T_k \ K_k)
+    have hT_cover : T n ⊆ (T n \ K n) ∪
+        ⋃ k : Fin n, Finset.restrict₂ (hJ_mono k.2.le) ⁻¹' (T k \ K k) := by
+      intro x hx
+      by_cases hxK : x ∈ K n
+      · -- x ∈ K_n, so x ∉ ⋂ k, restrict₂⁻¹(K_k) (since L n = ∅)
+        right
+        have : x ∉ ⋂ k : Fin n, Finset.restrict₂ (hJ_mono k.2.le) ⁻¹' K k := by
+          intro hmem; exact h_empty.subset ⟨hxK, hmem⟩
+        rw [Set.mem_iInter] at this; push_neg at this
+        obtain ⟨k, hk⟩ := this
+        exact Set.mem_iUnion.2 ⟨k, Set.mem_preimage.2 ⟨hT_anti k.2.le hx, hk⟩⟩
+      · exact Or.inl ⟨hx, hxK⟩
+    -- Use consistency to pull back measure to lower levels
+    have hK_diff_pull : ∀ k : Fin n,
+        pf.measure (J n) (Finset.restrict₂ (hJ_mono k.2.le) ⁻¹' (T ↑k \ K ↑k)) =
+        pf.measure (J ↑k) (T ↑k \ K ↑k) := by
+      intro k
+      rw [← Measure.map_apply (Finset.measurable_restrict₂ _)
+        ((mT ↑k).diff (hK_compact ↑k).measurableSet),
+        ← pf.consistent (J n) (J ↑k) (hJ_mono k.2.le)]
+    -- Bound function: δ k = ε / 2^(k+2)
+    -- Step 1: Measure ≤ sum of deficits (via covering + subadditivity + consistency)
+    have hstep1 : pf.measure (J n) (T n) ≤
+        pf.measure (J n) (T n \ K n) +
+        ∑ k : Fin n, pf.measure (J ↑k) (T ↑k \ K ↑k) := by
+      calc pf.measure (J n) (T n)
+          ≤ pf.measure (J n) ((T n \ K n) ∪
+              ⋃ k : Fin n, Finset.restrict₂ (hJ_mono k.2.le) ⁻¹' (T ↑k \ K ↑k)) :=
+            measure_mono hT_cover
+        _ ≤ pf.measure (J n) (T n \ K n) +
+              pf.measure (J n)
+                (⋃ k : Fin n, Finset.restrict₂ (hJ_mono k.2.le) ⁻¹' (T ↑k \ K ↑k)) :=
+            measure_union_le _ _
+        _ ≤ pf.measure (J n) (T n \ K n) +
+              ∑ k : Fin n, pf.measure (J n)
+                (Finset.restrict₂ (hJ_mono k.2.le) ⁻¹' (T ↑k \ K ↑k)) := by
+            gcongr; exact measure_iUnion_fintype_le _ _
+        _ = _ := by congr 1; congr 1 with k; exact hK_diff_pull k
+    -- Step 2: bound total by ε via geometric series
+    have hε_ne_top : ε ≠ ⊤ := ne_top_of_le_ne_top (measure_ne_top _ _) (h_lower 0)
+    -- Each deficit is strictly less than its budget
+    have hdeficit_le : ∀ k, pf.measure (J k) (T k \ K k) ≤ ε / 2 ^ (k + 2) :=
+      fun k ↦ (hK_diff k).le
+    -- The tsum < ε: ∑' k, ε/2^(k+2) = 2⁻¹ * ∑' k, ε/2^(k+1) = 2⁻¹ * ε = ε/2 < ε
+    have htsum_lt : ∑' k : ℕ, ε / 2 ^ (k + 2) < ε := by
+      have h_rw : (fun k ↦ ε / 2 ^ (k + 2)) = fun k ↦ 2⁻¹ * (ε / 2 ^ (k + 1)) := by
+        ext k
+        rw [show k + 2 = (k + 1) + 1 from by omega, pow_succ, ENNReal.div_eq_inv_mul,
+          ENNReal.mul_inv (Or.inl (by positivity)) (Or.inl (by positivity)),
+          mul_comm ((2 : ℝ≥0∞) ^ (k + 1))⁻¹ _, mul_assoc, ← ENNReal.div_eq_inv_mul]
+      rw [h_rw, ENNReal.tsum_mul_left]
+      have h_sum : ∑' k : ℕ, ε / 2 ^ (k + 1) = ε := by
+        have : (fun k ↦ ε / 2 ^ (k + 1)) = fun k ↦ ε * (2⁻¹ : ℝ≥0∞) ^ (k + 1) := by
+          ext k; rw [ENNReal.div_eq_inv_mul, ENNReal.inv_pow]
+        rw [this, ENNReal.tsum_mul_left, ENNReal.tsum_geometric_add_one, ENNReal.one_sub_inv_two,
+          inv_inv, ENNReal.inv_mul_cancel (by norm_num) (by norm_num), mul_one]
+      rw [h_sum, ← ENNReal.div_eq_inv_mul]
+      exact ENNReal.half_lt_self hε_pos.ne' hε_ne_top
+    -- The sum ≤ the tsum: using range (n+1) as the finite index set
+    have hfin_ne_top : ∑ k : Fin n, pf.measure (J ↑k) (T ↑k \ K ↑k) ≠ ⊤ :=
+      (ENNReal.sum_lt_top.2 (fun k _ ↦ measure_lt_top _ _)).ne
+    -- Step 2: bound the measure by the partial sum of budgets over range (n+1)
+    -- First bound: deficit_n + ∑ deficits < budget_n + ∑ budgets
+    -- Second: budget_n + ∑ budgets = ∑_{k ∈ range(n+1)} budget_k ≤ tsum ≤ ε/2 < ε
+    -- For the sum conversion, use Fin.sum_univ_castSucc or work over range directly.
+    -- Actually, bound the measure via a single sum over range (n + 1).
+    have h_range_le_tsum : ∑ k ∈ Finset.range (n + 1), ε / 2 ^ (k + 2) ≤
+        ∑' k : ℕ, ε / 2 ^ (k + 2) :=
+      ENNReal.sum_le_tsum _
+    -- pf.measure ≤ budget_n + ∑ budget_k = ∑ range (n+1) budget
+    -- Need: ∑ k : Fin n, ... = ∑ k ∈ range n, ...
+    -- And: ∑ k ∈ range (n+1), f k = (∑ k ∈ range n, f k) + f n
+    -- Combine: measure ≤ budget sum ≤ tsum < ε
+    have hstep2 : pf.measure (J n) (T n) ≤
+        ε / 2 ^ (n + 2) + ∑ k : Fin n, ε / 2 ^ ((k : ℕ) + 2) :=
+      hstep1.trans (add_le_add (hdeficit_le n) (Finset.sum_le_sum fun k _ ↦ hdeficit_le ↑k))
+    -- Rewrite as a sum over Fin (n+1) and bound by tsum
+    have hstep3 : ε / 2 ^ (n + 2) + ∑ k : Fin n, ε / 2 ^ ((k : ℕ) + 2) ≤
+        ∑' k : ℕ, ε / 2 ^ (k + 2) := by
+      calc ε / 2 ^ (n + 2) + ∑ k : Fin n, ε / 2 ^ ((k : ℕ) + 2)
+          = ∑ k : Fin (n + 1), ε / 2 ^ ((k : ℕ) + 2) := by
+            rw [Fin.sum_univ_castSucc]; simp [Fin.val_last, Fin.val_castSucc, add_comm]
+        _ = ∑' k : Fin (n + 1), ε / 2 ^ ((k : ℕ) + 2) := (tsum_fintype _).symm
+        _ ≤ ∑' k : ℕ, ε / 2 ^ (k + 2) :=
+            ENNReal.tsum_comp_le_tsum_of_injective Fin.val_injective _
+    exact (hstep2.trans hstep3).trans_lt htsum_lt
   -- restrict₂ maps L_{m} into L_n for n ≤ m
   have hL_restrict : ∀ {n m} (hnm : n ≤ m) (x : ∀ j : J m, α j),
       x ∈ L m → Finset.restrict₂ (hJ_mono hnm) x ∈ L n := by
@@ -228,22 +313,27 @@ noncomputable def kolmogorovExtension (pf : ProjectiveFamily ι α) : Measure (�
 /-- The Kolmogorov extension is a projective limit. -/
 theorem isProjectiveLimit_kolmogorovExtension (pf : ProjectiveFamily ι α) :
     IsProjectiveLimit pf.kolmogorovExtension pf.measure := by
-  sorry
+  intro I
+  ext s hs
+  rw [Measure.map_apply (Finset.measurable_restrict I) hs, ← cylinder, kolmogorovExtension,
+    AddContent.measure_eq _ _ generateFrom_measurableCylinders.symm _
+      (cylinder_mem_measurableCylinders _ _ hs),
+    projectiveFamilyContent_cylinder pf.consistent hs]
 
 instance instIsProbabilityMeasureKolmogorovExtension (pf : ProjectiveFamily ι α) :
-    IsProbabilityMeasure pf.kolmogorovExtension := by
-  sorry
+    IsProbabilityMeasure pf.kolmogorovExtension :=
+  pf.isProjectiveLimit_kolmogorovExtension.isProbabilityMeasure
 
 theorem kolmogorovExtension_unique (pf : ProjectiveFamily ι α) (μ : Measure (∀ i, α i))
     (hμ : IsProjectiveLimit μ pf.measure) :
-    μ = pf.kolmogorovExtension := by
-  sorry
+    μ = pf.kolmogorovExtension :=
+  hμ.unique pf.isProjectiveLimit_kolmogorovExtension
 
 @[simp]
 theorem kolmogorovExtension_apply_cylinder (pf : ProjectiveFamily ι α) (I : Finset ι)
     {S : Set (∀ i : I, α i)} (hS : MeasurableSet S) :
-    pf.kolmogorovExtension (cylinder I S) = pf.measure I S := by
-  sorry
+    pf.kolmogorovExtension (cylinder I S) = pf.measure I S :=
+  pf.isProjectiveLimit_kolmogorovExtension.measure_cylinder I hS
 
 end ProjectiveFamily
 
