@@ -5,6 +5,7 @@ Authors: LeanLevy Contributors
 -/
 import LeanLevy.Processes.LevyProcess
 import LeanLevy.Processes.PoissonProcess
+import LeanLevy.Levy.LevyMeasure
 import Mathlib.MeasureTheory.Group.Convolution
 import Mathlib.Probability.Independence.CharacteristicFunction
 
@@ -254,19 +255,30 @@ theorem IsLevyProcess.isInfinitelyDivisible_marginal
 /-! ## Section 6: Lévy-Khintchine representation -/
 
 /-- The **Lévy-Khintchine triple** `(b, σ², ν)` consisting of a drift, Gaussian variance,
-and Lévy measure. The Lévy measure satisfies the integrability condition
+and Lévy measure. The Lévy measure satisfies `IsLevyMeasure`, i.e., `ν({0}) = 0` and
 `∫ min(1, x²) dν < ∞`. -/
 structure LevyKhintchineTriple where
   /-- Drift parameter. -/
   drift : ℝ
   /-- Gaussian variance (non-negative). -/
   gaussianVariance : ℝ≥0
-  /-- Lévy measure: a σ-finite measure on `ℝ \ {0}` satisfying `∫ min(1, x²) dν < ∞`. -/
+  /-- Lévy measure satisfying `ν({0}) = 0` and `∫ min(1, x²) dν < ∞`. -/
   levyMeasure : Measure ℝ
-  /-- The Lévy measure assigns zero mass to the origin. -/
-  levyMeasure_zero : levyMeasure {0} = 0
-  /-- Integrability condition: `∫ min(1, x²) dν < ∞`. -/
-  integrable_min_one_sq : ∫⁻ x, ENNReal.ofReal (min 1 (x ^ 2)) ∂levyMeasure < ⊤
+  /-- The Lévy measure satisfies the Lévy measure conditions. -/
+  levyMeasure_isLevyMeasure : IsLevyMeasure levyMeasure
+
+namespace LevyKhintchineTriple
+
+variable (T : LevyKhintchineTriple)
+
+theorem levyMeasure_zero : T.levyMeasure {0} = 0 :=
+  T.levyMeasure_isLevyMeasure.zero_singleton
+
+theorem integrable_min_one_sq :
+    ∫⁻ x, ENNReal.ofReal (min 1 (x ^ 2)) ∂T.levyMeasure < ⊤ :=
+  T.levyMeasure_isLevyMeasure.lintegral_min_one_sq_lt_top
+
+end LevyKhintchineTriple
 
 /-- **Lévy-Khintchine representation theorem**: every infinitely divisible probability measure
 on `ℝ` has a characteristic function of the form
