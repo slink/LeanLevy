@@ -329,6 +329,9 @@ instance isProbabilityMeasure_poissonProcessFDD (rate : ℝ≥0) (I : Finset ℝ
     IsProbabilityMeasure (poissonProcessFDD rate I) :=
   sorry
 
+/-- `ℕ` is a Polish space (closed embedding into `ℝ`, which is Polish). -/
+instance : PolishSpace ℕ := Nat.isClosedEmbedding_coe_real.polishSpace
+
 /-- The projective family for a Poisson process with rate `rate`.
 Input to `ProjectiveFamily.kolmogorovExtension`. -/
 noncomputable def poissonProjectiveFamily (rate : ℝ≥0) :
@@ -355,7 +358,7 @@ poissonProcessFDD ──→ isProjectiveMeasureFamily_poissonProcessFDD
                   poissonProjectiveFamily
                          │
                          v
-                  kolmogorovExtension  (sorry'd in Kolmogorov.lean)
+                  kolmogorovExtension
                          │
                          v
               ┌──────────┼──────────┬────────────┐

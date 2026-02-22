@@ -5,6 +5,7 @@ Authors: LeanLevy Contributors
 -/
 import Mathlib.MeasureTheory.Constructions.Projective
 import Mathlib.MeasureTheory.Constructions.ProjectiveFamilyContent
+import Mathlib.MeasureTheory.OuterMeasure.OfAddContent
 import Mathlib.MeasureTheory.Measure.Regular
 import Mathlib.MeasureTheory.Measure.RegularityCompacts
 import Mathlib.Topology.MetricSpace.Polish
@@ -63,25 +64,25 @@ variable {ι : Type*} {α : ι → Type*}
   [∀ i, PolishSpace (α i)]
   [∀ i, BorelSpace (α i)]
 
+/-- The projective family content is σ-subadditive on Polish spaces.
+This is the key technical step, proved via inner regularity (tightness). -/
+theorem sigma_subadditive (pf : ProjectiveFamily ι α) :
+    (projectiveFamilyContent pf.consistent).IsSigmaSubadditive := by
+  sorry
+
 /-- The **Kolmogorov extension** of a projective family: a probability measure on the
 product space `∀ i, α i` whose finite-dimensional marginals match `pf.measure`.
 
-The construction proceeds by defining a content on `measurableCylinders α`,
-proving σ-additivity via tightness of measures on Polish spaces, and applying the
-Carathéodory extension theorem.
+The construction defines a content on `measurableCylinders α` via
+`projectiveFamilyContent`, proves σ-subadditivity via tightness on Polish spaces,
+and applies the Carathéodory extension theorem (`AddContent.measure`).
 
 Each `α i` must carry `TopologicalSpace`, `PolishSpace`, and `BorelSpace` instances. -/
 noncomputable def kolmogorovExtension (pf : ProjectiveFamily ι α) : Measure (∀ i, α i) :=
-  sorry
-  -- TODO proof outline:
-  -- 1. Define `projectiveFamilyContent pf.measure` on `measurableCylinders α`
-  --    using `pf.consistent` to ensure well-definedness.
-  -- 2. Prove the content is σ-subadditive. This is the hard step:
-  --    use that each `pf.measure I` is tight (Polish space + probability)
-  --    to get inner regularity, then show countable disjoint unions are handled.
-  -- 3. Promote content to a premeasure via `MeasureTheory.Content.measure` or
-  --    `MeasureTheory.OuterMeasure.ofFunction`.
-  -- 4. Apply Carathéodory extension to get the measure on `MeasurableSpace.pi`.
+  (projectiveFamilyContent pf.consistent).measure
+    isSetSemiring_measurableCylinders
+    generateFrom_measurableCylinders.ge
+    pf.sigma_subadditive
 
 /-- The Kolmogorov extension is a projective limit: for every finite index set `I`,
 projecting the extended measure onto `(i : I) → α i` recovers `pf.measure I`. -/
