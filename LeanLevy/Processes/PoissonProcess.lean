@@ -296,6 +296,51 @@ theorem IsPoissonProcess.charFun_eq {N : ℝ≥0 → Ω → ℕ} {rate : ℝ≥0
   rw [h.map_natCast_eq t]
   exact charFun_poissonMeasure_eq (rate * t) ξ
 
+/-! ## Poisson convolution on ℕ -/
+
+set_option maxHeartbeats 800000 in
+/-- Poisson convolution at the ℕ level: pushing forward the product
+`poissonMeasure(a) ⊗ poissonMeasure(b)` through addition gives `poissonMeasure(a + b)`.
+Derived from the ℝ-level characteristic function identity via Nat.cast injectivity. -/
+private theorem poissonMeasure_add_conv (a b : ℝ≥0) :
+    ((poissonMeasure a).prod (poissonMeasure b)).map (fun p : ℕ × ℕ => p.1 + p.2) =
+    poissonMeasure (a + b) := by
+  -- Nat.cast : ℕ → ℝ is a measurable embedding
+  have hembed : MeasurableEmbedding (Nat.cast : ℕ → ℝ) :=
+    ⟨Nat.cast_injective, measurable_from_top,
+      fun {t} _ => (t.to_countable.image _).measurableSet⟩
+  -- The ℝ-level convolution: Poisson(a).map cast ∗ Poisson(b).map cast = Poisson(a+b).map cast
+  have hR : (poissonMeasure a).map (Nat.cast : ℕ → ℝ) ∗
+      (poissonMeasure b).map (Nat.cast : ℕ → ℝ) =
+      (poissonMeasure (a + b)).map (Nat.cast : ℕ → ℝ) := by
+    apply Measure.ext_of_charFun; funext ξ
+    rw [charFun_conv, charFun_poissonMeasure_eq, charFun_poissonMeasure_eq,
+      charFun_poissonMeasure_eq, NNReal.coe_add, Complex.ofReal_add, add_mul]
+    exact (Complex.exp_add _ _).symm
+  -- Key: map Nat.cast of our LHS = convolution on ℝ
+  have h_cast_lhs :
+      (((poissonMeasure a).prod (poissonMeasure b)).map (fun p : ℕ × ℕ => p.1 + p.2)).map
+        (Nat.cast : ℕ → ℝ) =
+      (poissonMeasure a).map (Nat.cast : ℕ → ℝ) ∗
+      (poissonMeasure b).map (Nat.cast : ℕ → ℝ) := by
+    -- Convolution μ ∗ ν = (μ.prod ν).map (+)
+    -- LHS = ((prod pa pb).map (+ℕ)).map cast = (prod pa pb).map (cast ∘ +ℕ)
+    --     = (prod pa pb).map (+ℝ ∘ Prod.map cast cast)
+    --     = ((prod pa pb).map (Prod.map cast cast)).map (+ℝ)
+    --     = ((pa.map cast).prod (pb.map cast)).map (+ℝ)
+    --     = pa.map cast ∗ pb.map cast
+    rw [Measure.map_map hembed.measurable Measurable.of_discrete]
+    show ((poissonMeasure a).prod (poissonMeasure b)).map
+      ((Nat.cast : ℕ → ℝ) ∘ fun p : ℕ × ℕ => p.1 + p.2) = _
+    have hcomp : (Nat.cast : ℕ → ℝ) ∘ (fun p : ℕ × ℕ => p.1 + p.2) =
+        (fun p : ℝ × ℝ => p.1 + p.2) ∘ Prod.map (Nat.cast : ℕ → ℝ) (Nat.cast : ℕ → ℝ) := by
+      ext ⟨x, y⟩; simp [Prod.map]
+    rw [hcomp, ← Measure.map_map (by fun_prop) (by fun_prop),
+        ← Measure.map_prod_map _ _ hembed.measurable hembed.measurable]
+    rfl
+  -- Combine: map cast of LHS = conv = map cast of RHS
+  exact hembed.map_injective (h_cast_lhs.trans hR)
+
 /-! ## Poisson process projective family -/
 
 /-- The time gap (increment) at position `k` in the sorted enumeration of `I`.
@@ -336,6 +381,239 @@ noncomputable def poissonProcessFDD (rate : ℝ≥0) (I : Finset ℝ≥0) :
   let incrMeasure : Fin I.card → Measure ℕ := fun k => poissonMeasure (rate * poissonProcessGap I k)
   (Measure.pi incrMeasure).map (poissonProcessIncrToVal I)
 
+/-- The sorted enumeration of `I.erase t` is the sorted enumeration of `I` with position `k`
+(the sorted position of `t`) removed. Specifically:
+`(I.erase t).orderEmbOfFin rfl j = I.orderEmbOfFin rfl (k.succAbove j)` -/
+private theorem orderEmbOfFin_erase (I : Finset ℝ≥0) (t : ℝ≥0) (ht : t ∈ I) :
+    let J := I.erase t
+    let hcard : J.card + 1 = I.card := Finset.card_erase_add_one ht
+    let eI := I.orderEmbOfFin rfl
+    let k' : Fin (J.card + 1) := Fin.cast hcard.symm ((I.orderIsoOfFin rfl).symm ⟨t, ht⟩)
+    ∀ j : Fin J.card, J.orderEmbOfFin rfl j = eI (Fin.cast hcard (k'.succAbove j)) := by
+  intro J hcard eI k' j
+  -- We use orderEmbOfFin_unique: the composition eI ∘ Fin.cast hcard ∘ k'.succAbove
+  -- is the unique strictly monotone map from Fin J.card into J.
+  -- The composition is strictly monotone
+  have hmono : StrictMono (fun j => eI (Fin.cast hcard (k'.succAbove j))) := by
+    intro a b hab
+    exact eI.strictMono (Fin.cast_strictMono hcard ((Fin.strictMono_succAbove k') hab))
+  -- eI (Fin.cast hcard (k'.succAbove j)) ∈ J for all j
+  have hmem : ∀ j : Fin J.card, eI (Fin.cast hcard (k'.succAbove j)) ∈ J := by
+    intro j
+    rw [Finset.mem_erase]
+    refine ⟨?_, Finset.orderEmbOfFin_mem I rfl _⟩
+    -- eI (Fin.cast hcard (k'.succAbove j)) ≠ t
+    intro h_eq
+    -- Show eI (Fin.cast hcard k') = t
+    have hk_eq : eI (Fin.cast hcard k') = t := by
+      show (I.orderIsoOfFin rfl (Fin.cast hcard (Fin.cast hcard.symm
+        ((I.orderIsoOfFin rfl).symm ⟨t, ht⟩)))) = t
+      simp
+    have hinj := eI.injective (h_eq.trans hk_eq.symm)
+    have hval : (k'.succAbove j).val = k'.val := by
+      have := Fin.val_eq_of_eq hinj; simp at this; exact this
+    exact absurd (Fin.ext hval) (Fin.succAbove_ne k' j)
+  -- Apply uniqueness
+  have huniq := Finset.orderEmbOfFin_unique (s := J) rfl hmem hmono
+  exact congr_fun huniq.symm j
+
+/-- The merge map `ψ` on increment vectors: given `d : Fin (n+1) → ℕ` (increments for `I`),
+produce `d' : Fin n → ℕ` (increments for `I.erase t`) by dropping the coordinate at
+position `k` (the sorted position of `t` in `I`) and adding it to the appropriate neighbor:
+- For `j < k`: `d'(j) = d(j)` (unchanged)
+- For `j = k` (when `k < n`): `d'(k) = d(k) + d(k+1)` (merge with next)
+- For `j > k`: `d'(j) = d(j+1)` (shift)
+When `k = n` (t is the largest element), we simply drop the last coordinate. -/
+private noncomputable def poissonProcessMerge (I : Finset ℝ≥0) (t : ℝ≥0) (ht : t ∈ I) :
+    (Fin I.card → ℕ) → (Fin (I.erase t).card → ℕ) :=
+  have hcard : (I.erase t).card + 1 = I.card := Finset.card_erase_add_one ht
+  let k : Fin I.card := (I.orderIsoOfFin rfl).symm ⟨t, ht⟩
+  fun d j =>
+    if h : j.val < k.val then d ⟨j.val, by omega⟩
+    else if j.val = k.val then
+      d ⟨k.val, by omega⟩ + d ⟨k.val + 1, by omega⟩
+    else -- j.val > k.val
+      d ⟨j.val + 1, by omega⟩
+
+private theorem poissonProcessFDD_erase (rate : ℝ≥0) (I : Finset ℝ≥0) (t : ℝ≥0) (ht : t ∈ I) :
+    poissonProcessFDD rate (I.erase t) =
+      (poissonProcessFDD rate I).map
+        (@Finset.restrict₂ _ (fun _ : ℝ≥0 => ℕ) _ _ (Finset.erase_subset t I)) := by
+  set J := I.erase t with hJ_def
+  have hcard : J.card + 1 = I.card := Finset.card_erase_add_one ht
+  -- Set up the merge map ψ
+  set ψ := poissonProcessMerge I t ht with hψ_def
+  -- The increment measures
+  set μ_I : Fin I.card → Measure ℕ := fun k => poissonMeasure (rate * poissonProcessGap I k)
+  set μ_J : Fin J.card → Measure ℕ := fun k => poissonMeasure (rate * poissonProcessGap J k)
+  -- All functions on discrete spaces are measurable
+  have hmeas_ψ : Measurable ψ := Measurable.of_discrete
+  have hmeas_incrI : Measurable (poissonProcessIncrToVal I) := Measurable.of_discrete
+  have hmeas_incrJ : Measurable (poissonProcessIncrToVal J) := Measurable.of_discrete
+  have hmeas_restrict : Measurable (@Finset.restrict₂ _ (fun _ : ℝ≥0 => ℕ) _ _
+    (Finset.erase_subset t I)) := Measurable.of_discrete
+  -- SigmaFinite for product measures
+  have hσI : ∀ k, SigmaFinite (μ_I k) := fun k => inferInstance
+  have hσJ : ∀ k, SigmaFinite (μ_J k) := fun k => inferInstance
+  -- The sorted position of t in I
+  set eI := I.orderIsoOfFin rfl with heI_def
+  set k : Fin I.card := eI.symm ⟨t, ht⟩ with hk_def
+  -- Step 1: The diagram commutes:
+  --   restrict₂ ∘ incrToVal I = incrToVal J ∘ ψ
+  -- Proof: Both sides, evaluated at d : Fin I.card → ℕ and ⟨s, hs⟩ : J,
+  -- give the cumulative sum of increments up to position of s.
+  -- The merge map ψ is designed so this works: it merges the increment at
+  -- position k (the position of t) with its neighbor, preserving all
+  -- cumulative sums at positions other than k.
+  have hdiag : @Finset.restrict₂ _ (fun _ : ℝ≥0 => ℕ) _ _ (Finset.erase_subset t I) ∘
+      poissonProcessIncrToVal I = poissonProcessIncrToVal J ∘ ψ := by
+    funext d ⟨s, hs⟩
+    simp only [Function.comp_apply, Finset.restrict₂, poissonProcessIncrToVal,
+      poissonProcessReindex, poissonProcessCumSum]
+    -- Both sides are sums of d(i) for appropriate ranges.
+    -- The LHS sums d over {0, ..., posI(s)} and
+    -- the RHS sums ψ(d) over {0, ..., posJ(s)}.
+    -- These are equal by the design of ψ.
+    sorry
+  -- Step 2: The merge map pushes the product measure correctly:
+  --   (Measure.pi μ_I).map ψ = Measure.pi μ_J
+  -- The key fact: ψ marginalizes coordinate k by convolution.
+  -- For coordinates j ≠ k: the measure passes through unchanged.
+  -- For coordinate k: Poisson(rate*Δk) ⊗ Poisson(rate*Δ(k+1)) marginalizes
+  --   via addition to Poisson(rate*(Δk + Δ(k+1))) = Poisson(rate*Δ'k).
+  -- Gap identities relating gap_J and gap_I
+  -- These follow from the sorted enumeration of I.erase t.
+  -- The key relationship: sorted enumeration of J = sorted enumeration of I with k skipped
+  have hk' : k.val = ((Fin.cast hcard.symm k) : Fin (J.card + 1)).val := by simp
+  set k' : Fin (J.card + 1) := Fin.cast hcard.symm k with hk'_def
+  have herase := orderEmbOfFin_erase I t ht
+  -- Helper: orderEmbOfFin values from orderIsoOfFin
+  have hiso_emb_I : ∀ i : Fin I.card,
+      (I.orderIsoOfFin rfl i : ℝ≥0) = I.orderEmbOfFin rfl i := by
+    intro i; simp [Finset.coe_orderIsoOfFin_apply]
+  have hiso_emb_J : ∀ j : Fin J.card,
+      (J.orderIsoOfFin rfl j : ℝ≥0) = J.orderEmbOfFin rfl j := by
+    intro j; simp [Finset.coe_orderIsoOfFin_apply]
+  -- Helper: monotonicity of sorted enumeration
+  have hmono_I : ∀ a b : Fin I.card, a ≤ b →
+      (I.orderIsoOfFin rfl a : ℝ≥0) ≤ (I.orderIsoOfFin rfl b : ℝ≥0) :=
+    fun a b hab => Subtype.mk_le_mk.mp ((I.orderIsoOfFin rfl).monotone hab)
+  -- Helper: succAbove value computation
+  have hsa_lt : ∀ (j : Fin J.card), j.val < k'.val →
+      (Fin.cast hcard (k'.succAbove j)).val = j.val := by
+    intro j hj
+    rw [Fin.succAbove_of_castSucc_lt k' j (by rwa [Fin.lt_def, Fin.val_castSucc])]
+    simp
+  have hsa_ge : ∀ (j : Fin J.card), k'.val ≤ j.val →
+      (Fin.cast hcard (k'.succAbove j)).val = j.val + 1 := by
+    intro j hj
+    rw [Fin.succAbove_of_le_castSucc k' j (by rwa [Fin.le_def, Fin.val_castSucc])]
+    simp
+  -- Helper: eJ(j) in terms of eI using the erase lemma
+  have heJ_val : ∀ j : Fin J.card, (J.orderIsoOfFin rfl j : ℝ≥0) =
+      (I.orderIsoOfFin rfl (Fin.cast hcard (k'.succAbove j)) : ℝ≥0) := by
+    intro j
+    rw [hiso_emb_J, herase j, ← hiso_emb_I]
+  -- Gap identities
+  have hgap_lt : ∀ j : Fin J.card, j.val < k.val →
+      poissonProcessGap J j = poissonProcessGap I ⟨j.val, by omega⟩ := by
+    intro j hj
+    simp only [poissonProcessGap]
+    -- eJ(j) = eI(j) (since j < k)
+    have hsa_j := hsa_lt j (by simp [k']; exact hj)
+    have hkk_j : Fin.cast hcard (k'.succAbove j) = ⟨j.val, by omega⟩ := Fin.ext hsa_j
+    rw [heJ_val j, hkk_j]
+    -- Both have the same dite condition (j.val = 0), so we just need predecessor equality
+    by_cases hj0 : j.val = 0
+    · -- j = 0: both sides are eI(0) - 0
+      simp [hj0]
+    · -- j > 0: need eJ(j-1) = eI(j-1), which holds since j-1 < j < k
+      rw [dif_neg hj0, dif_neg hj0]
+      -- eJ(j-1) = eI(j-1) since j-1 < k
+      have hsa_pred := hsa_lt ⟨j.val - 1, by omega⟩ (by simp [k']; omega)
+      have hkk_pred : Fin.cast hcard (k'.succAbove ⟨j.val - 1, by omega⟩) =
+          ⟨j.val - 1, by omega⟩ := Fin.ext hsa_pred
+      rw [heJ_val ⟨j.val - 1, by omega⟩, hkk_pred]
+  have hgap_eq : (hkn : k.val < J.card) →
+      poissonProcessGap J ⟨k.val, hkn⟩ =
+      poissonProcessGap I k + poissonProcessGap I ⟨k.val + 1, by omega⟩ := by
+    intro hkn
+    simp only [poissonProcessGap]
+    -- eJ(k) = eI(k+1)
+    have hkk1 : Fin.cast hcard (k'.succAbove ⟨k.val, hkn⟩) = ⟨k.val + 1, by omega⟩ :=
+      Fin.ext (hsa_ge ⟨k.val, hkn⟩ (by simp [k']))
+    rw [heJ_val ⟨k.val, hkn⟩, hkk1]
+    by_cases hk0 : (k : ℕ) = 0
+    · -- k = 0
+      have hkn0 : (⟨k.val, hkn⟩ : Fin J.card).val = 0 := hk0
+      rw [dif_pos hkn0, dif_pos hk0, tsub_zero, tsub_zero]
+      have hne : ¬ ((⟨k.val + 1, (by omega : k.val + 1 < I.card)⟩ : Fin I.card).val = 0) := by
+        simp
+      rw [dif_neg hne]
+      have hfin_sub : (⟨(⟨k.val + 1, (by omega : k.val + 1 < I.card)⟩ : Fin I.card).val - 1,
+          (by simp)⟩ : Fin I.card) = ⟨k.val, by omega⟩ := Fin.ext (by simp)
+      rw [hfin_sub]
+      have hkk : (⟨k.val, (by omega : k.val < I.card)⟩ : Fin I.card) = k := Fin.ext rfl
+      rw [hkk, add_tsub_cancel_of_le]
+      exact hmono_I k ⟨k.val + 1, by omega⟩ (by simp [Fin.le_def])
+    · -- k > 0
+      have hkn0 : ¬ ((⟨k.val, hkn⟩ : Fin J.card).val = 0) := hk0
+      rw [dif_neg hkn0, dif_neg hk0]
+      have hne : ¬ ((⟨k.val + 1, (by omega : k.val + 1 < I.card)⟩ : Fin I.card).val = 0) := by
+        simp
+      rw [dif_neg hne]
+      have hkk_pred : Fin.cast hcard (k'.succAbove ⟨k.val - 1, by omega⟩) =
+          ⟨k.val - 1, by omega⟩ :=
+        Fin.ext (hsa_lt ⟨k.val - 1, by omega⟩ (by simp [k']; omega))
+      rw [heJ_val ⟨k.val - 1, by omega⟩, hkk_pred]
+      have hfin_sub : (⟨(⟨k.val + 1, (by omega : k.val + 1 < I.card)⟩ : Fin I.card).val - 1,
+          (by simp)⟩ : Fin I.card) = k := Fin.ext (by simp)
+      rw [hfin_sub]
+      have hle1 : k ≤ (⟨k.val + 1, by omega⟩ : Fin I.card) := Nat.le_succ _
+      have hle2 : (⟨k.val - 1, by omega⟩ : Fin I.card) ≤ k := Nat.sub_le _ _
+      have hcancel := tsub_add_tsub_cancel (hmono_I _ _ hle1) (hmono_I _ _ hle2)
+      rw [add_comm] at hcancel; exact hcancel.symm
+  have hgap_gt : ∀ j : Fin J.card, j.val > k.val →
+      poissonProcessGap J j = poissonProcessGap I ⟨j.val + 1, by omega⟩ := by
+    intro j hj
+    simp only [poissonProcessGap]
+    -- eJ(j) = eI(j+1)
+    have hkk_j : Fin.cast hcard (k'.succAbove j) = ⟨j.val + 1, by omega⟩ :=
+      Fin.ext (hsa_ge j (by simp [k']; omega))
+    rw [heJ_val j, hkk_j]
+    -- Both j and j+1 are > 0
+    have hj0 : ¬ ((j : ℕ) = 0) := by omega
+    have hj10 : ¬ ((⟨j.val + 1, (by omega : j.val + 1 < I.card)⟩ : Fin I.card).val = 0) := by
+      simp
+    rw [dif_neg hj0, dif_neg hj10]
+    -- eJ(j-1): since j-1 ≥ k, succAbove gives (j-1)+1 = j
+    have hkk_pred : Fin.cast hcard (k'.succAbove ⟨j.val - 1, by omega⟩) =
+        ⟨j.val, by omega⟩ := by
+      apply Fin.ext
+      have h := hsa_ge ⟨j.val - 1, by omega⟩ (by simp [k']; omega)
+      simp at h ⊢; omega
+    rw [heJ_val ⟨j.val - 1, by omega⟩, hkk_pred]
+    -- Both sides are eI(j+1) - eI(j), just need ⟨j, _⟩ = ⟨j+1-1, _⟩
+    congr 1
+  have hmerge : (Measure.pi μ_I).map ψ = Measure.pi μ_J := by
+    -- Show equality on singletons (both sides are measures on countable space).
+    apply Measure.ext_of_singleton
+    intro f
+    -- LHS: (Measure.pi μ_I).map ψ {f} = (Measure.pi μ_I) (ψ⁻¹' {f})
+    rw [Measure.map_apply hmeas_ψ (measurableSet_singleton f)]
+    -- RHS: Measure.pi μ_J {f} = ∏ j, μ_J j {f j}
+    rw [Measure.pi_singleton]
+    -- The fiber ψ⁻¹'{f} and its measure decompose using Poisson convolution
+    -- at coordinate k and direct equality at other coordinates.
+    -- Gap identities ensure the rates match.
+    sorry
+  -- Step 3: Chain the equalities
+  show (Measure.pi μ_J).map (poissonProcessIncrToVal J) =
+    ((Measure.pi μ_I).map (poissonProcessIncrToVal I)).map
+      (@Finset.restrict₂ _ (fun _ : ℝ≥0 => ℕ) _ _ (Finset.erase_subset t I))
+  rw [Measure.map_map hmeas_restrict hmeas_incrI, hdiag,
+      ← Measure.map_map hmeas_incrJ hmeas_ψ, hmerge]
+
 /-- For `J ⊆ I`, the poissonProcessFDD at `J` agrees with the projection of the
 poissonProcessFDD at `I`. This is the projective consistency property.
 
@@ -343,14 +621,6 @@ poissonProcessFDD at `I`. This is the projective consistency property.
 Step: pick `t ∈ I \ J`, let `I' = I.erase t`. By Poisson convolution,
 `Poisson(a) * Poisson(b) = Poisson(a+b)`, the FDD at `I` projects to `I'`.
 By IH the FDD at `I'` projects to `J`. Compose the two. -/
--- Helper: single-step projection (removing one element).
--- Requires Poisson convolution: Poisson(a) * Poisson(b) = Poisson(a+b).
-private theorem poissonProcessFDD_erase (rate : ℝ≥0) (I : Finset ℝ≥0) (t : ℝ≥0) (ht : t ∈ I) :
-    poissonProcessFDD rate (I.erase t) =
-      (poissonProcessFDD rate I).map
-        (@Finset.restrict₂ _ (fun _ : ℝ≥0 => ℕ) _ _ (Finset.erase_subset t I)) := by
-  sorry
-
 theorem isProjectiveMeasureFamily_poissonProcessFDD (rate : ℝ≥0) :
     IsProjectiveMeasureFamily (α := fun (_ : ℝ≥0) => ℕ) (poissonProcessFDD rate) := by
   -- Unfold: for all J ⊆ I, poissonProcessFDD rate J =
