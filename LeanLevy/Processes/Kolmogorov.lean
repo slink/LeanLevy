@@ -56,14 +56,14 @@ theorem nonempty_of_projective (pf : ProjectiveFamily ι α) (i : ι) : Nonempty
 
 /-! ### Tendsto zero for decreasing cylinders -/
 
+set_option maxHeartbeats 800000 in
 /-- The projective family content of a decreasing sequence of measurable cylinders
 with empty intersection tends to zero. -/
 private theorem content_tendsto_zero (pf : ProjectiveFamily ι α)
     {B : ℕ → Set (∀ i, α i)} (hB : ∀ n, B n ∈ measurableCylinders α)
     (hB_anti : Antitone B) (hB_inter : ⋂ n, B n = ∅) :
     Tendsto (fun n ↦ projectiveFamilyContent pf.consistent (B n)) atTop (𝓝 0) := by
-  sorry
-  /- The full proof uses inner regularity (tightness) on Polish spaces.
+  -- Part A: Setup — decompose cylinders and merge index sets
   have hne : ∀ i, Nonempty (α i) := pf.nonempty_of_projective
   choose I S mS B_eq using fun n ↦ (mem_measurableCylinders _).1 (hB n)
   classical
@@ -80,6 +80,7 @@ private theorem content_tendsto_zero (pf : ProjectiveFamily ι α)
   have content_eq : ∀ n,
       projectiveFamilyContent pf.consistent (B n) = pf.measure (J n) (T n) := fun n ↦ by
     rw [B_eq']; exact projectiveFamilyContent_cylinder pf.consistent (mT n)
+  -- By contradiction: suppose content doesn't tend to 0
   by_contra h_not_tendsto
   have h_mono : Antitone (fun n ↦ projectiveFamilyContent pf.consistent (B n)) :=
     fun _ _ hmn ↦ projectiveFamilyContent_mono pf.consistent (hB _) (hB _) (hB_anti hmn)
@@ -99,16 +100,17 @@ private theorem content_tendsto_zero (pf : ProjectiveFamily ι α)
     intro n m hnm x hx
     have hf : ext_fun x ∈ B m := by
       rw [B_eq']; simp only [mem_cylinder, ext_fun]; convert hx using 1
-      ext ⟨j, hj⟩; simp [Finset.restrict_def, dif_pos hj]
+      ext ⟨j, hj⟩; simp [dif_pos hj]
     have hf_n := hB_anti hnm hf; rw [B_eq'] at hf_n
     simp only [mem_cylinder] at hf_n; simp only [Set.mem_preimage]
     convert hf_n using 1; ext ⟨j, hj⟩
-    simp [Finset.restrict_def, Finset.restrict₂_def, ext_fun, dif_pos (hJ_mono hnm hj)]
+    simp [ext_fun, dif_pos (hJ_mono hnm hj)]
+  -- Part B: Inner regularity + compact thinning
   -- Inner regularity: compact K_n ⊆ T_n with small deficit
   choose K hK_sub hK_compact hK_diff using fun n ↦
     MeasurableSet.exists_isCompact_diff_lt (μ := pf.measure (J n)) (mT n)
       (measure_ne_top (pf.measure (J n)) _)
-      (ENNReal.div_ne_zero.2 ⟨hε_pos.ne', ENNReal.pow_ne_top (by norm_num)⟩ :
+      (ENNReal.div_pos hε_pos.ne' (ENNReal.pow_ne_top (by norm_num)) |>.ne' :
         ε / 2 ^ (n + 2) ≠ 0)
   have hK_closed : ∀ n, IsClosed (K n) := fun n ↦ (hK_compact n).isClosed
   -- L_n = K_n ∩ ⋂_{k<n} restrict₂⁻¹(K_k) (compact thinning)
@@ -120,19 +122,17 @@ private theorem content_tendsto_zero (pf : ProjectiveFamily ι α)
   have hL_compact : ∀ n, IsCompact (L n) :=
     fun n ↦ (hK_compact n).of_isClosed_subset (hL_closed n) inter_subset_left
   have hL_sub_T : ∀ n, L n ⊆ T n := fun n ↦ inter_subset_left.trans (hK_sub n)
-  -- L_n is non-empty (key measure bound)
+  -- L_n is non-empty (key measure bound argument)
   have hL_nonempty : ∀ n, (L n).Nonempty := by
     intro n
     by_contra h_empty; rw [Set.not_nonempty_iff_eq_empty] at h_empty
     suffices pf.measure (J n) (T n) < ε from absurd (h_lower n) (not_le.2 this)
-    -- Since L n = ∅, K_n ∩ ⋂ k, restrict₂⁻¹(K_k) = ∅, so
     -- T_n ⊆ (T_n \ K_n) ∪ ⋃ k : Fin n, restrict₂⁻¹(T_k \ K_k)
     have hT_cover : T n ⊆ (T n \ K n) ∪
         ⋃ k : Fin n, Finset.restrict₂ (hJ_mono k.2.le) ⁻¹' (T k \ K k) := by
       intro x hx
       by_cases hxK : x ∈ K n
-      · -- x ∈ K_n, so x ∉ ⋂ k, restrict₂⁻¹(K_k) (since L n = ∅)
-        right
+      · right
         have : x ∉ ⋂ k : Fin n, Finset.restrict₂ (hJ_mono k.2.le) ⁻¹' K k := by
           intro hmem; exact h_empty.subset ⟨hxK, hmem⟩
         rw [Set.mem_iInter] at this; push_neg at this
@@ -147,8 +147,7 @@ private theorem content_tendsto_zero (pf : ProjectiveFamily ι α)
       rw [← Measure.map_apply (Finset.measurable_restrict₂ _)
         ((mT ↑k).diff (hK_compact ↑k).measurableSet),
         ← pf.consistent (J n) (J ↑k) (hJ_mono k.2.le)]
-    -- Bound function: δ k = ε / 2^(k+2)
-    -- Step 1: Measure ≤ sum of deficits (via covering + subadditivity + consistency)
+    -- Measure ≤ sum of deficits
     have hstep1 : pf.measure (J n) (T n) ≤
         pf.measure (J n) (T n \ K n) +
         ∑ k : Fin n, pf.measure (J ↑k) (T ↑k \ K ↑k) := by
@@ -165,12 +164,10 @@ private theorem content_tendsto_zero (pf : ProjectiveFamily ι α)
                 (Finset.restrict₂ (hJ_mono k.2.le) ⁻¹' (T ↑k \ K ↑k)) := by
             gcongr; exact measure_iUnion_fintype_le _ _
         _ = _ := by congr 1; congr 1 with k; exact hK_diff_pull k
-    -- Step 2: bound total by ε via geometric series
+    -- Bound total by ε via geometric series
     have hε_ne_top : ε ≠ ⊤ := ne_top_of_le_ne_top (measure_ne_top _ _) (h_lower 0)
-    -- Each deficit is strictly less than its budget
     have hdeficit_le : ∀ k, pf.measure (J k) (T k \ K k) ≤ ε / 2 ^ (k + 2) :=
       fun k ↦ (hK_diff k).le
-    -- The tsum < ε: ∑' k, ε/2^(k+2) = ε * (2⁻¹)² * ∑ (2⁻¹)^k = ε/2 < ε
     have htsum_lt : ∑' k : ℕ, ε / 2 ^ (k + 2) < ε := by
       have h1 : (fun k ↦ ε / 2 ^ (k + 2)) =
           fun k ↦ (ε * (2 : ℝ≥0∞)⁻¹ ^ 2) * (2 : ℝ≥0∞)⁻¹ ^ k := by
@@ -178,32 +175,15 @@ private theorem content_tendsto_zero (pf : ProjectiveFamily ι α)
         rw [ENNReal.div_eq_inv_mul, ENNReal.inv_pow, show k + 2 = 2 + k from by omega, pow_add]
         ring
       rw [h1, ENNReal.tsum_mul_left, ENNReal.tsum_geometric, ENNReal.one_sub_inv_two, inv_inv]
-      -- Goal: (ε * (2⁻¹)²) * 2 < ε. Simplify (2⁻¹)² * 2 = 2⁻¹.
       rw [show (ε * (2 : ℝ≥0∞)⁻¹ ^ 2) * 2 = ε * ((2 : ℝ≥0∞)⁻¹ ^ 2 * 2) from by ring]
       rw [show (2 : ℝ≥0∞)⁻¹ ^ 2 * 2 = (2 : ℝ≥0∞)⁻¹ from by
         rw [pow_succ, pow_one, mul_assoc,
           ENNReal.inv_mul_cancel (by norm_num) (by norm_num), mul_one]]
-      rw [← ENNReal.div_eq_inv_mul]
-      exact ENNReal.half_lt_self hε_pos.ne' hε_ne_top
-    -- The sum ≤ the tsum: using range (n+1) as the finite index set
-    have hfin_ne_top : ∑ k : Fin n, pf.measure (J ↑k) (T ↑k \ K ↑k) ≠ ⊤ :=
-      (ENNReal.sum_lt_top.2 (fun k _ ↦ measure_lt_top _ _)).ne
-    -- Step 2: bound the measure by the partial sum of budgets over range (n+1)
-    -- First bound: deficit_n + ∑ deficits < budget_n + ∑ budgets
-    -- Second: budget_n + ∑ budgets = ∑_{k ∈ range(n+1)} budget_k ≤ tsum ≤ ε/2 < ε
-    -- For the sum conversion, use Fin.sum_univ_castSucc or work over range directly.
-    -- Actually, bound the measure via a single sum over range (n + 1).
-    have h_range_le_tsum : ∑ k ∈ Finset.range (n + 1), ε / 2 ^ (k + 2) ≤
-        ∑' k : ℕ, ε / 2 ^ (k + 2) :=
-      ENNReal.sum_le_tsum _
-    -- pf.measure ≤ budget_n + ∑ budget_k = ∑ range (n+1) budget
-    -- Need: ∑ k : Fin n, ... = ∑ k ∈ range n, ...
-    -- And: ∑ k ∈ range (n+1), f k = (∑ k ∈ range n, f k) + f n
-    -- Combine: measure ≤ budget sum ≤ tsum < ε
+      calc ε * (2 : ℝ≥0∞)⁻¹ = ε / 2 := by rw [ENNReal.div_eq_inv_mul, mul_comm]
+        _ < ε := ENNReal.half_lt_self hε_pos.ne' hε_ne_top
     have hstep2 : pf.measure (J n) (T n) ≤
         ε / 2 ^ (n + 2) + ∑ k : Fin n, ε / 2 ^ ((k : ℕ) + 2) :=
       hstep1.trans (add_le_add (hdeficit_le n) (Finset.sum_le_sum fun k _ ↦ hdeficit_le ↑k))
-    -- Rewrite as a sum over Fin (n+1) and bound by tsum
     have hstep3 : ε / 2 ^ (n + 2) + ∑ k : Fin n, ε / 2 ^ ((k : ℕ) + 2) ≤
         ∑' k : ℕ, ε / 2 ^ (k + 2) := by
       calc ε / 2 ^ (n + 2) + ∑ k : Fin n, ε / 2 ^ ((k : ℕ) + 2)
@@ -213,14 +193,13 @@ private theorem content_tendsto_zero (pf : ProjectiveFamily ι α)
         _ ≤ ∑' k : ℕ, ε / 2 ^ (k + 2) :=
             ENNReal.tsum_comp_le_tsum_of_injective Fin.val_injective _
     exact (hstep2.trans hstep3).trans_lt htsum_lt
-  -- restrict₂ maps L_{m} into L_n for n ≤ m
+  -- Part C: restrict₂ maps L_{m} into L_n for n ≤ m
   have hL_restrict : ∀ {n m} (hnm : n ≤ m) (x : ∀ j : J m, α j),
       x ∈ L m → Finset.restrict₂ (hJ_mono hnm) x ∈ L n := by
     intro n m hnm x hx
     simp only [L, mem_inter_iff, mem_iInter] at hx ⊢
     refine ⟨?_, fun k ↦ ?_⟩
-    · -- restrict₂(x) ∈ K_n
-      by_cases hnm' : n = m
+    · by_cases hnm' : n = m
       · subst hnm'; convert hx.1
       · have : n < m := lt_of_le_of_ne hnm hnm'
         have := hx.2 (⟨n, this⟩ : Fin m)
@@ -228,71 +207,149 @@ private theorem content_tendsto_zero (pf : ProjectiveFamily ι α)
     · have hkm : (k : ℕ) < m := lt_of_lt_of_le k.2 hnm
       have := hx.2 (⟨k, hkm⟩ : Fin m)
       convert this
-  -- Image tower: restrict₂(L_{n+k}) is compact, non-empty, decreasing
-  -- Q_n = ⋂_k restrict₂(L_{n+k}) is non-empty by Cantor
-  let P : ℕ → ℕ → Set (∀ j : J 0, α j) := fun n k ↦
-    Finset.restrict₂ (hJ_mono (Nat.zero_le (n + k))) '' L (n + k)
-  -- Actually, let me work with a single level: project everything to J_0
-  -- Mn = restrict₂_{0,n}(L_n)
+  -- Project everything down to J_0 and use Cantor intersection to get a single point
   let M : ℕ → Set (∀ j : J 0, α j) := fun n ↦
     Finset.restrict₂ (hJ_mono (Nat.zero_le n)) '' L n
   have hM_compact : ∀ n, IsCompact (M n) :=
     fun n ↦ (hL_compact n).image (Finset.continuous_restrict₂ _)
-  have hM_closed : ∀ n, IsClosed (M n) := fun n ↦ (hM_compact n).isClosed
   have hM_nonempty : ∀ n, (M n).Nonempty := fun n ↦ (hL_nonempty n).image _
   have hM_anti : ∀ n, M (n + 1) ⊆ M n := by
     intro n y ⟨x, hx, hyx⟩
     refine ⟨Finset.restrict₂ (hJ_mono (Nat.le_succ n)) x,
       hL_restrict (Nat.le_succ n) x hx, ?_⟩
-    rw [← hyx]; ext ⟨j, hj⟩; simp [Finset.restrict₂_def]
-  -- ⋂ M_n ≠ ∅
-  have hM_iInter : (⋂ n, M n).Nonempty :=
-    IsCompact.nonempty_iInter_of_sequence_nonempty_isCompact_isClosed M
-      hM_anti hM_nonempty (hM_compact 0) hM_closed
-  -- Pick y₀ ∈ ⋂ M_n. For each n, ∃ z_n ∈ L_n with restrict₂(z_n)|_{J_0} = y₀.
-  -- But z_n need not be compatible. To get compatibility, refine further.
-  -- For each n, define the fiber: elements of L_n that project to y₀ on J_0
-  obtain ⟨y₀, hy₀⟩ := hM_iInter
-  -- Fiber_n = {z ∈ L_n | restrict₂(z) at J_0 = y₀}
-  -- This is non-empty (from y₀ ∈ M_n) and compact (closed subset of L_n).
-  -- Now restrict₂ maps Fiber_{n+1} → some subset of the J_n-space.
-  -- We need to do the same trick at each level.
-  -- Let's use an inductive construction via Cantor at each level.
+    rw [← hyx]; ext ⟨j, hj⟩; simp [Finset.restrict₂]
+  -- Construct a point in the full product that belongs to every B_n.
+  -- We use the fact that L_n ⊆ T_n and cylinder(J_n)(T_n) = B_n.
+  -- Strategy: find f : ∀ i, α i such that restrict(J_n)(f) ∈ L_n for all n.
+  -- 1) Show ⋂ M_n is non-empty (Cantor on J_0-level)
+  -- 2) For any y₀ ∈ ⋂ M_n, recursively lift to compatible elements in L_n
+  -- Actually, we use a direct Tychonoff argument in the product ∀ n, ∀ j : J n, α j.
+  -- Define the set of "compatible L-sequences":
+  --   R_n = {x : ∀ k, ∀ j : J k, α j | x_k ∈ L_k for k ≤ n, and compatible for k < n}
+  -- R_n is closed and non-empty in the compact product of L_k.
+  -- The intersection ⋂ R_n is non-empty by Cantor.
+  -- From any element of ⋂ R_n, construct f : ∀ i, α i.
   --
-  -- Actually, the simplest approach for the contradiction:
-  -- We've shown L_n is non-empty compact. The closed cylinders cylinder(J_n)(L_n) are
-  -- closed in ∀ i, α i, and contained in B_n. We need ⋂_n cylinder(J_n)(L_n) ≠ ∅.
-  -- This is a decreasing intersection of non-empty closed sets.
-  -- In a compact space, FIP implies non-empty intersection.
-  -- ∀ i, α i is NOT compact. But we can embed into a Tychonoff product.
-  --
-  -- Alternative: construct the point by a recursive Cantor argument.
-  -- At level 0: pick y₀ ∈ L_0 (done).
-  -- At level 1: consider {z ∈ L_1 | restrict₂(z) = y₀}. This set might be empty!
-  -- To ensure non-emptiness, we should have chosen y₀ more carefully.
-  --
-  -- The "eventual image" approach:
-  -- For m ≥ n, let Im(n,m) = restrict₂_{n,m}(L_m) ⊆ L_n
-  -- Im(n, m) ⊇ Im(n, m+1) (since L_{m+1} restricts into L_m)
-  -- So Q_n = ⋂_m Im(n,m) is non-empty by Cantor.
-  -- Moreover, restrict₂_{n,n+1} : Q_{n+1} → Q_n is surjective.
-  -- (Proof: for y ∈ Q_n, for each m ≥ n+1, y ∈ Im(n,m) = restrict₂_{n,m}(L_m)
-  -- so ∃ z_m ∈ L_m with restrict₂(z_m) = y.
-  -- Then restrict₂_{n+1,m}(z_m) ∈ Im(n+1,m) and projects to y.
-  -- The set {w ∈ Im(n+1,m) | restrict₂(w) = y} is compact, non-empty, decreasing.
-  -- By Cantor, ⋂_m {w ∈ Im(n+1,m) | restrict₂(w) = y} ≠ ∅.
-  -- Any element is in Q_{n+1} and maps to y.)
-  --
-  -- Then we build a compatible sequence by AC + recursion.
-  --
-  -- This is mathematically complete. The formalization is very technical
-  -- due to dependent types. Let's implement it.
-  --
-  -- For each n, m with n ≤ m:
-  -- Im(n,m) = restrict₂_{n,m}(L_m)
-  -- As a function of m (for fixed n), this is decreasing, compact, non-empty.
-  -- We define Q_n = ⋂_{k:ℕ} Im(n, n+k).
-  sorry -/
+  -- Simpler approach: use the Tychonoff product of L_n directly.
+  -- Define C_n = {x ∈ ∏ L_k | restrict₂(x_{k+1}) = x_k for k < n}
+  -- C_n is closed in the compact product, non-empty, and decreasing.
+  -- By Cantor, ⋂ C_n ≠ ∅. Extract (y_k) and build f.
+  -- The Tychonoff product
+  let Prod := ∀ n : ℕ, ∀ j : J n, α j
+  -- The subset where y_n ∈ L_n for all n
+  let inL : Set Prod := Set.pi Set.univ (fun n ↦ L n)
+  -- inL is compact by Tychonoff (product of compact sets)
+  have hProd_compact : IsCompact inL := by
+    exact isCompact_univ_pi (fun n ↦ hL_compact n)
+  -- The compatibility constraint for step k: restrict₂(y_{k+1}) = y_k
+  -- R_n = {x ∈ inL | ∀ k < n, restrict₂(x_{k+1}) = x_k}
+  let R : ℕ → Set Prod := fun n ↦
+    inL ∩ ⋂ k : Fin n, {x : Prod |
+      Finset.restrict₂ (hJ_mono (Nat.le_succ k)) (x (↑k + 1)) = x ↑k}
+  -- R_n is closed
+  have hR_closed : ∀ n, IsClosed (R n) := by
+    intro n
+    refine IsClosed.inter ?_ (isClosed_iInter fun k ↦ ?_)
+    · exact isClosed_set_pi (fun n _ ↦ hL_closed n)
+    · -- The equalizer {x | f(x) = g(x)} for continuous f, g into a T2 space
+      exact isClosed_eq
+        ((Finset.continuous_restrict₂ _).comp (continuous_apply ((k : ℕ) + 1)))
+        (continuous_apply (k : ℕ))
+  -- R_{n+1} ⊆ R_n
+  have hR_anti : ∀ n, R (n + 1) ⊆ R n := by
+    intro n x hx
+    refine ⟨hx.1, Set.mem_iInter.2 fun k ↦ ?_⟩
+    have := Set.mem_iInter.1 hx.2 (k.castSucc)
+    simp [Fin.val_castSucc] at this
+    exact this
+  -- R_n is non-empty
+  have hR_nonempty : ∀ n, (R n).Nonempty := by
+    intro n
+    -- Build a compatible sequence up to level n, then extend arbitrarily
+    -- We'll pick y_n ∈ L_n, then define y_k = restrict₂(y_n) for k ≤ n,
+    -- and y_k arbitrary in L_k for k > n.
+    obtain ⟨yn, hyn⟩ := hL_nonempty n
+    -- Define the sequence
+    let y : Prod := fun k ↦
+      if h : k ≤ n then Finset.restrict₂ (hJ_mono h) yn
+      else (hL_nonempty k).some
+    refine ⟨y, ?_, Set.mem_iInter.2 fun k ↦ ?_⟩
+    · -- y ∈ inL: y_k ∈ L_k for all k
+      intro k _
+      simp only [y]
+      split_ifs with h
+      · exact hL_restrict h yn hyn
+      · exact (hL_nonempty k).some_mem
+    · -- compatibility: restrict₂(y_{k+1}) = y_k for k < n
+      simp only [Set.mem_setOf_eq, y]
+      have hk : (k : ℕ) < n := k.2
+      rw [dif_pos (by omega : (↑k + 1) ≤ n), dif_pos k.2.le]
+      ext ⟨j, hj⟩; simp [Finset.restrict₂]
+  -- ⋂ R_n is non-empty by Cantor
+  have hR_inter : (⋂ n, R n).Nonempty :=
+    IsCompact.nonempty_iInter_of_sequence_nonempty_isCompact_isClosed R
+      hR_anti hR_nonempty
+      (hProd_compact.of_isClosed_subset (hR_closed 0) (Set.inter_subset_left))
+      hR_closed
+  -- Extract a compatible sequence
+  obtain ⟨y, hy⟩ := hR_inter
+  have hy_mem : ∀ n, y n ∈ L n := by
+    intro n; exact (Set.mem_iInter.1 hy 0).1 n (Set.mem_univ _)
+  have hy_compat : ∀ n, Finset.restrict₂ (hJ_mono (Nat.le_succ n)) (y (n + 1)) = y n := by
+    intro n
+    have h_n1 := Set.mem_iInter.1 hy (n + 1)
+    have h_fn := Set.mem_iInter.1 h_n1.2 (⟨n, lt_add_one n⟩ : Fin (n + 1))
+    simpa using h_fn
+  -- Build f : ∀ i, α i from the compatible sequence
+  -- For each i, find the first n with i ∈ J n, and set f i = y n ⟨i, _⟩
+  let f : ∀ i, α i := fun i ↦
+    if h : ∃ n, i ∈ J n then y (Nat.find h) ⟨i, Nat.find_spec h⟩
+    else (hne i).some
+  -- Show f ∈ B n for all n (hence f ∈ ⋂ B_n)
+  have hf_mem : ∀ n, f ∈ B n := by
+    intro n
+    rw [B_eq']
+    simp only [mem_cylinder]
+    -- Need: Finset.restrict (J n) f ∈ T n, i.e., f restricted to J n is in T n
+    -- Since y n ∈ L n ⊆ T n, it suffices to show restrict(J n)(f) = y n
+    suffices h : (J n).restrict f = y n by rw [h]; exact hL_sub_T n (hy_mem n)
+    ext ⟨j, hj⟩
+    simp only [Finset.restrict_def, f]
+    have hij : ∃ k, j ∈ J k := ⟨n, hj⟩
+    rw [dif_pos hij]
+    -- Need: y (Nat.find hij) ⟨j, Nat.find_spec hij⟩ = y n ⟨j, hj⟩
+    -- Nat.find hij ≤ n, and y is compatible
+    set m := Nat.find hij with hm_def
+    have hm_le : m ≤ n := Nat.find_min' _ hj
+    -- By compatibility, restrict₂(y n) at J m level equals y m
+    -- So y m ⟨j, _⟩ = (restrict₂ (y n)) ⟨j, _⟩ = y n ⟨j, hJ_mono hm_le _⟩
+    -- We need to show y m ⟨j, Nat.find_spec _⟩ = y n ⟨j, hj⟩
+    -- Use the compatibility: for m ≤ n, restrict₂(y n) = y (n-1), ..., y m
+    -- More precisely, use induction on n - m
+    have hy_compat_gen : ∀ (a b : ℕ) (hab : a ≤ b),
+        Finset.restrict₂ (hJ_mono hab) (y b) = y a := by
+      intro a b hab
+      induction b with
+      | zero =>
+        have : a = 0 := Nat.eq_zero_of_le_zero hab
+        subst this; ext ⟨j', hj'⟩; simp [Finset.restrict₂]
+      | succ b ih =>
+        rcases Nat.eq_or_lt_of_le hab with rfl | hab'
+        · ext ⟨j', hj'⟩; simp [Finset.restrict₂]
+        · -- a ≤ b, and we have hy_compat b : restrict₂(y (b+1)) = y b
+          have hab'' : a ≤ b := Nat.lt_succ_iff.mp hab'
+          ext ⟨j', hj'⟩
+          have h1 := congr_fun (hy_compat b) ⟨j', hJ_mono hab'' hj'⟩
+          have h2 := congr_fun (ih hab'') ⟨j', hj'⟩
+          simp [Finset.restrict₂] at h1 h2 ⊢
+          rw [← h2, ← h1]
+    have := congr_fun (hy_compat_gen m n hm_le) ⟨j, Nat.find_spec hij⟩
+    simp [Finset.restrict₂] at this
+    exact this.symm
+  -- Contradiction: f ∈ ⋂ B_n = ∅
+  have : f ∈ ⋂ n, B n := Set.mem_iInter.2 hf_mem
+  rw [hB_inter] at this
+  exact this.elim
 
 /-- The projective family content is σ-subadditive on Polish spaces. -/
 theorem sigma_subadditive (pf : ProjectiveFamily ι α) :
