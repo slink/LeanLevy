@@ -290,8 +290,70 @@ private theorem charFun_eq_exp_div {ν : Measure ℝ} [IsProbabilityMeasure ν]
     {ψ : ℝ → ℂ} (hψ_cont : Continuous ψ) (hψ_zero : ψ 0 = 0)
     {m : ℕ} (hm : 0 < m) (hpow : ∀ ξ, (charFun ν ξ) ^ m = exp (ψ ξ)) :
     ∀ ξ, charFun ν ξ = exp (ψ ξ / ↑m) := by
-  -- Lift charFun ν and m*log through exp (covering map), then uniqueness gives ψ = m*log
-  sorry
+  -- Step 1: charFun ν is continuous and never zero (from hpow + exp_ne_zero)
+  have hcont : Continuous (charFun ν) := MeasureTheory.continuous_charFun
+  have hne : ∀ ξ, charFun ν ξ ≠ 0 := by
+    intro ξ habs
+    have : (charFun ν ξ) ^ m = 0 := by rw [habs, zero_pow (by omega)]
+    rw [hpow] at this
+    exact exp_ne_zero _ this
+  -- Step 2: Lift charFun ν through exp to get logν : C(ℝ, ℂ) with logν(0) = 0
+  have hφ0 : charFun ν 0 = 1 := charFun_zero_eq_one
+  set fν : C(ℝ, ℂ) := ⟨charFun ν, hcont⟩
+  have heν : Complex.exp (0 : ℂ) = fν (0 : ℝ) := by simp [fν, hφ0]
+  have hsν : ∀ ξ : ℝ, fν ξ ∈ ({0}ᶜ : Set ℂ) := fun ξ =>
+    Set.mem_compl_singleton_iff.mpr (hne ξ)
+  obtain ⟨logν, ⟨hlogν0, hlogν_exp⟩, hlogν_unique⟩ :=
+    Complex.isCoveringMapOn_exp.existsUnique_continuousMap_lifts fν heν hsν
+  -- logν 0 = 0 and exp ∘ logν = charFun ν
+  -- Step 3: Build the base map g := exp ∘ ψ as a ContinuousMap
+  set g : C(ℝ, ℂ) := ⟨fun ξ => exp (ψ ξ), hψ_cont.exp⟩
+  -- g maps into ℂ \ {0}
+  have hsg : ∀ ξ : ℝ, g ξ ∈ ({0}ᶜ : Set ℂ) := fun ξ =>
+    Set.mem_compl_singleton_iff.mpr (exp_ne_zero _)
+  have heg : Complex.exp (0 : ℂ) = g (0 : ℝ) := by simp [g, hψ_zero]
+  -- Step 4: ψ is a lift of g through exp
+  set ψ_cm : C(ℝ, ℂ) := ⟨ψ, hψ_cont⟩
+  have hψ_lift_val : ψ_cm (0 : ℝ) = 0 := hψ_zero
+  have hψ_lift_comp : Complex.exp ∘ ψ_cm = g := by
+    ext ξ; simp [ψ_cm, g]
+  -- Step 5: m * logν is also a lift of g through exp
+  set mlogν : C(ℝ, ℂ) := ⟨fun ξ => (↑m : ℂ) * logν ξ,
+    continuous_const.mul logν.continuous⟩
+  have hmlogν_val : mlogν (0 : ℝ) = 0 := by simp [mlogν, hlogν0]
+  have hmlogν_comp : Complex.exp ∘ mlogν = g := by
+    ext ξ
+    simp only [Function.comp_apply, ContinuousMap.coe_mk, g]
+    -- exp(m * logν(ξ)) = (exp(logν(ξ)))^m = (charFun ν ξ)^m = exp(ψ ξ)
+    rw [Complex.exp_nat_mul]
+    have hexp_logν : Complex.exp (logν ξ) = charFun ν ξ := by
+      have := congr_fun hlogν_exp ξ
+      simp [Function.comp_apply] at this
+      exact this
+    rw [hexp_logν, hpow]
+  -- Step 6: By uniqueness of lifts, ψ = m * logν
+  obtain ⟨_, ⟨_, _⟩, huniq⟩ :=
+    Complex.isCoveringMapOn_exp.existsUnique_continuousMap_lifts g heg hsg
+  have hψ_eq_mlogν : ψ_cm = mlogν := by
+    have hψ_uniq := huniq ψ_cm ⟨hψ_lift_val, hψ_lift_comp⟩
+    have hmlogν_uniq := huniq mlogν ⟨hmlogν_val, hmlogν_comp⟩
+    rw [hψ_uniq, hmlogν_uniq]
+  -- Step 7: Therefore charFun ν = exp(logν) = exp(ψ/m)
+  intro ξ
+  have hexp_logν : Complex.exp (logν ξ) = charFun ν ξ := by
+    have := congr_fun hlogν_exp ξ
+    simp [Function.comp_apply] at this
+    exact this
+  rw [← hexp_logν]
+  congr 1
+  -- logν ξ = ψ ξ / m, from ψ ξ = m * logν ξ
+  have hψ_eq : ψ ξ = (↑m : ℂ) * logν ξ := by
+    have := congr_fun (congrArg DFunLike.coe hψ_eq_mlogν) ξ
+    simp [ψ_cm, mlogν] at this
+    exact this
+  rw [hψ_eq]
+  rw [mul_div_cancel_left₀]
+  exact Nat.cast_ne_zero.mpr (by omega)
 
 /-- The complex limit `m * (1 - exp(z / m)) → -z` as `m → ∞`. -/
 private theorem tendsto_mul_one_sub_exp_div (z : ℂ) :
@@ -389,5 +451,33 @@ theorem levyKhintchine_of_cnd
         - ↑(T.gaussianVariance : ℝ) * ↑ξ ^ 2 / 2
         + ∫ x, levyCompensatedIntegrand ξ x ∂T.levyMeasure := by
   sorry
+
+/-! ## Assembly: Lévy-Khintchine representation -/
+
+/-- **Lévy-Khintchine representation theorem**: every infinitely divisible probability measure
+on `ℝ` has a characteristic function of the form
+`exp(ibξ − σ²ξ²/2 + ∫ f(ξ,x) dν(x))` where `f` is the compensated integrand
+`exp(ixξ) − 1 − ixξ·1_{|x|<1}`.
+
+**Proof via sub-lemmas:**
+1. `charFun_ne_zero` — characteristic function never vanishes (Sub-lemma 1)
+2. `exists_continuous_log` — continuous logarithm ψ with charFun = exp(ψ) (Sub-lemma 2)
+3. `isConditionallyNegativeDefinite_log` — ψ is CND (Sub-lemma 3)
+4. `levyKhintchine_of_cnd` — CND function has the integral representation (Sub-lemma 4) -/
+theorem levyKhintchine_representation
+    {μ : Measure ℝ} [IsProbabilityMeasure μ] (h : IsInfinitelyDivisible μ) :
+    ∃ T : LevyKhintchineTriple, ∀ ξ : ℝ,
+      charFun μ ξ = exp (
+        ↑T.drift * ↑ξ * I
+        - ↑(T.gaussianVariance : ℝ) * ↑ξ ^ 2 / 2
+        + ∫ x, levyCompensatedIntegrand ξ x ∂T.levyMeasure) := by
+  -- Sub-lemma 2: continuous logarithm
+  obtain ⟨ψ, hψ_cont, hψ_zero, hψ_exp⟩ := h.exists_continuous_log
+  -- Sub-lemma 3: ψ is conditionally negative definite
+  have hψ_cnd := h.isConditionallyNegativeDefinite_log hψ_cont hψ_zero hψ_exp
+  -- Sub-lemma 4: CND function has LK integral representation
+  obtain ⟨T, hT⟩ := levyKhintchine_of_cnd hψ_cont hψ_zero hψ_cnd
+  -- Combine: charFun μ ξ = exp(ψ ξ) = exp(ibξ - σ²ξ²/2 + ∫ f dν)
+  exact ⟨T, fun ξ => by rw [hψ_exp ξ, hT ξ]⟩
 
 end ProbabilityTheory

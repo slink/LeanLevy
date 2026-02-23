@@ -60,19 +60,4 @@ theorem integrable_min_one_sq :
 
 end LevyKhintchineTriple
 
-/-- **Lévy-Khintchine representation theorem**: every infinitely divisible probability measure
-on `ℝ` has a characteristic function of the form
-`exp(ibξ − σ²ξ²/2 + ∫ f(ξ,x) dν(x))` where `f` is the compensated integrand
-`exp(ixξ) − 1 − ixξ·1_{|x|<1}`.
-
-This is a deep analytic result requiring Fourier analysis and Lévy measure theory. -/
-theorem levyKhintchine_representation
-    {μ : Measure ℝ} [IsProbabilityMeasure μ] (h : IsInfinitelyDivisible μ) :
-    ∃ T : LevyKhintchineTriple, ∀ ξ : ℝ,
-      charFun μ ξ = Complex.exp (
-        ↑T.drift * ↑ξ * Complex.I
-        - ↑(T.gaussianVariance : ℝ) * ↑ξ ^ 2 / 2
-        + ∫ x, levyCompensatedIntegrand ξ x ∂T.levyMeasure) := by
-  sorry -- Deep analytic theorem (Fourier analysis + Lévy measure theory)
-
 end ProbabilityTheory
