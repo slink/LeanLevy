@@ -336,14 +336,15 @@ noncomputable def poissonProcessFDD (rate : ℝ≥0) (I : Finset ℝ≥0) :
   let incrMeasure : Fin I.card → Measure ℕ := fun k => poissonMeasure (rate * poissonProcessGap I k)
   (Measure.pi incrMeasure).map (poissonProcessIncrToVal I)
 
-/-- The Poisson FDDs form a projective family: marginalizing from `I` to `J ⊆ I`
-recovers the FDD at `J`. Follows from the Poisson convolution property
-`Poisson(a) * Poisson(b) = Poisson(a + b)` for independent variables, which lets
-us merge adjacent increments when dropping times.
+/-- For `J ⊆ I`, the poissonProcessFDD at `J` agrees with the projection of the
+poissonProcessFDD at `I`. This is the projective consistency property.
 
-**Dependencies:** `poissonProcessFDD` definition, Poisson convolution. -/
+**Proof strategy:** Strong induction on `|I \ J|`. Base case: `J = I`, identity.
+Step: pick `t ∈ I \ J`, let `I' = I.erase t`. By Poisson convolution,
+`Poisson(a) * Poisson(b) = Poisson(a+b)`, the FDD at `I` projects to `I'`.
+By IH the FDD at `I'` projects to `J`. Compose the two. -/
 theorem isProjectiveMeasureFamily_poissonProcessFDD (rate : ℝ≥0) :
-    IsProjectiveMeasureFamily (α := fun (_ : ℝ≥0) => ℕ) (poissonProcessFDD rate) :=
+    IsProjectiveMeasureFamily (α := fun (_ : ℝ≥0) => ℕ) (poissonProcessFDD rate) := by
   sorry
 
 /-- Each Poisson FDD is a probability measure (product of probability measures
