@@ -9,6 +9,9 @@ import LeanLevy.Levy.CompensatedIntegral
 import LeanLevy.Levy.LevyKhintchine
 import LeanLevy.Probability.Characteristic
 import LeanLevy.Levy.CharacteristicExponent
+import Mathlib.Analysis.Complex.CoveringMap
+import Mathlib.Topology.Homotopy.Lifting
+import Mathlib.Analysis.Convex.Contractible
 
 /-!
 # Lévy-Khintchine Proof Components
@@ -207,7 +210,26 @@ characteristic function: there exists `ψ : ℝ → ℂ` continuous with `ψ 0 =
 theorem IsInfinitelyDivisible.exists_continuous_log
     {μ : Measure ℝ} [IsProbabilityMeasure μ] (h : IsInfinitelyDivisible μ) :
     ∃ ψ : ℝ → ℂ, Continuous ψ ∧ ψ 0 = 0 ∧ ∀ ξ, charFun μ ξ = exp (ψ ξ) := by
-  sorry
+  -- The characteristic function is continuous and never vanishes
+  have hcont : Continuous (charFun μ) := MeasureTheory.continuous_charFun
+  have hne : ∀ ξ, charFun μ ξ ≠ 0 := h.charFun_ne_zero
+  -- charFun μ 0 = 1
+  have hφ0 : charFun μ 0 = 1 := by simp [charFun_zero, Measure.real, measure_univ]
+  -- Build the ContinuousMap f : C(ℝ, ℂ) for the characteristic function
+  set f : C(ℝ, ℂ) := ⟨charFun μ, hcont⟩
+  -- exp 0 = 1 = charFun μ 0 = f 0
+  have he : Complex.exp (0 : ℂ) = f (0 : ℝ) := by simp [f, hφ0]
+  -- charFun μ maps into ℂ \ {0}
+  have hs : ∀ ξ : ℝ, f ξ ∈ ({0}ᶜ : Set ℂ) := fun ξ => Set.mem_compl_singleton_iff.mpr (hne ξ)
+  -- Apply the lifting theorem for covering maps:
+  -- exp : ℂ → ℂ is a covering map on {0}ᶜ, ℝ is simply connected and locally path-connected
+  obtain ⟨F, ⟨hF0, hFexp⟩, _⟩ :=
+    Complex.isCoveringMapOn_exp.existsUnique_continuousMap_lifts f he hs
+  -- F is our continuous logarithm
+  exact ⟨F, F.continuous, hF0, fun ξ => by
+    have := congr_fun hFexp ξ
+    simp [Function.comp] at this
+    exact this.symm⟩
 
 /-! ## Sub-lemma 3: Conditional negative definiteness -/
 
