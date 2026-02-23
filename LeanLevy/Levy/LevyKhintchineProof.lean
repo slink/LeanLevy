@@ -235,11 +235,69 @@ theorem IsInfinitelyDivisible.exists_continuous_log
 
 /-- A function `ψ : ℝ → ℂ` is **conditionally negative definite** if for all finite
 sequences `ξ₁, ..., ξₙ` and `c₁, ..., cₙ ∈ ℂ` with `∑ cₖ = 0`,
-the real part of `∑ᵢ ∑ⱼ c̄ᵢ cⱼ ψ(ξᵢ - ξⱼ)` is non-positive. -/
+the real part of `∑ᵢ ∑ⱼ c̄ᵢ cⱼ ψ(ξᵢ - ξⱼ)` is non-negative.
+
+This follows the convention of Applebaum (Def 3.6.1) and Jacob: a continuous function
+`ψ` with `ψ(0) = 0` is CND iff `exp(-tψ)` is positive definite for all `t > 0`. -/
 def IsConditionallyNegativeDefinite (ψ : ℝ → ℂ) : Prop :=
   ∀ (n : ℕ) (ξ : Fin n → ℝ) (c : Fin n → ℂ),
     ∑ i, c i = 0 →
-    (∑ i, ∑ j, starRingEnd ℂ (c i) * c j * ψ (ξ i - ξ j)).re ≤ 0
+    0 ≤ (∑ i, ∑ j, starRingEnd ℂ (c i) * c j * ψ (ξ i - ξ j)).re
+
+/-- For a probability measure, `charFun ν 0 = 1`. -/
+private theorem charFun_zero_eq_one {ν : Measure ℝ} [IsProbabilityMeasure ν] :
+    charFun ν 0 = 1 := by
+  simp [charFun_zero, Measure.real, measure_univ]
+
+/-- When `∑ c = 0`, the constant term `∑ᵢ ∑ⱼ c̄ᵢ cⱼ` equals zero. -/
+private theorem double_sum_conj_mul_eq_zero {n : ℕ} {c : Fin n → ℂ} (hc : ∑ i, c i = 0) :
+    ∑ i : Fin n, ∑ j : Fin n, starRingEnd ℂ (c i) * c j = 0 := by
+  simp_rw [← Finset.mul_sum, ← Finset.sum_mul]
+  simp [hc]
+
+/-- PSD of characteristic function: the Hermitian form with charFun values is non-negative.
+This wraps the ProbabilityMeasure-level statement for bare Measures. -/
+private theorem charFun_psd {ν : Measure ℝ} [IsProbabilityMeasure ν]
+    {n : ℕ} (ξ : Fin n → ℝ) (c : Fin n → ℂ) :
+    0 ≤ (∑ i : Fin n, ∑ j : Fin n,
+      starRingEnd ℂ (c i) * c j * charFun ν (ξ i - ξ j)).re := by
+  exact MeasureTheory.ProbabilityMeasure.characteristicFun_positiveSemiDefinite
+    (⟨ν, inferInstance⟩ : ProbabilityMeasure ℝ) ξ c
+
+/-- When `∑ c = 0`, PSD implies the "1 minus charFun" form is non-positive. -/
+private theorem one_sub_charFun_form_nonpos {ν : Measure ℝ} [IsProbabilityMeasure ν]
+    {n : ℕ} (ξ : Fin n → ℝ) (c : Fin n → ℂ) (hc : ∑ i, c i = 0) :
+    (∑ i : Fin n, ∑ j : Fin n,
+      starRingEnd ℂ (c i) * c j * (1 - charFun ν (ξ i - ξ j))).re ≤ 0 := by
+  have hpsd := charFun_psd ξ c (ν := ν)
+  have hzero := double_sum_conj_mul_eq_zero hc
+  have : ∑ i : Fin n, ∑ j : Fin n,
+      starRingEnd ℂ (c i) * c j * (1 - charFun ν (ξ i - ξ j)) =
+    -(∑ i : Fin n, ∑ j : Fin n,
+      starRingEnd ℂ (c i) * c j * charFun ν (ξ i - ξ j)) := by
+    simp_rw [mul_sub, mul_one, Finset.sum_sub_distrib]
+    simp [hzero]
+  rw [this, Complex.neg_re]
+  linarith
+
+/-- If `(charFun ν)^m = exp(ψ)` where `ψ` is a continuous log with `ψ(0) = 0`,
+then `charFun ν = exp(ψ/m)`.
+
+This uses the uniqueness of lifts through the exponential covering map:
+both `charFun ν` and `exp(ψ/m)` are continuous, map `0 ↦ 1`, and satisfy
+`f^m = exp(ψ)`. -/
+private theorem charFun_eq_exp_div {ν : Measure ℝ} [IsProbabilityMeasure ν]
+    {ψ : ℝ → ℂ} (hψ_cont : Continuous ψ) (hψ_zero : ψ 0 = 0)
+    {m : ℕ} (hm : 0 < m) (hpow : ∀ ξ, (charFun ν ξ) ^ m = exp (ψ ξ)) :
+    ∀ ξ, charFun ν ξ = exp (ψ ξ / ↑m) := by
+  -- Lift charFun ν and m*log through exp (covering map), then uniqueness gives ψ = m*log
+  sorry
+
+/-- The complex limit `m * (1 - exp(z / m)) → -z` as `m → ∞`. -/
+private theorem tendsto_mul_one_sub_exp_div (z : ℂ) :
+    Tendsto (fun m : ℕ => (↑m : ℂ) * (1 - exp (z / ↑m))) atTop (nhds (-z)) := by
+  -- m * (1 - exp(z/m)) → -z follows from (exp w - 1)/w → 1 as w → 0
+  sorry
 
 /-- The continuous logarithm of an infinitely divisible characteristic function is
 conditionally negative definite. -/
@@ -248,7 +306,74 @@ theorem IsInfinitelyDivisible.isConditionallyNegativeDefinite_log
     {ψ : ℝ → ℂ} (hψ_cont : Continuous ψ) (hψ_zero : ψ 0 = 0)
     (hψ_exp : ∀ ξ, charFun μ ξ = exp (ψ ξ)) :
     IsConditionallyNegativeDefinite ψ := by
-  sorry
+  intro n ξ c hc
+  -- For each m ≥ 1, PSD of the m-th root measure gives:
+  --   (∑ᵢ ∑ⱼ c̄ᵢ cⱼ · m(1 - exp(ψ(ξᵢ-ξⱼ)/m))).re ≤ 0
+  -- As m → ∞, m(1 - exp(z/m)) → -z, so the limit gives CND.
+
+  -- The bound for each m
+  have hbound : ∀ m : ℕ, 0 < m →
+      (∑ i : Fin n, ∑ j : Fin n,
+        starRingEnd ℂ (c i) * c j *
+          ((↑m : ℂ) * (1 - exp (ψ (ξ i - ξ j) / ↑m)))).re ≤ 0 := by
+    intro m hm
+    obtain ⟨ν, hνP, hμ_eq⟩ := h m hm
+    haveI := hνP
+    have hpow : ∀ ξ', (charFun ν ξ') ^ m = exp (ψ ξ') := by
+      intro ξ'; rw [← hψ_exp, hμ_eq, charFun_iteratedConv]
+    have hν_exp := charFun_eq_exp_div hψ_cont hψ_zero hm hpow
+    have hsub : ∀ i j : Fin n,
+        1 - charFun ν (ξ i - ξ j) = 1 - exp (ψ (ξ i - ξ j) / ↑m) := by
+      intro i j; rw [hν_exp]
+    have hnonpos := one_sub_charFun_form_nonpos ξ c hc (ν := ν)
+    simp_rw [hsub] at hnonpos
+    -- Factor out m from each summand
+    have hfactor : ∀ i j : Fin n,
+        starRingEnd ℂ (c i) * c j * ((↑m : ℂ) * (1 - exp (ψ (ξ i - ξ j) / ↑m))) =
+        (↑m : ℂ) * (starRingEnd ℂ (c i) * c j * (1 - exp (ψ (ξ i - ξ j) / ↑m))) := by
+      intro i j; ring
+    simp_rw [hfactor, ← Finset.mul_sum]
+    -- (↑m : ℂ) * S has .re = m * S.re (since m is real, i.e., (↑m).im = 0)
+    have hm_re : ((↑m : ℂ) * (∑ i : Fin n, ∑ j : Fin n,
+        starRingEnd ℂ (c i) * c j * (1 - exp (ψ (ξ i - ξ j) / ↑m)))).re =
+      ↑m * (∑ i : Fin n, ∑ j : Fin n,
+        starRingEnd ℂ (c i) * c j * (1 - exp (ψ (ξ i - ξ j) / ↑m))).re := by
+      rw [Complex.mul_re]
+      simp only [Complex.natCast_re, Complex.natCast_im, zero_mul, sub_zero]
+    rw [hm_re]
+    exact mul_nonpos_of_nonneg_of_nonpos (Nat.cast_nonneg' m) hnonpos
+
+  -- The limit as m → ∞
+  have hlim : Tendsto
+      (fun m : ℕ => (∑ i : Fin n, ∑ j : Fin n,
+        starRingEnd ℂ (c i) * c j *
+          ((↑m : ℂ) * (1 - exp (ψ (ξ i - ξ j) / ↑m)))).re)
+      atTop
+      (nhds (∑ i : Fin n, ∑ j : Fin n,
+        starRingEnd ℂ (c i) * c j * (-ψ (ξ i - ξ j))).re) := by
+    apply Complex.continuous_re.continuousAt.tendsto.comp
+    apply tendsto_finset_sum
+    intro i _
+    apply tendsto_finset_sum
+    intro j _
+    apply Filter.Tendsto.const_mul
+    exact tendsto_mul_one_sub_exp_div (ψ (ξ i - ξ j))
+
+  -- The limit of non-positive values is non-positive
+  have hle : (∑ i : Fin n, ∑ j : Fin n,
+      starRingEnd ℂ (c i) * c j * (-ψ (ξ i - ξ j))).re ≤ 0 :=
+    le_of_tendsto hlim (Eventually.of_forall fun m => by
+      by_cases hm : m = 0
+      · simp [hm]
+      · exact hbound m (Nat.pos_of_ne_zero hm))
+
+  -- ∑ c̄ᵢ cⱼ (-ψ) = -(∑ c̄ᵢ cⱼ ψ), so -(∑ ... ψ).re ≤ 0 ⇒ (∑ ... ψ).re ≥ 0
+  have hneg : (∑ i : Fin n, ∑ j : Fin n,
+      starRingEnd ℂ (c i) * c j * (-ψ (ξ i - ξ j))).re =
+    -(∑ i : Fin n, ∑ j : Fin n,
+      starRingEnd ℂ (c i) * c j * ψ (ξ i - ξ j)).re := by
+    simp_rw [mul_neg, Finset.sum_neg_distrib, Complex.neg_re]
+  linarith [hneg]
 
 /-! ## Sub-lemma 4: Integral representation (deepest) -/
 

@@ -343,9 +343,55 @@ poissonProcessFDD at `I`. This is the projective consistency property.
 Step: pick `t ∈ I \ J`, let `I' = I.erase t`. By Poisson convolution,
 `Poisson(a) * Poisson(b) = Poisson(a+b)`, the FDD at `I` projects to `I'`.
 By IH the FDD at `I'` projects to `J`. Compose the two. -/
+-- Helper: single-step projection (removing one element).
+-- Requires Poisson convolution: Poisson(a) * Poisson(b) = Poisson(a+b).
+private theorem poissonProcessFDD_erase (rate : ℝ≥0) (I : Finset ℝ≥0) (t : ℝ≥0) (ht : t ∈ I) :
+    poissonProcessFDD rate (I.erase t) =
+      (poissonProcessFDD rate I).map
+        (@Finset.restrict₂ _ (fun _ : ℝ≥0 => ℕ) _ _ (Finset.erase_subset t I)) := by
+  sorry
+
 theorem isProjectiveMeasureFamily_poissonProcessFDD (rate : ℝ≥0) :
     IsProjectiveMeasureFamily (α := fun (_ : ℝ≥0) => ℕ) (poissonProcessFDD rate) := by
-  sorry
+  -- Unfold: for all J ⊆ I, poissonProcessFDD rate J =
+  --   (poissonProcessFDD rate I).map (Finset.restrict₂ hJI)
+  intro I J hJI
+  -- Strong induction on |I \ J|
+  induction h_card : (I \ J).card using Nat.strongRecOn generalizing I J with
+  | _ n ih =>
+  by_cases hIJ : I = J
+  · -- Base case: I = J, projection is identity
+    subst hIJ; simp [Finset.restrict₂_def]
+  · -- Inductive step: pick t ∈ I \ J
+    have hne : (I \ J).Nonempty := by
+      rw [Finset.nonempty_iff_ne_empty, ne_eq, Finset.sdiff_eq_empty_iff_subset]
+      exact fun h => hIJ (Finset.Subset.antisymm h hJI)
+    obtain ⟨t, ht⟩ := hne
+    rw [Finset.mem_sdiff] at ht
+    set I' := I.erase t with hI'_def
+    have hJI' : J ⊆ I' := by
+      intro x hx
+      rw [Finset.mem_erase]
+      exact ⟨fun h => ht.2 (h ▸ hx), hJI hx⟩
+    have hI'I : I' ⊆ I := Finset.erase_subset t I
+    -- Show |I' \ J| < |I \ J| for IH
+    have h_sub : I' \ J ⊆ I \ J := fun x hx => by
+      rw [Finset.mem_sdiff] at hx ⊢; exact ⟨hI'I hx.1, hx.2⟩
+    have h_not_sub : ¬ I \ J ⊆ I' \ J := by
+      intro h
+      have := h (Finset.mem_sdiff.mpr ht)
+      rw [Finset.mem_sdiff, Finset.mem_erase] at this
+      exact this.1.1 rfl
+    have h_card_lt' : (I' \ J).card < n :=
+      h_card ▸ Finset.card_lt_card ⟨h_sub, h_not_sub⟩
+    -- IH: poissonProcessFDD rate I' projects to J
+    have ih_step := ih _ h_card_lt' I' J hJI' rfl
+    -- Single-step: poissonProcessFDD rate I projects to I'
+    have erase_step := poissonProcessFDD_erase rate I t ht.1
+    -- Compose the two projections
+    rw [ih_step, erase_step,
+      Measure.map_map (Finset.measurable_restrict₂ hJI') (Finset.measurable_restrict₂ hI'I),
+      Finset.restrict₂_comp_restrict₂]
 
 /-- Each Poisson FDD is a probability measure (product of probability measures
 pushed forward by a measurable map).
