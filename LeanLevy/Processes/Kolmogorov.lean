@@ -62,6 +62,8 @@ private theorem content_tendsto_zero (pf : ProjectiveFamily ι α)
     {B : ℕ → Set (∀ i, α i)} (hB : ∀ n, B n ∈ measurableCylinders α)
     (hB_anti : Antitone B) (hB_inter : ⋂ n, B n = ∅) :
     Tendsto (fun n ↦ projectiveFamilyContent pf.consistent (B n)) atTop (𝓝 0) := by
+  sorry
+  /- The full proof uses inner regularity (tightness) on Polish spaces.
   have hne : ∀ i, Nonempty (α i) := pf.nonempty_of_projective
   choose I S mS B_eq using fun n ↦ (mem_measurableCylinders _).1 (hB n)
   classical
@@ -168,20 +170,20 @@ private theorem content_tendsto_zero (pf : ProjectiveFamily ι α)
     -- Each deficit is strictly less than its budget
     have hdeficit_le : ∀ k, pf.measure (J k) (T k \ K k) ≤ ε / 2 ^ (k + 2) :=
       fun k ↦ (hK_diff k).le
-    -- The tsum < ε: ∑' k, ε/2^(k+2) = 2⁻¹ * ∑' k, ε/2^(k+1) = 2⁻¹ * ε = ε/2 < ε
+    -- The tsum < ε: ∑' k, ε/2^(k+2) = ε * (2⁻¹)² * ∑ (2⁻¹)^k = ε/2 < ε
     have htsum_lt : ∑' k : ℕ, ε / 2 ^ (k + 2) < ε := by
-      have h_rw : (fun k ↦ ε / 2 ^ (k + 2)) = fun k ↦ 2⁻¹ * (ε / 2 ^ (k + 1)) := by
+      have h1 : (fun k ↦ ε / 2 ^ (k + 2)) =
+          fun k ↦ (ε * (2 : ℝ≥0∞)⁻¹ ^ 2) * (2 : ℝ≥0∞)⁻¹ ^ k := by
         ext k
-        rw [show k + 2 = (k + 1) + 1 from by omega, pow_succ, ENNReal.div_eq_inv_mul,
-          ENNReal.mul_inv (Or.inl (by positivity)) (Or.inl (by positivity)),
-          mul_comm ((2 : ℝ≥0∞) ^ (k + 1))⁻¹ _, mul_assoc, ← ENNReal.div_eq_inv_mul]
-      rw [h_rw, ENNReal.tsum_mul_left]
-      have h_sum : ∑' k : ℕ, ε / 2 ^ (k + 1) = ε := by
-        have : (fun k ↦ ε / 2 ^ (k + 1)) = fun k ↦ ε * (2⁻¹ : ℝ≥0∞) ^ (k + 1) := by
-          ext k; rw [ENNReal.div_eq_inv_mul, ENNReal.inv_pow]
-        rw [this, ENNReal.tsum_mul_left, ENNReal.tsum_geometric_add_one, ENNReal.one_sub_inv_two,
-          inv_inv, ENNReal.inv_mul_cancel (by norm_num) (by norm_num), mul_one]
-      rw [h_sum, ← ENNReal.div_eq_inv_mul]
+        rw [ENNReal.div_eq_inv_mul, ENNReal.inv_pow, show k + 2 = 2 + k from by omega, pow_add]
+        ring
+      rw [h1, ENNReal.tsum_mul_left, ENNReal.tsum_geometric, ENNReal.one_sub_inv_two, inv_inv]
+      -- Goal: (ε * (2⁻¹)²) * 2 < ε. Simplify (2⁻¹)² * 2 = 2⁻¹.
+      rw [show (ε * (2 : ℝ≥0∞)⁻¹ ^ 2) * 2 = ε * ((2 : ℝ≥0∞)⁻¹ ^ 2 * 2) from by ring]
+      rw [show (2 : ℝ≥0∞)⁻¹ ^ 2 * 2 = (2 : ℝ≥0∞)⁻¹ from by
+        rw [pow_succ, pow_one, mul_assoc,
+          ENNReal.inv_mul_cancel (by norm_num) (by norm_num), mul_one]]
+      rw [← ENNReal.div_eq_inv_mul]
       exact ENNReal.half_lt_self hε_pos.ne' hε_ne_top
     -- The sum ≤ the tsum: using range (n+1) as the finite index set
     have hfin_ne_top : ∑ k : Fin n, pf.measure (J ↑k) (T ↑k \ K ↑k) ≠ ⊤ :=
@@ -290,7 +292,7 @@ private theorem content_tendsto_zero (pf : ProjectiveFamily ι α)
   -- Im(n,m) = restrict₂_{n,m}(L_m)
   -- As a function of m (for fixed n), this is decreasing, compact, non-empty.
   -- We define Q_n = ⋂_{k:ℕ} Im(n, n+k).
-  sorry
+  sorry -/
 
 /-- The projective family content is σ-subadditive on Polish spaces. -/
 theorem sigma_subadditive (pf : ProjectiveFamily ι α) :
@@ -315,10 +317,13 @@ theorem isProjectiveLimit_kolmogorovExtension (pf : ProjectiveFamily ι α) :
     IsProjectiveLimit pf.kolmogorovExtension pf.measure := by
   intro I
   ext s hs
-  rw [Measure.map_apply (Finset.measurable_restrict I) hs, ← cylinder, kolmogorovExtension,
-    AddContent.measure_eq _ _ generateFrom_measurableCylinders.symm _
-      (cylinder_mem_measurableCylinders _ _ hs),
-    projectiveFamilyContent_cylinder pf.consistent hs]
+  rw [Measure.map_apply (Finset.measurable_restrict I) hs, ← cylinder]
+  have key : pf.kolmogorovExtension (cylinder I s) =
+      projectiveFamilyContent pf.consistent (cylinder I s) := by
+    unfold kolmogorovExtension
+    exact AddContent.measure_eq _ _ generateFrom_measurableCylinders.symm _
+      (cylinder_mem_measurableCylinders _ _ hs)
+  rw [key, projectiveFamilyContent_cylinder pf.consistent hs]
 
 instance instIsProbabilityMeasureKolmogorovExtension (pf : ProjectiveFamily ι α) :
     IsProbabilityMeasure pf.kolmogorovExtension :=
