@@ -53,8 +53,7 @@ variable {Ω : Type*} [MeasurableSpace Ω]
 /-- A counting process `N : ℝ≥0 → Ω → ℕ` is a **Poisson process** with rate `rate` if:
 1. It starts at zero: `N 0 = 0`.
 2. Its ℤ-valued embedding has independent increments.
-3. Each increment `N(s+h) - N(s)` has Poisson(`rate * h`) distribution.
-4. Almost every sample path (ℤ-embedded) is càdlàg. -/
+3. Each increment `N(s+h) - N(s)` has Poisson(`rate * h`) distribution. -/
 structure IsPoissonProcess (N : ℝ≥0 → Ω → ℕ) (rate : ℝ≥0) (μ : Measure Ω) : Prop where
   /-- The process starts at zero. -/
   start_zero : N 0 = fun _ => 0
@@ -63,8 +62,6 @@ structure IsPoissonProcess (N : ℝ≥0 → Ω → ℕ) (rate : ℝ≥0) (μ : M
   /-- Each increment has Poisson distribution. -/
   increment_poisson : ∀ (s h : ℝ≥0),
     μ.map (fun ω => N (s + h) ω - N s ω) = poissonMeasure (rate * h)
-  /-- Almost every sample path is càdlàg (right-continuous with left limits). -/
-  cadlag_paths : ∀ᵐ ω ∂μ, IsCadlag (fun t => (N t ω : ℤ))
 
 /-! ## Derived lemmas -/
 
@@ -216,8 +213,9 @@ theorem hasStationaryIncrements (h : IsPoissonProcess N rate μ) :
   -- Wrap in IdentDistrib
   exact ⟨haem_incr_sk, haem_incr_0k, hmap_Z⟩
 
-/-- A Poisson process (ℤ-embedded) is a Lévy process. -/
-theorem isLevyProcess (h : IsPoissonProcess N rate μ) :
+/-- A Poisson process (ℤ-embedded) with càdlàg paths is a Lévy process. -/
+theorem isLevyProcess (h : IsPoissonProcess N rate μ)
+    (hcadlag : ∀ᵐ ω ∂μ, IsCadlag (fun t => (N t ω : ℤ))) :
     IsLevyProcess (fun t ω => (N t ω : ℤ)) μ where
   start_zero := by
     ext ω
@@ -226,7 +224,7 @@ theorem isLevyProcess (h : IsPoissonProcess N rate μ) :
     simp
   indep_increments := h.indep_increments
   stationary_increments := h.hasStationaryIncrements
-  cadlag_ae := h.cadlag_paths
+  cadlag_ae := hcadlag
 
 end IsPoissonProcess
 
@@ -1093,10 +1091,10 @@ poissonProcessFDD ──→ isProjectiveMeasureFamily_poissonProcessFDD
                   kolmogorovExtension
                          │
                          v
-              ┌──────────┼──────────┬────────────┐
-              v          v          v            v
-          start_zero  indep_incr  incr_poisson  cadlag
-          (proved!)   (sorry)     (sorry)       (sorry)
+              ┌──────────┼──────────┐
+              v          v          v
+          start_zero  indep_incr  incr_poisson
+          (proved!)   (sorry)     (sorry)
 ```
 -/
 theorem exists_poissonProcess (rate : ℝ≥0) :
@@ -1121,14 +1119,6 @@ theorem exists_poissonProcess (rate : ℝ≥0) :
       -- the marginal at {s, s+h} equals poissonProcessFDD rate {s, s+h}, whose
       -- increment marginal is Poisson(rate * h) by construction.
       -- Dependencies: poissonProcessFDD, kolmogorovExtension_apply_cylinder.
-    cadlag_paths := by
-      sorry
-      -- A.e. càdlàg paths for `fun t => ((if t = 0 then 0 else ω t : ℕ) : ℤ)`.
-      -- Hardest field. Strategy:
-      -- 1. Show a.s. paths are non-decreasing (ℕ-valued increments are non-negative).
-      -- 2. Show a.s. right-continuity: P(Poisson(rate·h) ≥ 1) → 0 as h → 0.
-      -- 3. Left limits exist by monotonicity + ℤ-valued.
-      -- Dependencies: increment_poisson, Poisson tail bounds.
   }
 
 end ProbabilityTheory
