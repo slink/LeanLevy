@@ -42,8 +42,13 @@ A Lean 4 formalization of Lévy processes, built on top of mathlib.
 - Definition: independent increments, stationary increments, càdlàg paths, starts at zero
 - Characteristic exponent and supporting lemmas (multiplicativity, non-vanishing, right-continuity)
 
+**Kolmogorov extension theorem** (`LeanLevy/Processes/Kolmogorov.lean`)
+- Full proof of existence and uniqueness of the projective limit measure on Polish spaces
+- σ-additivity of cylinder content via inner regularity and Tychonoff compactness
+
 **Poisson process** (`LeanLevy/Processes/PoissonProcess.lean`)
 - Definition as a counting process with independent Poisson-distributed increments
+- Poisson FDD projectivity fully proved (single-step erase via Poisson convolution)
 - Shown to be a Lévy process
 
 **Characteristic exponent** (`LeanLevy/Levy/CharacteristicExponent.lean`)
@@ -71,10 +76,10 @@ A Lean 4 formalization of Lévy processes, built on top of mathlib.
 
 ## Incomplete
 
-Two results remain sorry'd:
+Two declarations remain sorry'd:
 
-- **`exists_poissonProcess`** — Existence of a Poisson process. Needs the Kolmogorov extension theorem, which isn't in mathlib yet.
-- **`levyKhintchine_representation`** — The Lévy–Khintchine representation theorem.
+- **`exists_poissonProcess`** — Existence of a Poisson process (3 sub-sorries: independent increments, increment distribution, càdlàg paths). The Kolmogorov extension and FDD projectivity are proved; what remains is wiring the process properties.
+- **`levyKhintchine_of_cnd`** — The Lévy–Khintchine representation theorem. Blocked on Bochner's theorem (not in mathlib).
 
 ## Building
 

@@ -341,6 +341,47 @@ private theorem poissonMeasure_add_conv (a b : ℝ≥0) :
   -- Combine: map cast of LHS = conv = map cast of RHS
   exact hembed.map_injective (h_cast_lhs.trans hR)
 
+/-- Singleton-level Poisson convolution: the convolution sum at a single point. -/
+private theorem poissonMeasure_conv_singleton (a b : ℝ≥0) (m : ℕ) :
+    (∑' n : ℕ, if n ≤ m then poissonMeasure a {n} * poissonMeasure b {m - n} else 0) =
+    poissonMeasure (a + b) {m} := by
+  have hpc := poissonMeasure_add_conv a b
+  -- hpc : (prod).map add = poissonMeasure(a+b)
+  -- Evaluate both sides at {m}
+  have hpc' : ((poissonMeasure a).prod (poissonMeasure b)).map
+      (fun p : ℕ × ℕ => p.1 + p.2) {m} = poissonMeasure (a + b) {m} := by rw [hpc]
+  rw [Measure.map_apply Measurable.of_discrete (measurableSet_singleton m)] at hpc'
+  rw [← hpc']
+  -- LHS of hpc: (prod).{(i,j) | i + j = m}
+  -- Express preimage as disjoint union of singletons {(n, m-n)}
+  have hfib : (fun p : ℕ × ℕ => p.1 + p.2) ⁻¹' {m} =
+      ⋃ n : ℕ, if n ≤ m then {⟨n, m - n⟩} else ∅ := by
+    ext ⟨a', b'⟩
+    simp only [Set.mem_preimage, Set.mem_singleton_iff, Set.mem_iUnion]
+    constructor
+    · intro hab; exact ⟨a', by rw [if_pos (by omega)]; ext <;> simp <;> omega⟩
+    · rintro ⟨n, hn⟩
+      by_cases hle : n ≤ m
+      · rw [if_pos hle] at hn; obtain ⟨rfl, rfl⟩ := Prod.mk.inj hn; omega
+      · rw [if_neg hle] at hn; exact absurd hn (by simp)
+  rw [hfib, measure_iUnion₀
+    (by intro i j hij; simp only [Function.onFun, AEDisjoint]
+        by_cases hi : i ≤ m
+        · by_cases hj : j ≤ m
+          · rw [if_pos hi, if_pos hj]
+            exact (Set.disjoint_singleton.mpr (fun h => hij (Prod.mk.inj h).1)).aedisjoint
+          · rw [if_neg hj]; simp
+        · rw [if_neg hi]; simp)
+    (by intro n; by_cases hn : n ≤ m
+        · rw [if_pos hn]; exact (measurableSet_singleton _).nullMeasurableSet
+        · rw [if_neg hn]; exact MeasurableSet.empty.nullMeasurableSet)]
+  congr 1; ext n
+  by_cases hn : n ≤ m
+  · rw [if_pos hn, if_pos hn,
+      show ({⟨n, m - n⟩} : Set (ℕ × ℕ)) = {n} ×ˢ {m - n} from (Set.singleton_prod_singleton).symm,
+      Measure.prod_prod]
+  · rw [if_neg hn, if_neg hn, measure_empty]
+
 /-! ## Poisson process projective family -/
 
 /-- The time gap (increment) at position `k` in the sorted enumeration of `I`.
@@ -458,47 +499,19 @@ private theorem poissonProcessFDD_erase (rate : ℝ≥0) (I : Finset ℝ≥0) (t
   -- The sorted position of t in I
   set eI := I.orderIsoOfFin rfl with heI_def
   set k : Fin I.card := eI.symm ⟨t, ht⟩ with hk_def
-  -- Step 1: The diagram commutes:
-  --   restrict₂ ∘ incrToVal I = incrToVal J ∘ ψ
-  -- Proof: Both sides, evaluated at d : Fin I.card → ℕ and ⟨s, hs⟩ : J,
-  -- give the cumulative sum of increments up to position of s.
-  -- The merge map ψ is designed so this works: it merges the increment at
-  -- position k (the position of t) with its neighbor, preserving all
-  -- cumulative sums at positions other than k.
-  have hdiag : @Finset.restrict₂ _ (fun _ : ℝ≥0 => ℕ) _ _ (Finset.erase_subset t I) ∘
-      poissonProcessIncrToVal I = poissonProcessIncrToVal J ∘ ψ := by
-    funext d ⟨s, hs⟩
-    simp only [Function.comp_apply, Finset.restrict₂, poissonProcessIncrToVal,
-      poissonProcessReindex, poissonProcessCumSum]
-    -- Both sides are sums of d(i) for appropriate ranges.
-    -- The LHS sums d over {0, ..., posI(s)} and
-    -- the RHS sums ψ(d) over {0, ..., posJ(s)}.
-    -- These are equal by the design of ψ.
-    sorry
-  -- Step 2: The merge map pushes the product measure correctly:
-  --   (Measure.pi μ_I).map ψ = Measure.pi μ_J
-  -- The key fact: ψ marginalizes coordinate k by convolution.
-  -- For coordinates j ≠ k: the measure passes through unchanged.
-  -- For coordinate k: Poisson(rate*Δk) ⊗ Poisson(rate*Δ(k+1)) marginalizes
-  --   via addition to Poisson(rate*(Δk + Δ(k+1))) = Poisson(rate*Δ'k).
-  -- Gap identities relating gap_J and gap_I
-  -- These follow from the sorted enumeration of I.erase t.
-  -- The key relationship: sorted enumeration of J = sorted enumeration of I with k skipped
+  -- Helper lemmas (shared by hdiag and hmerge)
   have hk' : k.val = ((Fin.cast hcard.symm k) : Fin (J.card + 1)).val := by simp
   set k' : Fin (J.card + 1) := Fin.cast hcard.symm k with hk'_def
   have herase := orderEmbOfFin_erase I t ht
-  -- Helper: orderEmbOfFin values from orderIsoOfFin
   have hiso_emb_I : ∀ i : Fin I.card,
       (I.orderIsoOfFin rfl i : ℝ≥0) = I.orderEmbOfFin rfl i := by
     intro i; simp [Finset.coe_orderIsoOfFin_apply]
   have hiso_emb_J : ∀ j : Fin J.card,
       (J.orderIsoOfFin rfl j : ℝ≥0) = J.orderEmbOfFin rfl j := by
     intro j; simp [Finset.coe_orderIsoOfFin_apply]
-  -- Helper: monotonicity of sorted enumeration
   have hmono_I : ∀ a b : Fin I.card, a ≤ b →
       (I.orderIsoOfFin rfl a : ℝ≥0) ≤ (I.orderIsoOfFin rfl b : ℝ≥0) :=
     fun a b hab => Subtype.mk_le_mk.mp ((I.orderIsoOfFin rfl).monotone hab)
-  -- Helper: succAbove value computation
   have hsa_lt : ∀ (j : Fin J.card), j.val < k'.val →
       (Fin.cast hcard (k'.succAbove j)).val = j.val := by
     intro j hj
@@ -509,6 +522,118 @@ private theorem poissonProcessFDD_erase (rate : ℝ≥0) (I : Finset ℝ≥0) (t
     intro j hj
     rw [Fin.succAbove_of_le_castSucc k' j (by rwa [Fin.le_def, Fin.val_castSucc])]
     simp
+  have heJ_val : ∀ j : Fin J.card, (J.orderIsoOfFin rfl j : ℝ≥0) =
+      (I.orderIsoOfFin rfl (Fin.cast hcard (k'.succAbove j)) : ℝ≥0) := by
+    intro j
+    rw [hiso_emb_J, herase j, ← hiso_emb_I]
+  -- Step 1: The diagram commutes:
+  --   restrict₂ ∘ incrToVal I = incrToVal J ∘ ψ
+  have hdiag : @Finset.restrict₂ _ (fun _ : ℝ≥0 => ℕ) _ _ (Finset.erase_subset t I) ∘
+      poissonProcessIncrToVal I = poissonProcessIncrToVal J ∘ ψ := by
+    funext d ⟨s, hs⟩
+    simp only [Function.comp_apply, Finset.restrict₂, poissonProcessIncrToVal,
+      poissonProcessReindex, poissonProcessCumSum]
+    -- Goal: ∑ j : Fin (posI+1), d ⟨j,_⟩ = ∑ j : Fin (posJ+1), ψ d ⟨j,_⟩
+    set posJ := (J.orderIsoOfFin rfl).symm ⟨s, hs⟩
+    -- Position relationship
+    have hpos : (I.orderIsoOfFin rfl).symm ⟨s, Finset.erase_subset t I hs⟩ =
+        Fin.cast hcard (k'.succAbove posJ) := by
+      apply eI.injective
+      ext
+      simp only [eI, OrderIso.apply_symm_apply]
+      rw [hiso_emb_I, ← herase, ← hiso_emb_J]
+      simp [posJ, OrderIso.apply_symm_apply]
+    by_cases hlt : posJ.val < k.val
+    · -- Case 1: posJ < k ⟹ posI = posJ, sums match term-by-term
+      have hval : ((I.orderIsoOfFin rfl).symm ⟨s, Finset.erase_subset t I hs⟩).val =
+          posJ.val := by
+        rw [hpos]; exact hsa_lt posJ hlt
+      -- Use Fintype.sum_equiv to change sum bounds + show term equality
+      have hlen : ((I.orderIsoOfFin rfl).symm ⟨s, Finset.erase_subset t I hs⟩).val + 1 =
+          posJ.val + 1 := by omega
+      exact Fintype.sum_equiv (finCongr hlen)
+        (fun j => d ⟨j.val, by omega⟩)
+        (fun j => ψ d ⟨j.val, Nat.lt_of_lt_of_le j.isLt (Nat.succ_le_of_lt posJ.isLt)⟩)
+        (fun ⟨j, hj⟩ => by
+          show d ⟨j, _⟩ = ψ d ⟨(finCongr hlen ⟨j, hj⟩).val, _⟩
+          simp only [finCongr_apply_mk, ψ, poissonProcessMerge, ← heI_def, ← hk_def]
+          rw [dif_pos (show j < k.val from by omega)])
+    · -- Case 2: posJ ≥ k ⟹ posI = posJ + 1, merge at k
+      push_neg at hlt
+      have hval : ((I.orderIsoOfFin rfl).symm ⟨s, Finset.erase_subset t I hs⟩).val =
+          posJ.val + 1 := by
+        rw [hpos]; exact hsa_ge posJ hlt
+      -- LHS sums posJ+2 terms, RHS sums posJ+1 terms.
+      have hlen : ((I.orderIsoOfFin rfl).symm ⟨s, Finset.erase_subset t I hs⟩).val + 1 =
+          posJ.val + 2 := by omega
+      have hk_lt : k.val < posJ.val + 2 := by omega
+      set kk : Fin (posJ.val + 2) := ⟨k.val, hk_lt⟩ with hkk_def
+      -- Step A: Convert LHS from Fin(posI+1) to Fin(posJ+2) and split at kk
+      -- LHS = ∑_{Fin(posJ+2)} d j = d(k) + ∑_{Fin(posJ+1)} d(succAbove j)
+      have hlhs : (∑ j : Fin (((I.orderIsoOfFin rfl).symm
+            ⟨s, Finset.erase_subset t I hs⟩).val + 1), d ⟨j.val, by omega⟩) =
+          d ⟨k.val, by omega⟩ +
+          ∑ j : Fin (posJ.val + 1),
+            d ⟨(kk.succAbove j).val, by exact Nat.lt_of_lt_of_le (kk.succAbove j).isLt (by omega)⟩ := by
+        rw [show (∑ j : Fin (((I.orderIsoOfFin rfl).symm
+              ⟨s, Finset.erase_subset t I hs⟩).val + 1), d ⟨j.val, by omega⟩) =
+            ∑ j : Fin (posJ.val + 2), d ⟨j.val, by omega⟩ from
+          Fintype.sum_equiv (finCongr hlen)
+            (fun j => d ⟨j.val, by omega⟩) (fun j => d ⟨j.val, by omega⟩)
+            (fun j => by simp [finCongr_apply_mk])]
+        exact Fin.sum_univ_succAbove (fun j : Fin (posJ.val + 2) => d ⟨j.val, by omega⟩) kk
+      rw [hlhs]
+      -- Goal: d(k) + ∑ d(succAbove j) = ∑ ψ d j
+      -- Step B: Show ψ d j = d(succAbove j) + (if j = kJ then d(k) else 0)
+      set kJ : Fin (posJ.val + 1) := ⟨k.val, by omega⟩ with hkJ_def
+      -- Bound for succAbove values in I.card
+      have hsa_bound : ∀ j : Fin (posJ.val + 1), (kk.succAbove j).val < I.card :=
+        fun j => Nat.lt_of_lt_of_le (kk.succAbove j).isLt
+          (hcard ▸ Nat.succ_le_succ (Nat.succ_le_of_lt posJ.isLt))
+      -- Compute succAbove values
+      have hsa_val : ∀ j : Fin (posJ.val + 1),
+          (kk.succAbove j).val = if j.val < k.val then j.val else j.val + 1 := by
+        intro ⟨j, hj⟩
+        by_cases hjk : j < k.val
+        · rw [if_pos hjk,
+            Fin.succAbove_of_castSucc_lt kk ⟨j, hj⟩ (by rwa [Fin.lt_def, Fin.val_castSucc])]
+          simp
+        · have hle : kk ≤ Fin.castSucc ⟨j, hj⟩ := by
+            rw [Fin.le_def, Fin.val_castSucc]; exact Nat.not_lt.mp hjk
+          rw [if_neg hjk, Fin.succAbove_of_le_castSucc kk ⟨j, hj⟩ hle]
+          simp
+      have hψ_decomp : ∀ j : Fin (posJ.val + 1),
+          ψ d ⟨j.val, Nat.lt_of_lt_of_le j.isLt (Nat.succ_le_of_lt posJ.isLt)⟩ =
+          d ⟨(kk.succAbove j).val, hsa_bound j⟩ +
+          if j = kJ then d ⟨k.val, by omega⟩ else 0 := by
+        intro ⟨j, hj⟩
+        simp only [ψ, poissonProcessMerge, ← heI_def, ← hk_def]
+        by_cases hjk : j < k.val
+        · -- j < k: ψ d j = d j, succAbove j = j
+          have hne : (⟨j, hj⟩ : Fin _) ≠ kJ := Fin.ne_of_val_ne (Nat.ne_of_lt hjk)
+          rw [dif_pos hjk, if_neg hne, add_zero]
+          exact congr_arg d (Fin.ext (by rw [hsa_val]; simp [hjk]))
+        · push_neg at hjk
+          by_cases hjk2 : j = k.val
+          · -- j = k: ψ d j = d(k) + d(k+1), succAbove j = j+1
+            subst hjk2
+            rw [dif_neg (lt_irrefl _), if_pos rfl, if_pos (show (⟨k.val, hj⟩ : Fin _) = kJ from rfl)]
+            have hsa_eq : (kk.succAbove ⟨k.val, hj⟩).val = k.val + 1 := by
+              rw [hsa_val]; simp [lt_irrefl k.val]
+            rw [show d ⟨(kk.succAbove ⟨k.val, hj⟩).val, hsa_bound ⟨k.val, hj⟩⟩ =
+              d ⟨k.val + 1, by omega⟩ from congr_arg d (Fin.ext hsa_eq)]
+            exact add_comm _ _
+          · -- j > k: ψ d j = d(j+1), succAbove j = j+1
+            have hne : (⟨j, hj⟩ : Fin _) ≠ kJ := Fin.ne_of_val_ne hjk2
+            rw [dif_neg (not_lt.mpr hjk), if_neg hjk2, if_neg hne, add_zero]
+            exact congr_arg d (Fin.ext (by rw [hsa_val]; simp [not_lt.mpr hjk]))
+      -- Step C: Sum the decomposition
+      simp_rw [hψ_decomp]
+      rw [Finset.sum_add_distrib]
+      -- Goal: d(k) + ∑ d(succAbove j) = ∑ d(succAbove j) + ∑ (if j = kJ then d(k) else 0)
+      rw [Finset.sum_ite_eq' Finset.univ kJ (fun _ => d ⟨k.val, by omega⟩)]
+      simp [add_comm]
+  -- Step 2: The merge map pushes the product measure correctly
   -- Helper: eJ(j) in terms of eI using the erase lemma
   have heJ_val : ∀ j : Fin J.card, (J.orderIsoOfFin rfl j : ℝ≥0) =
       (I.orderIsoOfFin rfl (Fin.cast hcard (k'.succAbove j)) : ℝ≥0) := by
@@ -595,18 +720,282 @@ private theorem poissonProcessFDD_erase (rate : ℝ≥0) (I : Finset ℝ≥0) (t
     rw [heJ_val ⟨j.val - 1, by omega⟩, hkk_pred]
     -- Both sides are eI(j+1) - eI(j), just need ⟨j, _⟩ = ⟨j+1-1, _⟩
     congr 1
+  -- Bound: k.val ≤ J.card (since k : Fin I.card and J.card + 1 = I.card)
+  have hk_le : k.val ≤ J.card := by have := k.isLt; omega
   have hmerge : (Measure.pi μ_I).map ψ = Measure.pi μ_J := by
-    -- Show equality on singletons (both sides are measures on countable space).
-    apply Measure.ext_of_singleton
-    intro f
-    -- LHS: (Measure.pi μ_I).map ψ {f} = (Measure.pi μ_I) (ψ⁻¹' {f})
-    rw [Measure.map_apply hmeas_ψ (measurableSet_singleton f)]
-    -- RHS: Measure.pi μ_J {f} = ∏ j, μ_J j {f j}
-    rw [Measure.pi_singleton]
-    -- The fiber ψ⁻¹'{f} and its measure decompose using Poisson convolution
-    -- at coordinate k and direct equality at other coordinates.
-    -- Gap identities ensure the rates match.
-    sorry
+    apply Measure.ext_of_singleton; intro f
+    rw [Measure.map_apply hmeas_ψ (measurableSet_singleton f), Measure.pi_singleton]
+    -- Goal: (Measure.pi μ_I) (ψ ⁻¹' {f}) = ∏ i : Fin J.card, μ_J i {f i}
+    -- Define lift: given n (value at coord k), build the preimage element
+    let lift : ℕ → (Fin I.card → ℕ) := fun n i =>
+      if h1 : i.val < k.val then f ⟨i.val, Nat.lt_of_lt_of_le h1 hk_le⟩
+      else if h2 : i.val = k.val then n
+      else if h3 : i.val = k.val + 1 ∧ k.val < J.card then f ⟨k.val, h3.2⟩ - n
+      else f ⟨i.val - 1, by
+        have : (I.erase t).card + 1 = I.card := Finset.card_erase_add_one ht
+        have : i.val < I.card := i.isLt
+        have : ¬(i.val < k.val) := h1; have : ¬(i.val = k.val) := h2
+        omega⟩
+    -- lift is injective (determined by value at coord k)
+    have hlift_inj : Function.Injective lift := by
+      intro m n hmn
+      have := congr_fun hmn ⟨k.val, k.isLt⟩
+      change (if _ : _ then _ else if _ : _ then _ else _) =
+        (if _ : _ then _ else if _ : _ then _ else _) at this
+      rw [dif_neg (lt_irrefl _), dif_pos rfl, dif_neg (lt_irrefl _), dif_pos rfl] at this
+      exact this
+    -- Evaluate lift at k → n
+    have hlift_at_k : ∀ n, lift n ⟨k.val, k.isLt⟩ = n := by
+      intro n
+      change (if _ : _ then _ else if _ : _ then _ else _) = _
+      rw [dif_neg (lt_irrefl _), dif_pos rfl]
+    -- Evaluate lift at k+1 (merge case) → f(k) - n
+    have hlift_at_k1 : ∀ (hkJ : k.val < J.card) n,
+        lift n ⟨k.val + 1, by omega⟩ = f ⟨k.val, hkJ⟩ - n := by
+      intro hkJ n
+      change (if _ : _ then _ else if _ : _ then _ else if _ : _ then _ else _) = _
+      rw [dif_neg (by omega : ¬(k.val + 1 < k.val)),
+          dif_neg (by omega : ¬(k.val + 1 = k.val)),
+          dif_pos (show k.val + 1 = k.val + 1 ∧ k.val < J.card from ⟨rfl, hkJ⟩)]
+    -- Evaluate lift at i > k (not k+1 merge): gives f(i-1)
+    have hlift_at_gt : ∀ n (i : Fin I.card) (hki : k.val < i.val)
+        (hni : ¬(i.val = k.val + 1 ∧ k.val < J.card)) (hb : i.val - 1 < J.card),
+        lift n i = f ⟨i.val - 1, hb⟩ := by
+      intro n i hki hni hb
+      change (if _ : _ then _ else if _ : _ then _ else if _ : _ then _ else _) = _
+      rw [dif_neg (by omega), dif_neg (by omega), dif_neg hni]
+    -- ψ (lift n) = f when n ≤ f(k) (if k < J.card) or always (if k ≥ J.card)
+    have hlift_ψ : ∀ n, (∀ hkJ : k.val < J.card, n ≤ f ⟨k.val, hkJ⟩) → ψ (lift n) = f := by
+      intro n hn; ext ⟨j, hj⟩
+      simp only [ψ, poissonProcessMerge, ← heI_def, ← hk_def]
+      have hIJ : (I.erase t).card + 1 = I.card := Finset.card_erase_add_one ht
+      by_cases hjk : j < k.val
+      · -- j < k
+        rw [dif_pos hjk]
+        change lift n ⟨j, _⟩ = _
+        change (if _ : _ then _ else _) = _
+        rw [dif_pos hjk]
+      · push_neg at hjk
+        rw [dif_neg (not_lt.mpr hjk)]
+        by_cases hjk2 : j = k.val
+        · -- j = k: n + (f(k) - n) = f(k)
+          subst hjk2; rw [if_pos rfl]
+          change lift n ⟨k.val, k.isLt⟩ + lift n ⟨k.val + 1, _⟩ = f ⟨k.val, hj⟩
+          rw [hlift_at_k, hlift_at_k1 hj]
+          exact Nat.add_sub_cancel' (hn hj)
+        · -- j > k
+          rw [if_neg hjk2]
+          change lift n ⟨j + 1, _⟩ = _
+          have hjk3 : k.val < j := Nat.lt_of_le_of_ne hjk (Ne.symm hjk2)
+          have hj1_lt : j + 1 < I.card := by omega
+          have hb : (⟨j + 1, hj1_lt⟩ : Fin I.card).val - 1 < J.card := hj
+          rw [hlift_at_gt n ⟨j + 1, hj1_lt⟩ (Nat.lt_succ_of_lt hjk3)
+              (by intro ⟨h, _⟩; simp at h; omega) hb]
+          exact congr_arg f (Fin.ext (by simp))
+    -- Converse: every element of ψ⁻¹'{f} is of the form lift n
+    have hlift_surj : ∀ d, ψ d = f → d = lift (d ⟨k.val, k.isLt⟩) := by
+      intro d hd; ext ⟨i, hi⟩
+      set m := d ⟨k.val, k.isLt⟩
+      -- Use hd to extract info about d from ψ d = f
+      have hd' : ∀ j : Fin J.card, ψ d j = f j := congr_fun hd
+      by_cases hi1 : i < k.val
+      · -- i < k: d(i) = ψ(d)(i) = f(i) = lift(m)(i)
+        have hψi := hd' ⟨i, Nat.lt_of_lt_of_le hi1 hk_le⟩
+        simp only [ψ, poissonProcessMerge, ← heI_def, ← hk_def, dif_pos hi1] at hψi
+        show d ⟨i, hi⟩ = (if _ : _ then _ else _)
+        rw [dif_pos hi1, ← hψi]
+      · push_neg at hi1
+        by_cases hi2 : i = k.val
+        · -- i = k: d(k) = m = lift(m)(k)
+          subst hi2; exact (hlift_at_k m).symm
+        · -- i > k
+          have hik : k.val < i := Nat.lt_of_le_of_ne hi1 (Ne.symm hi2)
+          by_cases hi3 : i = k.val + 1 ∧ k.val < J.card
+          · -- i = k+1, k < J.card: d(k+1) = f(k) - d(k)
+            have hi_eq : i = k.val + 1 := hi3.1
+            subst hi_eq
+            have hψk := hd' ⟨k.val, hi3.2⟩
+            simp only [ψ, poissonProcessMerge, ← heI_def, ← hk_def,
+              dif_neg (lt_irrefl _)] at hψk
+            simp only [if_true] at hψk
+            -- hψk : d(k) + d(k+1) = f(k)
+            show d ⟨k.val + 1, hi⟩ = lift m ⟨k.val + 1, hi⟩
+            rw [hlift_at_k1 hi3.2]; omega
+          · -- i > k, not merge: d(i) = f(i-1)
+            have hib : i - 1 < J.card := by
+              have := Finset.card_erase_add_one ht; omega
+            rw [hlift_at_gt m ⟨i, hi⟩ hik hi3 hib]
+            have hψi := hd' ⟨i - 1, hib⟩
+            simp only [ψ, poissonProcessMerge, ← heI_def, ← hk_def] at hψi
+            rw [dif_neg (by omega : ¬(i - 1 < k.val)),
+                if_neg (by omega : ¬((i - 1 : ℕ) = k.val))] at hψi
+            simp only [show i - 1 + 1 = i from by omega] at hψi
+            exact hψi
+    -- Split into merge case (k < J.card) and drop-last case (k = J.card)
+    by_cases hkJ : k.val < J.card
+    · -- MERGE CASE: k < J.card, ψ merges coordinates k and k+1
+      set m := f ⟨k.val, hkJ⟩ with hm_def
+      -- Helper: ψ d at position k gives d(k) + d(k+1)
+      have hψ_at_k : ∀ d, ψ d ⟨k.val, hkJ⟩ = d ⟨k.val, k.isLt⟩ + d ⟨k.val + 1, by omega⟩ := by
+        intro d
+        simp only [ψ, poissonProcessMerge, ← heI_def, ← hk_def,
+          dif_neg (lt_irrefl _), ite_true]
+      -- Preimage: ψ⁻¹'{f} = ⋃ n ≤ m, {lift n}
+      have hpreimage : ψ ⁻¹' {f} =
+          ⋃ n : ℕ, if n ≤ m then {lift n} else ∅ := by
+        ext d; simp only [Set.mem_preimage, Set.mem_singleton_iff, Set.mem_iUnion]
+        constructor
+        · intro hd
+          have hdk_le : d ⟨k.val, k.isLt⟩ ≤ m := by
+            have := congr_fun hd ⟨k.val, hkJ⟩; rw [hψ_at_k] at this; omega
+          refine ⟨d ⟨k.val, k.isLt⟩, ?_⟩
+          rw [if_pos hdk_le]; exact Set.mem_singleton_iff.mpr (hlift_surj d hd)
+        · rintro ⟨n, hn⟩
+          by_cases hle : n ≤ m
+          · rw [if_pos hle, Set.mem_singleton_iff] at hn; rw [hn]
+            exact hlift_ψ n (fun _ => hle)
+          · rw [if_neg hle] at hn; exact absurd hn (by simp)
+      rw [hpreimage, measure_iUnion₀
+        (by intro i j hij
+            show AEDisjoint _ (if i ≤ m then {lift i} else ∅) (if j ≤ m then {lift j} else ∅)
+            by_cases hi : i ≤ m
+            · by_cases hj : j ≤ m
+              · rw [if_pos hi, if_pos hj]
+                exact (Set.disjoint_singleton.mpr fun h => hij (hlift_inj h)).aedisjoint
+              · rw [if_neg hj]; exact disjoint_bot_right.aedisjoint
+            · rw [if_neg hi]; exact disjoint_bot_left.aedisjoint)
+        (by intro n; by_cases h : n ≤ m
+            · rw [if_pos h]; exact (measurableSet_singleton _).nullMeasurableSet
+            · rw [if_neg h]; exact MeasurableSet.empty.nullMeasurableSet)]
+      simp only [show ∀ n, (Measure.pi μ_I) (if n ≤ m then ({lift n} : Set _) else ∅) =
+          if n ≤ m then (Measure.pi μ_I) {lift n} else 0 from fun n => by
+        by_cases h : n ≤ m
+        · rw [if_pos h, if_pos h]
+        · rw [if_neg h, if_neg h, measure_empty]]
+      simp only [Measure.pi_singleton]
+      -- Product identity: split the n-dependent terms from the constant
+      set kJ := (⟨k.val, hkJ⟩ : Fin J.card)
+      let C := (Finset.univ.erase kJ).prod (fun j => μ_J j {f j})
+      -- Helper: lift n at positions j < k gives f j
+      have hlift_lt : ∀ n (j : Fin J.card), j.val < k.val →
+          lift n ⟨j.val, by omega⟩ = f j := by
+        intro n j hj
+        change (if _ : _ then _ else _) = _
+        rw [dif_pos hj]
+      have hprod_merge : ∀ n, ∏ i : Fin I.card, μ_I i {lift n i} =
+          μ_I k {n} * μ_I ⟨k.val + 1, by omega⟩ {m - n} * C := by
+        intro n
+        -- Reindex from Fin I.card to Fin (J.card + 1)
+        rw [Fintype.prod_equiv (finCongr hcard.symm)
+          (fun i => μ_I i {lift n i})
+          (fun j => μ_I (finCongr hcard j) {lift n (finCongr hcard j)})
+          (fun x => by simp [finCongr])]
+        -- Split at k' to extract the k-th term
+        rw [Fin.prod_univ_succAbove _ k']
+        have hk'_eq : finCongr hcard k' = k := Fin.ext (by simp [k', finCongr])
+        rw [hk'_eq, hlift_at_k, mul_assoc]
+        congr 1
+        -- Extract kJ from inner product via mul_prod_erase
+        rw [← Finset.mul_prod_erase _ _ (Finset.mem_univ kJ)]
+        -- The kJ-th term = μ_I ⟨k+1⟩ {m - n}
+        have hk'_le_kJ : k'.val ≤ kJ.val := le_refl _
+        have hfin_kJ : finCongr hcard (k'.succAbove kJ) = ⟨k.val + 1, by omega⟩ :=
+          Fin.ext (hsa_ge kJ hk'_le_kJ)
+        congr 1
+        · rw [hfin_kJ, hlift_at_k1 hkJ]
+        · -- Remaining product = C
+          apply Finset.prod_congr rfl
+          intro j hj
+          rw [Finset.mem_erase] at hj
+          have hne : j.val ≠ k.val := fun h => hj.1 (Fin.ext h)
+          by_cases hjk : j.val < k.val
+          · -- j < k: succAbove j = j, lift gives f j, gap identity
+            have hfin_j : finCongr hcard (k'.succAbove j) = ⟨j.val, by omega⟩ :=
+              Fin.ext (hsa_lt j (by simp [k']; exact hjk))
+            rw [hfin_j, hlift_lt n j hjk]
+            show poissonMeasure (rate * poissonProcessGap I ⟨j.val, _⟩) {f j} =
+              poissonMeasure (rate * poissonProcessGap J j) {f j}
+            congr 2; congr 1; exact (hgap_lt j hjk).symm
+          · -- j > k: succAbove j = j+1, lift gives f j, gap identity
+            push_neg at hjk
+            have hjk_gt : j.val > k.val := Nat.lt_of_le_of_ne hjk (Ne.symm hne)
+            have hk'_le_j : k'.val ≤ j.val := by simp [k']; omega
+            have hj1_lt_I : j.val + 1 < I.card := by omega
+            have hk_lt_j1 : k.val < j.val + 1 := by omega
+            have hni : ¬(j.val + 1 = k.val + 1 ∧ k.val < J.card) := by
+              intro ⟨h, _⟩; omega
+            have hfin_j : finCongr hcard (k'.succAbove j) = ⟨j.val + 1, hj1_lt_I⟩ :=
+              Fin.ext (hsa_ge j hk'_le_j)
+            have hlift_val : lift n (finCongr hcard (k'.succAbove j)) = f j := by
+              rw [hfin_j]
+              exact hlift_at_gt n ⟨j.val + 1, hj1_lt_I⟩ hk_lt_j1 hni j.isLt
+            rw [hlift_val, hfin_j]
+            show poissonMeasure (rate * poissonProcessGap I ⟨j.val + 1, _⟩) {f j} =
+              poissonMeasure (rate * poissonProcessGap J j) {f j}
+            congr 2; congr 1; exact (hgap_gt j hjk_gt).symm
+      -- Factor out the n-independent constant and apply Poisson convolution
+      simp_rw [show ∀ n, (if n ≤ m then ∏ i, μ_I i {lift n i} else 0) =
+          (if n ≤ m then μ_I k {n} * μ_I ⟨k.val + 1, by omega⟩ {m - n} else 0) * C
+          from fun n => by
+        by_cases h : n ≤ m
+        · rw [if_pos h, if_pos h, hprod_merge]
+        · simp [if_neg h]]
+      rw [ENNReal.tsum_mul_right, poissonMeasure_conv_singleton _ _ m,
+        show rate * poissonProcessGap I k + rate * poissonProcessGap I ⟨k.val + 1, by omega⟩ =
+          rate * poissonProcessGap J kJ from by rw [← mul_add, hgap_eq hkJ]]
+      -- Reassemble: μ_J kJ {m} * C = ∏ j, μ_J j {f j}
+      change μ_J kJ {m} * C = ∏ i, μ_J i {f i}
+      rw [hm_def]
+      exact Finset.mul_prod_erase Finset.univ (fun j => μ_J j {f j})
+        (Finset.mem_univ kJ)
+    · -- DROP-LAST CASE: k = J.card, ψ just drops the last coordinate
+      have hkJ_eq : k.val = J.card := Nat.le_antisymm hk_le (Nat.not_lt.mp hkJ)
+      -- Preimage: every n gives a valid lift
+      have hpreimage : ψ ⁻¹' {f} = ⋃ n : ℕ, {lift n} := by
+        ext d; simp only [Set.mem_preimage, Set.mem_singleton_iff, Set.mem_iUnion]
+        constructor
+        · intro hd; exact ⟨d ⟨k.val, k.isLt⟩, hlift_surj d hd⟩
+        · rintro ⟨n, rfl⟩; exact hlift_ψ n (fun hkJ' => absurd hkJ' (by omega))
+      rw [hpreimage, measure_iUnion₀
+        (by intro i j hij
+            exact (Set.disjoint_singleton.mpr (fun h => hij (hlift_inj h))).aedisjoint)
+        (by intro n; exact (measurableSet_singleton _).nullMeasurableSet)]
+      simp_rw [Measure.pi_singleton]
+      -- Product split: ∏ i, μ_I i {lift n i} = (∏ j, μ_J j {f j}) * μ_I k {n}
+      have hlift_lt : ∀ n (j : Fin J.card),
+          lift n ⟨j.val, by omega⟩ = f j := by
+        intro n j
+        change (if _ : _ then _ else _) = _
+        rw [dif_pos (show j.val < k.val by omega)]
+      have hprod : ∀ n, ∏ i : Fin I.card, μ_I i {lift n i} =
+          (∏ j : Fin J.card, μ_J j {f j}) * μ_I k {n} := by
+        intro n
+        rw [Fintype.prod_equiv (finCongr hcard.symm)
+          (fun i => μ_I i {lift n i})
+          (fun j => μ_I (finCongr hcard j) {lift n (finCongr hcard j)})
+          (fun x => by simp [finCongr])]
+        rw [Fin.prod_univ_castSucc]
+        congr 1
+        · -- castSucc product = ∏ j, μ_J j {f j}
+          apply Finset.prod_congr rfl; intro j _
+          have hfin : finCongr hcard (Fin.castSucc j) = ⟨j.val, by omega⟩ :=
+            Fin.ext (by simp [finCongr])
+          rw [hfin, hlift_lt n j]
+          show poissonMeasure (rate * poissonProcessGap I ⟨j.val, _⟩) {f j} =
+               poissonMeasure (rate * poissonProcessGap J j) {f j}
+          congr 2; congr 1; exact (hgap_lt j (by omega)).symm
+        · -- last term = μ_I k {n}
+          have hfin : finCongr hcard (Fin.last J.card) = k :=
+            Fin.ext (by simp [finCongr, Fin.last, hkJ_eq])
+          rw [hfin, hlift_at_k]
+      simp_rw [hprod, ENNReal.tsum_mul_left]
+      rw [show ∑' n, μ_I k {n} = 1 from by
+        calc ∑' n, μ_I k {n}
+            = μ_I k (⋃ n, {n}) := (measure_iUnion
+              (fun i j hij => Set.disjoint_singleton.mpr fun h => hij h)
+              (fun n => measurableSet_singleton n)).symm
+          _ = μ_I k Set.univ := by congr 1; ext x; simp
+          _ = 1 := measure_univ, mul_one]
   -- Step 3: Chain the equalities
   show (Measure.pi μ_J).map (poissonProcessIncrToVal J) =
     ((Measure.pi μ_I).map (poissonProcessIncrToVal I)).map
