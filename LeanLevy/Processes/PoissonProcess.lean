@@ -1070,6 +1070,271 @@ noncomputable def poissonProjectiveFamily (rate : ℝ≥0) :
   consistent := isProjectiveMeasureFamily_poissonProcessFDD rate
   prob := isProbabilityMeasure_poissonProcessFDD rate
 
+/-! ## Singleton marginal of the FDD -/
+
+/-- Evaluating the poissonProcessFDD at a singleton `{t}` and projecting to the unique
+coordinate recovers `poissonMeasure (rate * t)`. -/
+private theorem poissonProcessFDD_singleton_eval (rate : ℝ≥0) (t : ℝ≥0) :
+    (poissonProcessFDD rate {t}).map
+      (fun f : ({t} : Finset ℝ≥0) → ℕ => f ⟨t, Finset.mem_singleton_self t⟩) =
+    poissonMeasure (rate * t) := by
+  -- {t}.card = 1
+  have hcard : ({t} : Finset ℝ≥0).card = 1 := Finset.card_singleton t
+  -- The gap at position 0 in {t} is t - 0 = t
+  have hgap : poissonProcessGap {t} ⟨0, by rw [hcard]; omega⟩ = t := by
+    simp [poissonProcessGap]
+    exact Finset.mem_singleton.mp
+      (({t} : Finset ℝ≥0).orderEmbOfFin_mem rfl ⟨0, by omega⟩)
+  -- Unfold: FDD = (Measure.pi incrMeasure).map incrToVal
+  -- Compose: eval ∘ incrToVal = fun d => d 0
+  -- Because incrToVal sends d to (fun ⟨t, _⟩ => cumsum(d)(orderIso⁻¹(⟨t,_⟩))) = (fun _ => d 0)
+  have hcomp : (fun f : ({t} : Finset ℝ≥0) → ℕ => f ⟨t, Finset.mem_singleton_self t⟩) ∘
+      poissonProcessIncrToVal {t} =
+      (fun d : Fin ({t} : Finset ℝ≥0).card → ℕ => d ⟨0, by rw [hcard]; omega⟩) := by
+    ext d
+    simp only [Function.comp_apply, poissonProcessIncrToVal, poissonProcessReindex]
+    -- cumsum at orderIso⁻¹(⟨t,_⟩) = d 0, since #{t} = 1 means the position is ⟨0, _⟩
+    haveI : Subsingleton (Fin ({t} : Finset ℝ≥0).card) := by rw [hcard]; infer_instance
+    rw [show (({t} : Finset ℝ≥0).orderIsoOfFin rfl).symm
+        ⟨t, Finset.mem_singleton_self t⟩ = ⟨0, by rw [hcard]; omega⟩ from
+      Subsingleton.elim _ _]
+    simp [poissonProcessCumSum]
+  -- poissonProcessFDD rate {t} = (Measure.pi incrMeasure).map incrToVal
+  -- So (FDD.map eval) = (Measure.pi incrMeasure).map (eval ∘ incrToVal)
+  --                    = (Measure.pi incrMeasure).map (fun d => d 0)
+  unfold poissonProcessFDD
+  rw [Measure.map_map Measurable.of_discrete Measurable.of_discrete, hcomp]
+  -- Now: (Measure.pi incrMeasure).map (fun d => d 0) = incrMeasure 0 = poissonMeasure (rate * t)
+  -- Prove by ext_of_singleton
+  apply Measure.ext_of_singleton; intro n
+  rw [Measure.map_apply Measurable.of_discrete (measurableSet_singleton n)]
+  -- LHS: (Measure.pi incrMeasure) {d | d 0 = n}
+  -- = (Measure.pi incrMeasure) (Set.pi univ (fun i => if i = ⟨0, _⟩ then {n} else univ))
+  -- But on Fin 1, this simplifies to {fun _ => n}
+  have hpreimage : (fun d : Fin ({t} : Finset ℝ≥0).card → ℕ =>
+      d ⟨0, by rw [hcard]; omega⟩) ⁻¹' {n} =
+      {fun i : Fin ({t} : Finset ℝ≥0).card => n} := by
+    ext d; simp only [Set.mem_preimage, Set.mem_singleton_iff]
+    constructor
+    · intro hd; ext ⟨j, hj⟩; have hj0 : j = 0 := by omega
+      subst hj0; exact hd
+    · intro hd; exact congr_fun hd _
+  rw [hpreimage, Measure.pi_singleton]
+  -- Beta-reduce the product and collapse (#{t} = 1 so Fin #{t} ≅ Fin 1)
+  change ∏ i : Fin ({t} : Finset ℝ≥0).card,
+      poissonMeasure (rate * poissonProcessGap {t} i) {n} = _
+  -- Collapse product over Fin 1 using Subsingleton
+  haveI : Subsingleton (Fin ({t} : Finset ℝ≥0).card) := by rw [hcard]; infer_instance
+  rw [Fintype.prod_subsingleton _ ⟨0, by rw [hcard]; omega⟩, hgap]
+
+/-- The Kolmogorov extension measure projected to a single coordinate `t`
+gives `poissonMeasure (rate * t)`. -/
+private theorem kolmogorovExtension_map_coord (rate : ℝ≥0) (t : ℝ≥0) :
+    (poissonProjectiveFamily rate).kolmogorovExtension.map (fun ω : ∀ _ : ℝ≥0, ℕ => ω t) =
+    poissonMeasure (rate * t) := by
+  set μ := (poissonProjectiveFamily rate).kolmogorovExtension
+  -- Factor: (fun ω => ω t) = eval_t ∘ {t}.restrict
+  have hfactor : (fun ω : ∀ _ : ℝ≥0, ℕ => ω t) =
+      (fun f : ({t} : Finset ℝ≥0) → ℕ => f ⟨t, Finset.mem_singleton_self t⟩) ∘
+      Finset.restrict {t} := by
+    ext ω; simp [Finset.restrict]
+  -- μ.map ({t}.restrict) = poissonProcessFDD rate {t}
+  have hmarg : μ.map (Finset.restrict {t}) = poissonProcessFDD rate {t} :=
+    (poissonProjectiveFamily rate).isProjectiveLimit_kolmogorovExtension {t}
+  rw [hfactor]
+  have h_decomp : μ.map ((fun f : ({t} : Finset ℝ≥0) → ℕ =>
+      f ⟨t, Finset.mem_singleton_self t⟩) ∘ Finset.restrict {t}) =
+      (μ.map (Finset.restrict {t})).map
+        (fun f : ({t} : Finset ℝ≥0) → ℕ => f ⟨t, Finset.mem_singleton_self t⟩) :=
+    (Measure.map_map Measurable.of_discrete
+      (Finset.measurable_restrict (X := fun _ : ℝ≥0 => ℕ) {t})).symm
+  rw [h_decomp, hmarg]
+  exact poissonProcessFDD_singleton_eval rate t
+
+/-! ## 2-point increment marginal -/
+
+/-- The Kolmogorov extension projected through the difference
+`ω(s+h) - ω(s)` gives `poissonMeasure (rate * h)`, for `s ≠ 0` and `h ≠ 0`. -/
+private theorem kolmogorovExtension_map_diff (rate : ℝ≥0) (s h : ℝ≥0) (hh : h ≠ 0) :
+    (poissonProjectiveFamily rate).kolmogorovExtension.map
+      (fun ω : ∀ _ : ℝ≥0, ℕ => ω (s + h) - ω s) =
+    poissonMeasure (rate * h) := by
+  set μ := (poissonProjectiveFamily rate).kolmogorovExtension
+  -- s < s + h since h ≠ 0
+  have hlt : s < s + h := lt_add_of_pos_right s (pos_iff_ne_zero.mpr hh)
+  have hne : s ≠ s + h := ne_of_lt hlt
+  have hsh_ne : s + h ≠ s := hne.symm
+  -- Factor through {s, s+h}.restrict
+  set I := ({s, s + h} : Finset ℝ≥0) with hI_def
+  have hs_mem : s ∈ I := Finset.mem_insert.mpr (Or.inl rfl)
+  have hsh_mem : s + h ∈ I := Finset.mem_insert.mpr (Or.inr (Finset.mem_singleton_self _))
+  -- The difference function factors through the restriction
+  have hfactor : (fun ω : ∀ _ : ℝ≥0, ℕ => ω (s + h) - ω s) =
+      (fun f : I → ℕ => f ⟨s + h, hsh_mem⟩ - f ⟨s, hs_mem⟩) ∘ Finset.restrict I := by
+    ext ω; simp [Finset.restrict]
+  -- μ.map (I.restrict) = poissonProcessFDD rate I
+  have hmarg : μ.map (Finset.restrict I) = poissonProcessFDD rate I :=
+    (poissonProjectiveFamily rate).isProjectiveLimit_kolmogorovExtension I
+  rw [hfactor]
+  have h_decomp : μ.map ((fun f : I → ℕ =>
+      f ⟨s + h, hsh_mem⟩ - f ⟨s, hs_mem⟩) ∘ Finset.restrict I) =
+      (μ.map (Finset.restrict I)).map
+        (fun f : I → ℕ => f ⟨s + h, hsh_mem⟩ - f ⟨s, hs_mem⟩) :=
+    (Measure.map_map Measurable.of_discrete
+      (Finset.measurable_restrict (X := fun _ : ℝ≥0 => ℕ) I)).symm
+  rw [h_decomp, hmarg]
+  -- Now prove: (poissonProcessFDD rate I).map (fun f => f(s+h) - f(s)) = poissonMeasure(rate * h)
+  -- Unfold poissonProcessFDD and compute
+  -- I has 2 elements: {s, s+h}, card = 2
+  have hcard : I.card = 2 := by
+    rw [hI_def, Finset.card_insert_of_notMem
+      (Finset.notMem_singleton.mpr hne), Finset.card_singleton]
+  -- The order iso sends 0 ↦ s, 1 ↦ s+h (since s < s+h)
+  set e := I.orderIsoOfFin rfl with he_def
+  -- Gaps: gap 0 = s, gap 1 = h
+  -- incrToVal sends d to cumsum reindexed:
+  --   at s: d(0)
+  --   at s+h: d(0) + d(1)
+  -- So f(s+h) - f(s) = d(1)
+  -- Therefore (FDD.map diff) = (pi incr).map (fun d => d 1) = poissonMeasure(rate * h)
+  -- Prove the composition identity
+  have hcomp : (fun f : I → ℕ => f ⟨s + h, hsh_mem⟩ - f ⟨s, hs_mem⟩) ∘
+      poissonProcessIncrToVal I =
+      fun d : Fin I.card → ℕ => d ⟨1, by rw [hcard]; omega⟩ := by
+    ext d
+    simp only [Function.comp_apply, poissonProcessIncrToVal, poissonProcessReindex,
+      poissonProcessCumSum]
+    set pos_s := e.symm ⟨s, hs_mem⟩
+    set pos_sh := e.symm ⟨s + h, hsh_mem⟩
+    -- pos_s and pos_sh are distinct because s ≠ s + h
+    have hne_pos : pos_s ≠ pos_sh := by
+      intro heq
+      have := congr_arg (fun x => (e x : ℝ≥0)) heq
+      simp only [pos_s, pos_sh, OrderIso.apply_symm_apply, Subtype.coe_mk] at this
+      exact hne this
+    -- pos_s.val = 0: by contradiction via ordering
+    have hps_lt := pos_s.isLt   -- pos_s.val < I.card
+    have hpsh_lt := pos_sh.isLt -- pos_sh.val < I.card
+    have hne_val : pos_s.val ≠ pos_sh.val := fun hv => hne_pos (Fin.ext hv)
+    have hpos_s : pos_s.val = 0 := by
+      by_contra h0
+      have h1 : pos_s.val = 1 := by omega
+      have hpsh0 : pos_sh.val = 0 := by omega
+      -- pos_sh < pos_s in Fin order, so e(pos_sh) < e(pos_s), i.e. s+h < s — contradiction
+      have hlt_fin : pos_sh < pos_s := show pos_sh.val < pos_s.val by omega
+      have : (e pos_sh : ℝ≥0) < (e pos_s : ℝ≥0) :=
+        Subtype.mk_lt_mk.mp (e.strictMono hlt_fin)
+      simp only [pos_s, pos_sh, OrderIso.apply_symm_apply, Subtype.coe_mk] at this
+      exact not_lt.mpr (le_of_lt hlt) this
+    have hpos_sh : pos_sh.val = 1 := by omega
+    -- cumsum at pos_sh = d(0) + d(1), cumsum at pos_s = d(0)
+    have hsum_sh : (∑ j : Fin (pos_sh.val + 1), d ⟨j.val, by omega⟩) =
+        d ⟨0, by omega⟩ + d ⟨1, by omega⟩ :=
+      calc ∑ j : Fin (pos_sh.val + 1), d ⟨j.val, by omega⟩
+          = ∑ j : Fin 2, d ⟨j.val, by omega⟩ :=
+            Fintype.sum_equiv (finCongr (by omega : pos_sh.val + 1 = 2)) _ _ (fun j => rfl)
+        _ = d ⟨0, by omega⟩ + d ⟨1, by omega⟩ := Fin.sum_univ_two _
+    have hsum_s : (∑ j : Fin (pos_s.val + 1), d ⟨j.val, by omega⟩) =
+        d ⟨0, by omega⟩ :=
+      calc ∑ j : Fin (pos_s.val + 1), d ⟨j.val, by omega⟩
+          = ∑ j : Fin 1, d ⟨j.val, by omega⟩ :=
+            Fintype.sum_equiv (finCongr (by omega : pos_s.val + 1 = 1)) _ _ (fun j => rfl)
+        _ = d ⟨0, by omega⟩ := Fin.sum_univ_one _
+    -- The sums in the goal match pos_sh and pos_s
+    change (∑ j : Fin (pos_sh.val + 1), d ⟨j.val, _⟩) -
+        (∑ j : Fin (pos_s.val + 1), d ⟨j.val, _⟩) = _
+    rw [hsum_sh, hsum_s]
+    omega
+  -- Now: (FDD rate I).map diff = (pi incr).map (fun d => d 1)
+  unfold poissonProcessFDD
+  rw [Measure.map_map Measurable.of_discrete Measurable.of_discrete, hcomp]
+  -- Need: (Measure.pi incrMeasure).map (fun d => d 1) = poissonMeasure (rate * h)
+  -- where incrMeasure 1 = poissonMeasure (rate * gap 1) = poissonMeasure (rate * h)
+  -- This is the marginal of the product measure at coordinate 1
+  -- Prove gap 1 = h
+  have hgap1 : poissonProcessGap I ⟨1, by rw [hcard]; omega⟩ = h := by
+    -- Helper: e(0) and e(1) are elements of I = {s, s+h}
+    set fin0 : Fin I.card := ⟨0, by omega⟩
+    set fin1 : Fin I.card := ⟨1, by rw [hcard]; omega⟩
+    have he0_mem := (e fin0).prop
+    have he1_mem := (e fin1).prop
+    -- e is strictly monotone, so e(0) < e(1)
+    have hlt_01 : (e fin0 : ℝ≥0) < (e fin1 : ℝ≥0) :=
+      Subtype.mk_lt_mk.mp (e.strictMono (show fin0 < fin1 from
+        Fin.mk_lt_mk.mpr (by omega)))
+    -- Membership gives: e(0), e(1) ∈ {s, s+h}
+    simp only [hI_def, Finset.mem_insert, Finset.mem_singleton] at he0_mem he1_mem
+    -- e(0) = s (the smaller) and e(1) = s+h (the larger)
+    have he0 : (e fin0 : ℝ≥0) = s := by
+      rcases he0_mem with h0s | h0sh
+      · exact h0s
+      · -- if e(0) = s+h then e(1) ∈ {s, s+h} with e(0) < e(1) gives contradiction
+        rcases he1_mem with h1s | h1sh
+        · rw [h0sh, h1s] at hlt_01; exact absurd hlt_01 (not_lt.mpr (le_of_lt hlt))
+        · rw [h0sh, h1sh] at hlt_01; exact absurd hlt_01 (lt_irrefl _)
+    have he1 : (e fin1 : ℝ≥0) = s + h := by
+      rcases he1_mem with h1s | h1sh
+      · rw [he0, h1s] at hlt_01; exact absurd hlt_01 (lt_irrefl _)
+      · exact h1sh
+    -- Unfold poissonProcessGap: for k = 1, gap = e(1) - e(0)
+    simp only [poissonProcessGap]
+    rw [dif_neg (show (fin1.val : ℕ) ≠ 0 by simp [fin1])]
+    -- ⟨fin1.val - 1, _⟩ = fin0
+    have hfin0 : (⟨fin1.val - 1, by omega⟩ : Fin I.card) = fin0 :=
+      Fin.ext (by simp [fin0, fin1])
+    rw [he1, hfin0, he0]
+    exact add_tsub_cancel_left s h
+  -- Remaining computation: ext_of_singleton, preimage, product split, tsum
+  apply Measure.ext_of_singleton; intro n
+  rw [Measure.map_apply Measurable.of_discrete (measurableSet_singleton n)]
+  -- Preimage: d ↦ d(1) lands in {n} iff d = (fun i => if i = 0 then m else n) for some m
+  set a : Fin I.card := ⟨0, by omega⟩
+  set b : Fin I.card := ⟨1, by rw [hcard]; omega⟩
+  have hab : a ≠ b := Fin.ne_of_val_ne (show (0 : ℕ) ≠ 1 by omega)
+  have hpreimage : (fun d : Fin I.card → ℕ => d b) ⁻¹' {n} =
+      ⋃ m : ℕ, {fun i : Fin I.card => if i = a then m else n} := by
+    ext d; simp only [Set.mem_preimage, Set.mem_singleton_iff, Set.mem_iUnion]
+    constructor
+    · intro hd
+      refine ⟨d a, funext fun ⟨i, hi⟩ => ?_⟩
+      by_cases h0 : i = 0
+      · subst h0; simp [a]
+      · simp only [show (⟨i, hi⟩ : Fin I.card) ≠ a from Fin.ne_of_val_ne h0, ite_false]
+        have hi2 : i < 2 := hcard ▸ hi
+        have hi1 : i = 1 := by omega
+        subst hi1; exact hd
+    · rintro ⟨m, rfl⟩
+      simp [show b ≠ a from hab.symm]
+  rw [hpreimage, measure_iUnion₀
+    (fun i j hij => (Set.disjoint_singleton.mpr (fun h => hij (by
+      have := congr_fun h a; simp [a] at this; exact this))).aedisjoint)
+    (fun m => (measurableSet_singleton _).nullMeasurableSet)]
+  simp_rw [Measure.pi_singleton]
+  -- Product split: ∏ over Fin I.card with I.card = 2
+  have huniv : (Finset.univ : Finset (Fin I.card)) = {a, b} := by
+    ext ⟨i, hi⟩
+    simp only [Finset.mem_univ, true_iff, Finset.mem_insert, Finset.mem_singleton]
+    have hi2 : i < 2 := hcard ▸ hi
+    by_cases h : i = 0
+    · left; exact Fin.ext h
+    · right; exact Fin.ext (show i = 1 by omega)
+  have hprod : ∀ m, ∏ i : Fin I.card,
+      poissonMeasure (rate * poissonProcessGap I i) {if i = a then m else n} =
+      poissonMeasure (rate * poissonProcessGap I a) {m} *
+      poissonMeasure (rate * poissonProcessGap I b) {n} := by
+    intro m
+    change Finset.univ.prod _ = _
+    rw [huniv, Finset.prod_pair hab, if_pos rfl, if_neg hab.symm]
+  simp_rw [hprod, ENNReal.tsum_mul_right]
+  -- ∑' m, poissonMeasure(rate * gap 0) {m} = 1 (total mass of probability measure)
+  rw [show ∑' m, poissonMeasure (rate * poissonProcessGap I a) {m} = 1 from by
+    calc ∑' m, poissonMeasure (rate * poissonProcessGap I a) {m}
+        = poissonMeasure (rate * poissonProcessGap I a) (⋃ m, {m}) := (measure_iUnion
+          (fun i j hij => Set.disjoint_singleton.mpr fun h => hij h)
+          (fun m => measurableSet_singleton m)).symm
+      _ = poissonMeasure (rate * poissonProcessGap I a) Set.univ := by congr 1; ext x; simp
+      _ = 1 := measure_univ, one_mul, hgap1]
+
 /-! ## Existence -/
 
 /-- There exists a probability space supporting a Poisson process with any rate.
@@ -1094,7 +1359,7 @@ poissonProcessFDD ──→ isProjectiveMeasureFamily_poissonProcessFDD
               ┌──────────┼──────────┐
               v          v          v
           start_zero  indep_incr  incr_poisson
-          (proved!)   (sorry)     (sorry)
+          (proved!)   (sorry)     (proved!)
 ```
 -/
 theorem exists_poissonProcess (rate : ℝ≥0) :
@@ -1104,21 +1369,60 @@ theorem exists_poissonProcess (rate : ℝ≥0) :
   refine ⟨∀ _ : ℝ≥0, ℕ, inferInstance,
     (poissonProjectiveFamily rate).kolmogorovExtension,
     fun t ω => if t = 0 then 0 else ω t, ?_⟩
-  exact {
-    start_zero := by ext ω; simp
-    indep_increments := by
-      sorry
-      -- Independent increments of `fun t ω => ((if t = 0 then 0 else ω t : ℕ) : ℤ)`.
-      -- Follows from the product structure of poissonProcessFDD and
-      -- kolmogorovExtension_apply_cylinder recovering the FDD on cylinder sets.
-      -- Dependencies: poissonProcessFDD, kolmogorovExtension_apply_cylinder.
-    increment_poisson := by
-      sorry
-      -- `μ.map (fun ω => N(s+h) ω - N s ω) = poissonMeasure (rate * h)`.
-      -- Factor through the projection to {s, s+h}: by kolmogorovExtension_apply_cylinder,
-      -- the marginal at {s, s+h} equals poissonProcessFDD rate {s, s+h}, whose
-      -- increment marginal is Poisson(rate * h) by construction.
-      -- Dependencies: poissonProcessFDD, kolmogorovExtension_apply_cylinder.
-  }
+  set μ := (poissonProjectiveFamily rate).kolmogorovExtension
+  constructor
+  · -- start_zero
+    ext ω; simp
+  · -- indep_increments
+    sorry
+  · -- increment_poisson
+    intro s h
+    -- Goal: μ.map (fun ω => (if s+h = 0 then 0 else ω (s+h)) - (if s = 0 then 0 else ω s))
+    --     = poissonMeasure (rate * h)
+    by_cases hh : h = 0
+    · -- Case h = 0: difference is always 0
+      -- The function is fun ω => N(s+0)(ω) - N(s)(ω) = 0 for all ω
+      have hconst : (fun ω : ∀ _ : ℝ≥0, ℕ =>
+          (if s + h = 0 then 0 else ω (s + h)) - (if s = 0 then 0 else ω s)) =
+          fun _ => (0 : ℕ) := by subst hh; ext ω; simp
+      rw [hconst, hh, mul_zero]
+      -- μ.map (fun _ => 0) = poissonMeasure 0
+      -- Use kolmogorovExtension_map_coord for t = 0
+      -- poissonMeasure (rate * 0) = poissonMeasure 0
+      -- μ.map (fun _ => 0) = μ.map (fun ω => ω 0) composed with (fun _ => 0)
+      -- Actually, just use map_const + show poissonMeasure 0 = Dirac 0
+      rw [Measure.map_const _ (0 : ℕ), measure_univ, one_smul]
+      -- Dirac 0 = poissonMeasure 0
+      -- Both are probability measures; agree on singletons
+      symm; apply Measure.ext_of_singleton; intro n
+      rw [show poissonMeasure 0 = (poissonPMF 0).toMeasure from rfl,
+        PMF.toMeasure_apply_singleton _ _ (measurableSet_singleton n)]
+      rw [Measure.dirac_apply' 0 (measurableSet_singleton n)]
+      -- Goal: poissonPMF 0 n = Set.indicator {0} 1 n
+      -- poissonPMF 0 n = ENNReal.ofReal (poissonPMFReal 0 n) definitionally
+      change ENNReal.ofReal (poissonPMFReal 0 n) = _
+      by_cases hn : n = 0
+      · subst hn; simp [poissonPMFReal]
+      · simp only [Set.indicator_apply, Set.mem_singleton_iff, Pi.one_apply]
+        simp [poissonPMFReal, zero_pow (by omega : n ≠ 0)]
+        exact fun h => hn h.symm
+    · -- Case h ≠ 0
+      by_cases hs : s = 0
+      · -- Subcase s = 0: N(0+h) ω - N(0) ω = ω h - 0 = ω h
+        -- Show the function equals fun ω => ω h
+        have hfun : (fun ω : ∀ _ : ℝ≥0, ℕ =>
+            (if s + h = 0 then 0 else ω (s + h)) - (if s = 0 then 0 else ω s)) =
+            fun ω => ω h := by
+          ext ω; simp [hs, hh]
+        rw [hfun]
+        exact kolmogorovExtension_map_coord rate h
+      · -- Subcase s ≠ 0, h ≠ 0: N(s+h) ω - N s ω = ω(s+h) - ω s
+        have hsh_ne : s + h ≠ 0 := by positivity
+        have hfun : (fun ω : ∀ _ : ℝ≥0, ℕ =>
+            (if s + h = 0 then 0 else ω (s + h)) - (if s = 0 then 0 else ω s)) =
+            fun ω => ω (s + h) - ω s := by
+          ext ω; simp [hs, hsh_ne]
+        rw [hfun]
+        exact kolmogorovExtension_map_diff rate s h hh
 
 end ProbabilityTheory
