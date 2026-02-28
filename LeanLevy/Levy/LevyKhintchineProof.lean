@@ -9,6 +9,7 @@ import LeanLevy.Levy.CompensatedIntegral
 import LeanLevy.Levy.LevyKhintchine
 import LeanLevy.Probability.Characteristic
 import LeanLevy.Levy.CharacteristicExponent
+import LeanLevy.Fourier.Bochner
 import Mathlib.Analysis.Complex.CoveringMap
 import Mathlib.Topology.Homotopy.Lifting
 import Mathlib.Analysis.Convex.Contractible
@@ -30,7 +31,8 @@ The logarithm of an infinitely divisible char function is conditionally negative
 
 ## Sub-lemma 4: Integral representation
 A continuous, conditionally negative definite function with ψ(0)=0 has the
-Lévy-Khintchine integral representation.
+Lévy-Khintchine integral representation. Uses Schoenberg + Bochner to extract
+probability measures, then (sorry) differentiates the convolution semigroup.
 -/
 
 open MeasureTheory MeasureTheory.Measure ProbabilityTheory Complex Filter Topology
@@ -481,12 +483,32 @@ theorem IsInfinitelyDivisible.isConditionallyNegativeDefinite_log
     simp_rw [mul_neg, Finset.sum_neg_distrib, Complex.neg_re]
   linarith [hneg]
 
+/-! ## Schoenberg's theorem -/
+
+/-- **Schoenberg's theorem.** If `ψ : ℝ → ℂ` is continuous, conditionally negative definite,
+and `ψ(0) = 0`, then for every `t > 0`, the function `ξ ↦ exp(-t · ψ(ξ))` is positive definite.
+
+The proof uses the power series expansion of exp and closure of PD under pointwise limits.
+For weights `c` with `∑ c = 0`, the CND condition gives `∑∑ c̄ᵢcⱼψ(ξᵢ-ξⱼ) ≥ 0`,
+which means `∑∑ c̄ᵢcⱼ(-ψ(ξᵢ-ξⱼ)) ≤ 0`. The exponential power series transforms this
+into non-negative partial sums. -/
+theorem schoenberg_exp_of_cnd
+    {ψ : ℝ → ℂ} (hψ_cont : Continuous ψ) (hψ_zero : ψ 0 = 0)
+    (hψ_cnd : IsConditionallyNegativeDefinite ψ)
+    (t : ℝ) (ht : 0 < t) :
+    IsPositiveDefinite (fun ξ => exp (-↑t * ψ ξ)) := by
+  sorry
+
 /-! ## Sub-lemma 4: Integral representation (deepest) -/
 
 /-- A continuous, conditionally negative definite function `ψ : ℝ → ℂ` with `ψ(0) = 0`
 has the Lévy-Khintchine integral representation.
 
-This is the deepest sub-lemma, requiring Bochner's theorem (not yet in mathlib). -/
+**Proof via Bochner's theorem:**
+1. By Schoenberg, `exp(-tψ)` is PD, continuous, with value 1 at 0 for each `t > 0`.
+2. By Bochner, ∃ probability measure `μ_t` with `charFun(μ_t) = exp(-tψ)`.
+3. The family `{μ_t}` forms a convolution semigroup.
+4. Differentiating at `t = 0` extracts the Lévy-Khintchine triple `(b, σ², ν)`. -/
 theorem levyKhintchine_of_cnd
     {ψ : ℝ → ℂ} (hψ_cont : Continuous ψ) (hψ_zero : ψ 0 = 0)
     (hψ_cnd : IsConditionallyNegativeDefinite ψ) :
@@ -494,6 +516,22 @@ theorem levyKhintchine_of_cnd
       ψ ξ = ↑T.drift * ↑ξ * I
         - ↑(T.gaussianVariance : ℝ) * ↑ξ ^ 2 / 2
         + ∫ x, levyCompensatedIntegrand ξ x ∂T.levyMeasure := by
+  -- Step 1: For each t > 0, exp(-tψ) is PD, continuous, with value 1 at 0
+  have hpd : ∀ t : ℝ, 0 < t → IsPositiveDefinite (fun ξ => exp (-↑t * ψ ξ)) :=
+    fun t ht => schoenberg_exp_of_cnd hψ_cont hψ_zero hψ_cnd t ht
+  have hcont : ∀ t : ℝ, Continuous (fun ξ => exp (-(↑t : ℂ) * ψ ξ)) := by
+    intro t; fun_prop
+  have hzero : ∀ t : ℝ, exp (-(↑t : ℂ) * ψ 0) = 1 := by
+    intro t; rw [hψ_zero, mul_zero, exp_zero]
+  -- Step 2: By Bochner, each exp(-tψ) is a characteristic function
+  have hboch : ∀ t : ℝ, 0 < t → ∃ μ : MeasureTheory.ProbabilityMeasure ℝ,
+      ∀ ξ, MeasureTheory.ProbabilityMeasure.characteristicFun μ ξ =
+        exp (-(↑t : ℂ) * ψ ξ) :=
+    fun t ht => bochner _ (hcont t) (hpd t ht) (hzero t)
+  -- Step 3: Extract the triple by differentiating the convolution semigroup at t=0.
+  -- This is the deepest analytical step: from the family {μ_t} of probability measures
+  -- satisfying charFun(μ_t)(ξ) = exp(-tψ(ξ)), extract drift b, variance σ², and Lévy measure ν
+  -- such that ψ has the Lévy-Khintchine integral form.
   sorry
 
 /-! ## Assembly: Lévy-Khintchine representation -/

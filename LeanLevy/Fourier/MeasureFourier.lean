@@ -65,4 +65,13 @@ theorem continuous_fourierTransform :
   · filter_upwards with x
     exact by fun_prop
 
+/-- The Fourier transform at zero equals the total mass. -/
+@[simp]
+theorem fourierTransform_apply_zero :
+    fourierTransform μ 0 = ↑μ.mass := by
+  unfold fourierTransform
+  simp only [zero_mul, Complex.ofReal_zero, zero_mul, Complex.exp_zero]
+  rw [integral_const]
+  simp [Measure.real, ← ennreal_mass, ENNReal.coe_toReal]
+
 end MeasureTheory.FiniteMeasure

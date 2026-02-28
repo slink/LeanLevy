@@ -2,6 +2,8 @@
 -- Import modules here that should be built as part of the library.
 import LeanLevy.Basic
 import LeanLevy.Fourier.MeasureFourier
+import LeanLevy.Fourier.PositiveDefinite
+import LeanLevy.Fourier.Bochner
 import LeanLevy.Probability.Characteristic
 import LeanLevy.Probability.Poisson
 import LeanLevy.Processes.StochasticProcess

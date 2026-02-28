@@ -25,8 +25,10 @@ where `(b, σ², ν)` is the Lévy-Khintchine triple.
 
 ## Sorry audit
 
-One sorry:
-* `levyKhintchine_representation` — deep analytic theorem (Fourier analysis + Lévy measures).
+The representation theorem chains through four sub-lemmas (1–3 fully proved) to
+`levyKhintchine_of_cnd`, which uses Schoenberg + Bochner with a remaining sorry
+for the convolution semigroup differentiation step. See `LevyKhintchineProof.lean`
+and `Bochner.lean` for details.
 -/
 
 open MeasureTheory MeasureTheory.Measure ProbabilityTheory

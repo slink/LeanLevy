@@ -5,7 +5,9 @@ A Lean 4 formalization of Lévy processes, built on top of mathlib.
 ## What's here
 
 **Fourier analysis** (`LeanLevy/Fourier/`)
-- Fourier transform of finite measures on ℝ, with boundedness and continuity
+- Fourier transform of finite measures on ℝ, with boundedness, continuity, and value at zero
+- Positive definite functions: definition, pointwise closure, characteristic function bridge
+- Bochner's theorem (statement + Gaussian smoothing proof strategy via Lévy continuity)
 
 **Characteristic functions** (`LeanLevy/Probability/Characteristic.lean`)
 - Characteristic function of probability measures
@@ -70,16 +72,21 @@ A Lean 4 formalization of Lévy processes, built on top of mathlib.
 - `levyCompensatedIntegrand ξ x = exp(ixξ) − 1 − ixξ·1_{|x|<1}`
 - Pointwise norm bound, measurability, Bochner integrability under a Lévy measure
 
-**Lévy–Khintchine representation** (`LeanLevy/Levy/LevyKhintchine.lean`)
+**Lévy–Khintchine representation** (`LeanLevy/Levy/LevyKhintchine.lean`, `LevyKhintchineProof.lean`)
 - `LevyKhintchineTriple` structure: drift, Gaussian variance, Lévy measure
 - Statement of the representation theorem
+- Sub-lemmas 1–3 fully proved: non-vanishing, continuous logarithm, conditional negative definiteness
+- Sub-lemma 4: Schoenberg + Bochner infrastructure in place; convolution semigroup differentiation remains
 
 ## Incomplete
 
-Two declarations remain sorry'd:
+Five declarations contain sorry:
 
-- **`exists_poissonProcess`** — Existence of a Poisson process (3 sub-sorries: independent increments, increment distribution, càdlàg paths). The Kolmogorov extension and FDD projectivity are proved; what remains is wiring the process properties.
-- **`levyKhintchine_of_cnd`** — The Lévy–Khintchine representation theorem. Blocked on Bochner's theorem (not in mathlib).
+- **`exists_poissonProcess`** — Existence of a Poisson process (independent increments sub-sorry). The Kolmogorov extension and FDD projectivity are proved.
+- **`IsPositiveDefinite.mul`** — Schur product theorem (Hadamard product of PSD matrices is PSD).
+- **`bochner`** — Bochner's theorem. Proof strategy in place (Gaussian smoothing + Lévy continuity); blocked on Parseval's identity (not in mathlib).
+- **`schoenberg_exp_of_cnd`** — Schoenberg's theorem (exp of CND function is PD).
+- **`levyKhintchine_of_cnd`** — Convolution semigroup differentiation step. Schoenberg + Bochner infrastructure wired; extracting the triple from the semigroup `{μ_t}` remains.
 
 ## Building
 
@@ -95,7 +102,9 @@ lake build
 LeanLevy/
 ├── Basic.lean
 ├── Fourier/
-│   └── MeasureFourier.lean
+│   ├── Bochner.lean
+│   ├── MeasureFourier.lean
+│   └── PositiveDefinite.lean
 ├── Probability/
 │   ├── Characteristic.lean
 │   ├── Poisson.lean
@@ -113,5 +122,6 @@ LeanLevy/
     ├── CompensatedIntegral.lean
     ├── InfiniteDivisible.lean
     ├── LevyKhintchine.lean
+    ├── LevyKhintchineProof.lean
     └── LevyMeasure.lean
 ```
