@@ -25,6 +25,10 @@ A function `φ : ℝ → ℂ` is **positive definite** if for every finite seque
 * `IsPositiveDefinite.mul` — Schur product: pointwise product of PD functions is PD.
 * `IsPositiveDefinite.of_charFun` — characteristic function of a probability measure is PD.
 * `IsPositiveDefinite.closure_pointwise` — pointwise limit of PD functions is PD.
+
+## Sorry audit
+
+* `norm_le_one` — PD bound `‖φ(ξ)‖ ≤ 1` when `φ(0) = 1` (2x2 PSD + Hermitian symmetry).
 -/
 
 open MeasureTheory Complex ComplexConjugate Finset Filter Topology Matrix
@@ -221,6 +225,15 @@ theorem closure_pointwise {φs : ℕ → ℝ → ℂ} (hφs : ∀ n, IsPositiveD
     intro j _
     exact (hlim (x i - x j)).const_mul _
   exact ge_of_tendsto htend (Eventually.of_forall fun k => hφs k n x c)
+
+/-- For a positive definite function with `φ(0) = 1`, `‖φ(ξ)‖ ≤ 1`.
+
+Proof sketch: Take `n = 2`, `x = (0, ξ)`, `c = (1, -φ(ξ)/‖φ(ξ)‖)`. The PD condition yields
+`0 ≤ 2 - 2‖φ(ξ)‖`, hence `‖φ(ξ)‖ ≤ 1`. Requires the Hermitian symmetry `φ(-ξ) = conj(φ(ξ))`
+which follows from the PD condition. -/
+theorem norm_le_one (hφ : IsPositiveDefinite φ) (h0 : φ 0 = 1) (ξ : ℝ) :
+    ‖φ ξ‖ ≤ 1 := by
+  sorry
 
 /-- The characteristic function of a probability measure is positive definite. -/
 theorem of_charFun (μ : ProbabilityMeasure ℝ) :
