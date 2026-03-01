@@ -30,8 +30,7 @@ This file defines the Poisson process as a structure predicate and derives key p
 * `ProbabilityTheory.IsPoissonProcess.charFun_eq` — the characteristic function of the
   time-`t` marginal `N(t)` equals `exp(r·t(e^{iξ} − 1))`.
 
-* `ProbabilityTheory.exists_poissonProcess` — existence (sorry'd, requires Kolmogorov
-  extension).
+* `ProbabilityTheory.exists_poissonProcess` — existence via Kolmogorov extension.
 
 ## Implementation notes
 
@@ -1335,6 +1334,446 @@ private theorem kolmogorovExtension_map_diff (rate : ℝ≥0) (s h : ℝ≥0) (h
       _ = poissonMeasure (rate * poissonProcessGap I a) Set.univ := by congr 1; ext x; simp
       _ = 1 := measure_univ, one_mul, hgap1]
 
+/-! ## Independent increments from the Kolmogorov extension -/
+
+/-- The cumulative sum at position `j+1` minus position `j` equals `d(j+1)`.
+This is the telescoping property of partial sums. -/
+private theorem poissonProcessCumSum_succ_sub {m : ℕ} (d : Fin m → ℕ) (j : Fin m)
+    (hj : j.val + 1 < m) :
+    poissonProcessCumSum d ⟨j.val + 1, hj⟩ = poissonProcessCumSum d j + d ⟨j.val + 1, hj⟩ := by
+  simp only [poissonProcessCumSum]
+  -- Goal involves ∑ i : Fin (⟨j.val+1, hj⟩.val+1) and ∑ i : Fin (j.val+1)
+  -- Use Fin.sum_univ_castSucc to split the last term
+  have hsplit := Fin.sum_univ_castSucc (n := j.val + 1)
+    (f := fun (i : Fin (j.val + 1 + 1)) => d ⟨i.val, by omega⟩)
+  simp only [Fin.val_castSucc, Fin.val_last] at hsplit
+  convert hsplit using 2
+
+/-- For monotone `t : Fin (n+1) → ℝ≥0`, the sorted positions of consecutive values
+`t k.castSucc` and `t k.succ` in `I = image t univ` are consecutive in `Fin I.card`
+when `t k.castSucc < t k.succ`. -/
+private theorem orderIsoOfFin_symm_succ_of_lt (n : ℕ) (t : Fin (n + 1) → ℝ≥0)
+    (hmono : Monotone t) (k : Fin n) (hlt : t k.castSucc < t k.succ) :
+    let I := Finset.image t Finset.univ
+    let e := I.orderIsoOfFin rfl
+    (e.symm ⟨t k.succ, Finset.mem_image.mpr ⟨k.succ, Finset.mem_univ _, rfl⟩⟩).val =
+    (e.symm ⟨t k.castSucc, Finset.mem_image.mpr ⟨k.castSucc, Finset.mem_univ _, rfl⟩⟩).val + 1 := by
+  intro I e
+  -- Use abbreviations for readability, but `let` to avoid opaqueness from `set`
+  let p := e.symm ⟨t k.castSucc, Finset.mem_image.mpr ⟨k.castSucc, Finset.mem_univ _, rfl⟩⟩
+  let q := e.symm ⟨t k.succ, Finset.mem_image.mpr ⟨k.succ, Finset.mem_univ _, rfl⟩⟩
+  -- p < q since e is order-preserving and t k.castSucc < t k.succ
+  have hpq : p < q := e.symm.strictMono hlt
+  show q.val = p.val + 1
+  -- No element of Fin I.card is strictly between p and q
+  -- because any such element would correspond to a value strictly between
+  -- t k.castSucc and t k.succ in I = image t univ.
+  -- But there's no Fin (n+1) index strictly between k.castSucc and k.succ.
+  by_contra h
+  -- q.val ≠ p.val + 1, and p.val < q.val, so q.val ≥ p.val + 2
+  have hpq_val : p.val < q.val := hpq
+  have hgap : p.val + 2 ≤ q.val := by omega
+  -- There exists j : Fin I.card with p < j < q
+  let j : Fin I.card := ⟨p.val + 1, by omega⟩
+  have hpj : p < j := by show p.val < j.val; dsimp [j]; omega
+  have hjq : j < q := by show j.val < q.val; dsimp [j]; omega
+  -- e j is in I and satisfies t k.castSucc < e j < t k.succ
+  have h1 : t k.castSucc < (e j : ℝ≥0) := by
+    have := e.strictMono hpj; simp [p, OrderIso.apply_symm_apply] at this; exact this
+  have h2 : (e j : ℝ≥0) < t k.succ := by
+    have := e.strictMono hjq; simp [q, OrderIso.apply_symm_apply] at this; exact this
+  -- e j ∈ I = image t univ, so e j = t m for some m
+  have hej_mem : (e j : ℝ≥0) ∈ I := (e j).2
+  rw [Finset.mem_image] at hej_mem
+  obtain ⟨m, _, hm_eq⟩ := hej_mem
+  rw [← hm_eq] at h1 h2
+  -- h1 : t k.castSucc < t m, h2 : t m < t k.succ
+  -- By monotonicity: k.castSucc < m < k.succ (as Fin (n+1) values)
+  -- But k.castSucc.val = k.val and k.succ.val = k.val + 1, so no m exists
+  have hlt1 : k.val < m.val := by
+    by_contra hle; push_neg at hle
+    exact absurd (hmono (Fin.le_iff_val_le_val.mpr (by simp [Fin.val_castSucc]; exact hle)))
+      (not_le.mpr h1)
+  have hlt2 : m.val < k.val + 1 := by
+    by_contra hle; push_neg at hle
+    exact absurd (hmono (Fin.le_iff_val_le_val.mpr (by simp [Fin.val_succ]; exact hle)))
+      (not_le.mpr h2)
+  omega
+
+/-- Under the Kolmogorov extension, `ω 0 = 0` almost everywhere. This follows from the
+FDD at `{0}` being `poissonMeasure(rate * 0) = Dirac(0)` via `poissonProcessGap`. -/
+private theorem kolmogorovExtension_coord_zero_ae (rate : ℝ≥0) :
+    ∀ᵐ ω ∂(poissonProjectiveFamily rate).kolmogorovExtension, ω 0 = 0 := by
+  set μ := (poissonProjectiveFamily rate).kolmogorovExtension
+  -- Show μ {ω | ω 0 ≠ 0} = 0 via the FDD at {0}
+  rw [ae_iff (μ := μ)]
+  -- Goal: μ { a | ¬a 0 = 0 } = 0
+  -- This set equals (fun ω => ω 0) ⁻¹' ({0}ᶜ)
+  have hset : { ω : ∀ _ : ℝ≥0, ℕ | ¬ω 0 = 0 } = (fun ω => ω 0) ⁻¹' ({0} : Set ℕ)ᶜ := by
+    ext ω; simp
+  rw [hset]
+  -- μ ((fun ω => ω 0) ⁻¹' {0}ᶜ) = (μ.map (fun ω => ω 0)) {0}ᶜ
+  rw [← Measure.map_apply (measurable_pi_apply 0) (MeasurableSet.compl (measurableSet_singleton 0))]
+  rw [kolmogorovExtension_map_coord rate 0, mul_zero]
+  -- poissonMeasure 0 {0}ᶜ = 0 because poissonMeasure 0 = Dirac 0
+  -- poissonMeasure 0 = (poissonPMF 0).toMeasure, and poissonPMF 0 0 = 1 (by definition with 0^0/0! = 1)
+  -- poissonMeasure 0 {0}ᶜ = 1 - poissonMeasure 0 {0} = 1 - 1 = 0
+  rw [measure_compl (measurableSet_singleton 0) (measure_ne_top _ _),
+    measure_univ, show poissonMeasure 0 {0} = 1 from ?_, tsub_self]
+  -- poissonMeasure 0 {0} = (poissonPMF 0).toMeasure {0} = poissonPMF 0 0 = 1
+  change (poissonPMF 0).toMeasure {0} = 1
+  rw [PMF.toMeasure_apply_singleton _ _ (measurableSet_singleton 0)]
+  -- Goal: (poissonPMF 0) 0 = 1
+  -- poissonPMF 0 0 = ENNReal.ofReal (poissonPMFReal 0 0) = ENNReal.ofReal (exp(-0) * 0^0 / 0!) = 1
+  show ENNReal.ofReal (poissonPMFReal 0 0) = 1
+  simp [poissonPMFReal, Nat.factorial]
+
+/-- The ℤ-valued increments `ω(t(k+1)) - ω(t(k))` are mutually independent under
+the Kolmogorov extension of the Poisson projective family, for any monotone
+`t : Fin (n+1) → ℝ≥0`. This is the core independence property needed for `exists_poissonProcess`.
+
+The proof uses `iIndepFun_iff_measure_inter_preimage_eq_mul`: for any `S : Finset (Fin n)` and
+measurable sets `A_k ⊆ ℤ`, the product formula
+`μ (⋂ k ∈ S, incr_k ⁻¹' A_k) = ∏ k ∈ S, μ (incr_k ⁻¹' A_k)`
+holds because the intersection is a cylinder set at `I = image t univ`, and the FDD
+`poissonProcessFDD rate I` is a product measure pushed through a cumulative sum. -/
+private theorem kolmogorovExtension_indep_increments (rate : ℝ≥0) (n : ℕ)
+    (t : Fin (n + 1) → ℝ≥0) (hmono : Monotone t) :
+    iIndepFun (fun k : Fin n => fun ω : ∀ _ : ℝ≥0, ℕ =>
+        (ω (t k.succ) : ℤ) - (ω (t k.castSucc) : ℤ))
+        (poissonProjectiveFamily rate).kolmogorovExtension := by
+  set μ := (poissonProjectiveFamily rate).kolmogorovExtension
+  -- Each increment fun ω => (ω(t(k+1)) : ℤ) - (ω(t(k)) : ℤ) is measurable
+  have hmeas_incr : ∀ k : Fin n, Measurable (fun ω : ∀ _ : ℝ≥0, ℕ =>
+      (ω (t k.succ) : ℤ) - (ω (t k.castSucc) : ℤ)) := by
+    intro k
+    exact (Measurable.of_discrete.comp (measurable_pi_apply _)).sub
+      (Measurable.of_discrete.comp (measurable_pi_apply _))
+  -- Use the product formula characterization
+  rw [iIndepFun_iff_measure_inter_preimage_eq_mul]
+  intro S sets _hmeas_sets
+  -- Reduce to showing: the joint distribution μ.map fI is a product measure.
+  -- The combined function extracts all n increments at once.
+  set fI : (∀ _ : ℝ≥0, ℕ) → (Fin n → ℤ) :=
+    fun ω k => (ω (t k.succ) : ℤ) - (ω (t k.castSucc) : ℤ) with hfI_def
+  -- fI is measurable
+  have hmeas_fI : Measurable fI := measurable_pi_lambda _ hmeas_incr
+  -- The intersection and each preimage factor through fI
+  have hinter_eq : ⋂ k ∈ S, (fun ω : ∀ _ : ℝ≥0, ℕ =>
+      (ω (t k.succ) : ℤ) - (ω (t k.castSucc) : ℤ)) ⁻¹' sets k =
+      fI ⁻¹' (⋂ k ∈ S, (fun z : Fin n → ℤ => z k) ⁻¹' sets k) := by
+    ext ω; simp only [Set.mem_iInter, Set.mem_preimage, fI]
+  have hindiv_eq : ∀ k : Fin n,
+      (fun ω : ∀ _ : ℝ≥0, ℕ => (ω (t k.succ) : ℤ) - (ω (t k.castSucc) : ℤ)) ⁻¹' sets k =
+      fI ⁻¹' ((fun z : Fin n → ℤ => z k) ⁻¹' sets k) := by
+    intro k; ext ω; simp only [Set.mem_preimage, fI]
+  rw [hinter_eq]; simp_rw [hindiv_eq]
+  -- Goal: μ (fI ⁻¹' (⋂ k ∈ S, ..)) = ∏ k ∈ S, μ (fI ⁻¹' (..))
+  -- = (μ.map fI) (⋂ k ∈ S, ..) = ∏ k ∈ S, (μ.map fI) (..)
+  -- It suffices to show μ.map fI is a product measure, i.e.,
+  -- iIndepFun (fun k z => z k) (μ.map fI)
+  -- because then the product formula follows from iIndepFun_pi.
+  -- Equivalently, show μ.map fI = Measure.pi (fun k => (μ.map fI).map (fun z => z k)).
+  --
+  -- Step 1: Compute μ.map fI by factoring through restrict I.
+  set I := Finset.image t Finset.univ
+  -- fI factors through restrict I
+  have hfI_factor : fI = (fun f : (i : ↥I) → ℕ => fun k : Fin n =>
+      (f ⟨t k.succ, Finset.mem_image.mpr ⟨k.succ, Finset.mem_univ _, rfl⟩⟩ : ℤ) -
+      (f ⟨t k.castSucc, Finset.mem_image.mpr ⟨k.castSucc, Finset.mem_univ _, rfl⟩⟩ : ℤ))
+      ∘ Finset.restrict I := by
+    ext ω k; simp [fI, Finset.restrict]
+  -- μ.map (restrict I) = FDD = (Measure.pi incrMeasure).map incrToVal
+  have hmarg : μ.map (Finset.restrict I) = poissonProcessFDD rate I :=
+    (poissonProjectiveFamily rate).isProjectiveLimit_kolmogorovExtension I
+  -- Step 2: Convert to μ.map fI and show it's a product measure.
+  haveI : MeasurableSingletonClass (Fin n → ℤ) :=
+    Pi.instMeasurableSingletonClass
+  haveI : DiscreteMeasurableSpace (Fin n → ℤ) :=
+    MeasurableSingletonClass.toDiscreteMeasurableSpace
+  rw [← Measure.map_apply hmeas_fI MeasurableSet.of_discrete]
+  simp_rw [← Measure.map_apply hmeas_fI MeasurableSet.of_discrete]
+  -- Goal: (μ.map fI) (⋂ k ∈ S, ..) = ∏ k ∈ S, (μ.map fI) (..)
+  -- It suffices to show μ.map fI is a product measure, then use the iIndepFun
+  -- criterion for coordinate projections.
+  -- Show iIndepFun of coordinate projections on μ.map fI:
+  suffices h_indep : iIndepFun (fun k (z : Fin n → ℤ) => z k) (μ.map fI) from
+    h_indep.measure_inter_preimage_eq_mul S (fun k _ => _hmeas_sets k ‹_›)
+  -- It suffices to show μ.map fI = Measure.pi (fun k => (μ.map fI).map (fun z => z k))
+  -- Use iIndepFun_iff_map_fun_eq_pi_map
+  haveI : IsProbabilityMeasure (μ.map fI) :=
+    Measure.isProbabilityMeasure_map hmeas_fI.aemeasurable
+  rw [iIndepFun_iff_map_fun_eq_pi_map (fun k => (measurable_pi_apply k).aemeasurable)]
+  -- Goal: (μ.map fI).map (fun z k => z k) = Measure.pi (fun k => (μ.map fI).map (fun z => z k))
+  -- Simplify: (fun z k => z k) = id
+  have hid : (fun z : Fin n → ℤ => fun k => z k) = id := by ext z k; rfl
+  rw [hid, Measure.map_id]
+  -- Goal: μ.map fI = Measure.pi (fun k => (μ.map fI).map (fun z => z k))
+  -- = Measure.pi (fun k => μ.map (fun ω => (ω (t k.succ) : ℤ) - (ω (t k.castSucc) : ℤ)))
+  -- Simplify RHS marginals: (μ.map fI).map (fun z => z k) = μ.map (fI_k)
+  have hmarg_k : ∀ k : Fin n,
+      (μ.map fI).map (fun z : Fin n → ℤ => z k) =
+      μ.map (fun ω => (ω (t k.succ) : ℤ) - (ω (t k.castSucc) : ℤ)) := by
+    intro k
+    rw [Measure.map_map (measurable_pi_apply k) hmeas_fI]
+    rfl
+  simp_rw [hmarg_k]
+  -- Goal: μ.map fI = Measure.pi (fun k => μ.map (fun ω => (ω (t k.succ) : ℤ) - (ω (t k.castSucc) : ℤ)))
+  -- Show the joint distribution is a product measure.
+  -- Key: μ.map fI factors through the FDD, which is a product measure map.
+  -- Compute μ.map fI via the factorization fI = gI ∘ restrict I.
+  have hmap_fI : μ.map fI = (poissonProcessFDD rate I).map (fun f : (i : ↥I) → ℕ =>
+      fun k : Fin n =>
+        (f ⟨t k.succ, Finset.mem_image.mpr ⟨k.succ, Finset.mem_univ _, rfl⟩⟩ : ℤ) -
+        (f ⟨t k.castSucc, Finset.mem_image.mpr ⟨k.castSucc, Finset.mem_univ _, rfl⟩⟩ : ℤ)) := by
+    rw [hfI_factor]
+    rw [← Measure.map_map Measurable.of_discrete
+      (Finset.measurable_restrict (X := fun _ : ℝ≥0 => ℕ) I)]
+    rw [hmarg]
+  -- Now use the FDD = (Measure.pi incrMeasure).map incrToVal structure.
+  -- The composition extracts differences of cumulative sums, which are sums over
+  -- disjoint coordinate blocks. This means μ.map fI is a product measure.
+  -- We show equality with Measure.pi on singletons.
+  apply Measure.ext_of_singleton
+  intro z
+  rw [Measure.map_apply hmeas_fI (measurableSet_singleton z)]
+  rw [Measure.pi_singleton]
+  simp_rw [Measure.map_apply (hmeas_incr _) (measurableSet_singleton (z _))]
+  -- Goal: μ (fI ⁻¹' {z}) = ∏ k : Fin n, μ (incr_k ⁻¹' {z k})
+  -- Both sides factor through the FDD.
+  -- Use hmap_fI to express LHS through the FDD
+  have hLHS : μ (fI ⁻¹' {z}) = (μ.map fI) {z} :=
+    (Measure.map_apply hmeas_fI (measurableSet_singleton z)).symm
+  rw [hLHS, hmap_fI]
+  -- LHS: ((FDD).map gI) {z}
+  -- For each k in the product, factor through FDD too
+  have hRHS_k : ∀ k : Fin n,
+      μ ((fun ω : ∀ _ : ℝ≥0, ℕ => (ω (t k.succ) : ℤ) - (ω (t k.castSucc) : ℤ)) ⁻¹' {z k}) =
+      (poissonProcessFDD rate I).map (fun f : (i : ↥I) → ℕ =>
+        (f ⟨t k.succ, Finset.mem_image.mpr ⟨k.succ, Finset.mem_univ _, rfl⟩⟩ : ℤ) -
+        (f ⟨t k.castSucc, Finset.mem_image.mpr ⟨k.castSucc, Finset.mem_univ _, rfl⟩⟩ : ℤ))
+        {z k} := by
+    intro k
+    have hcomp : (fun ω : ∀ _ : ℝ≥0, ℕ => (ω (t k.succ) : ℤ) - (ω (t k.castSucc) : ℤ)) =
+        (fun f : (i : ↥I) → ℕ =>
+          (f ⟨t k.succ, Finset.mem_image.mpr ⟨k.succ, Finset.mem_univ _, rfl⟩⟩ : ℤ) -
+          (f ⟨t k.castSucc, Finset.mem_image.mpr ⟨k.castSucc, Finset.mem_univ _, rfl⟩⟩ : ℤ)) ∘
+        Finset.restrict I := by
+      ext ω; simp [Finset.restrict]
+    rw [hcomp, Set.preimage_comp]
+    rw [← Measure.map_apply
+      (Finset.measurable_restrict (X := fun _ : ℝ≥0 => ℕ) I) MeasurableSet.of_discrete]
+    -- Goal: (μ.map I.restrict) (g ⁻¹' {z k}) = (FDD.map g) {z k}
+    -- = ((μ.map I.restrict).map g) {z k} using Measure.map_apply
+    rw [← Measure.map_apply Measurable.of_discrete (measurableSet_singleton (z k))]
+    -- Goal: ((μ.map I.restrict).map g) {z k} = (FDD.map g) {z k}
+    rw [hmarg]
+  simp_rw [hRHS_k]
+  -- Now both sides are expressed through poissonProcessFDD rate I.
+  -- Unfold FDD as product measure map.
+  unfold poissonProcessFDD
+  haveI : DiscreteMeasurableSpace (Fin I.card → ℕ) :=
+    MeasurableSingletonClass.toDiscreteMeasurableSpace
+  -- LHS: ((Measure.pi incrMeasure).map incrToVal).map gI_all {z}
+  --     = (Measure.pi incrMeasure).map (gI_all ∘ incrToVal) {z}
+  --     = (Measure.pi incrMeasure) ((gI_all ∘ incrToVal) ⁻¹' {z})
+  rw [Measure.map_map Measurable.of_discrete Measurable.of_discrete,
+    Measure.map_apply Measurable.of_discrete (measurableSet_singleton z)]
+  -- RHS: ∏ k, ((Measure.pi incrMeasure).map incrToVal).map gI_k {z k}
+  --     = ∏ k, (Measure.pi incrMeasure).map (gI_k ∘ incrToVal) {z k}
+  --     = ∏ k, (Measure.pi incrMeasure) ((gI_k ∘ incrToVal) ⁻¹' {z k})
+  simp_rw [Measure.map_map Measurable.of_discrete Measurable.of_discrete,
+    Measure.map_apply Measurable.of_discrete (measurableSet_singleton (z _))]
+  -- Goal: (Measure.pi incrMeasure) (h ⁻¹' {z}) = ∏ k, (Measure.pi incrMeasure) (h_k ⁻¹' {z k})
+  -- where h = gI_all ∘ incrToVal and h_k = gI_k ∘ incrToVal
+  -- Strategy: reduce to iIndepFun of ℤ-cast coordinate projections on product measure.
+  -- Abbreviations for readability (using let to avoid unfolding issues)
+  let incrMeasure' : Fin I.card → Measure ℕ :=
+    fun k => poissonMeasure (rate * poissonProcessGap I k)
+  let πμ := Measure.pi incrMeasure'
+  let e := I.orderIsoOfFin rfl
+  -- F_k k d = the k-th increment computed from increment vector d
+  let F_k : Fin n → (Fin I.card → ℕ) → ℤ := fun k d =>
+    ((fun f : (i : ↥I) → ℕ => fun j : Fin n =>
+      (f ⟨t j.succ, Finset.mem_image.mpr ⟨j.succ, Finset.mem_univ _, rfl⟩⟩ : ℤ) -
+      (f ⟨t j.castSucc, Finset.mem_image.mpr ⟨j.castSucc, Finset.mem_univ _, rfl⟩⟩ : ℤ))
+      (poissonProcessIncrToVal I d)) k
+  -- q k = position of t k.succ in sorted enumeration
+  let q : Fin n → Fin I.card :=
+    fun k => e.symm ⟨t k.succ, Finset.mem_image.mpr ⟨k.succ, Finset.mem_univ _, rfl⟩⟩
+  -- Step 1: Show F_k k d = (d (q k) : ℤ) when t k.castSucc < t k.succ
+  have hF_k_eq : ∀ k : Fin n, t k.castSucc < t k.succ →
+      ∀ d : Fin I.card → ℕ, F_k k d = (d (q k) : ℤ) := by
+    intro k hlt d
+    show (poissonProcessIncrToVal I d ⟨t k.succ, _⟩ : ℤ) -
+         (poissonProcessIncrToVal I d ⟨t k.castSucc, _⟩ : ℤ) = (d (q k) : ℤ)
+    unfold poissonProcessIncrToVal poissonProcessReindex
+    simp only [Function.comp_apply]
+    set p := e.symm ⟨t k.castSucc, Finset.mem_image.mpr ⟨k.castSucc, Finset.mem_univ _, rfl⟩⟩
+    have hqp := orderIsoOfFin_symm_succ_of_lt n t hmono k hlt
+    have hcum : poissonProcessCumSum d (q k) =
+        poissonProcessCumSum d p + d (q k) := by
+      have hqval : (q k).val = p.val + 1 := hqp
+      -- q k = ⟨p.val + 1, _⟩ and we need CumSum(q k) = CumSum(p) + d(q k)
+      -- This is poissonProcessCumSum_succ_sub d p (p.val + 1 < I.card)
+      have hp_lt : p.val + 1 < I.card := by omega
+      have := poissonProcessCumSum_succ_sub d p hp_lt
+      -- this : poissonProcessCumSum d ⟨p.val + 1, hp_lt⟩ = ...
+      -- We need to show that ⟨p.val + 1, hp_lt⟩ = q k
+      have hq_eq_fin : q k = ⟨p.val + 1, hp_lt⟩ := Fin.ext hqval
+      rwa [hq_eq_fin]
+    rw [hcum]; push_cast; ring
+  -- Step 2: Show F_k k d = 0 when t k.castSucc = t k.succ
+  have hF_k_const : ∀ k : Fin n, t k.castSucc = t k.succ →
+      ∀ d : Fin I.card → ℕ, F_k k d = 0 := by
+    intro k heq d
+    show (poissonProcessIncrToVal I d ⟨t k.succ, _⟩ : ℤ) -
+         (poissonProcessIncrToVal I d ⟨t k.castSucc, _⟩ : ℤ) = 0
+    -- Since t k.castSucc = t k.succ, the two terms are equal
+    suffices heq' : poissonProcessIncrToVal I d
+        ⟨t k.succ, Finset.mem_image.mpr ⟨k.succ, Finset.mem_univ _, rfl⟩⟩ =
+      poissonProcessIncrToVal I d
+        ⟨t k.castSucc, Finset.mem_image.mpr ⟨k.castSucc, Finset.mem_univ _, rfl⟩⟩ by
+      simp [heq']
+    congr 1; exact Subtype.ext heq.symm
+  -- Step 3: q is injective on non-constant k's
+  have hq_inj : ∀ k₁ k₂ : Fin n, t k₁.castSucc < t k₁.succ →
+      t k₂.castSucc < t k₂.succ → q k₁ = q k₂ → k₁ = k₂ := by
+    intro k₁ k₂ hlt₁ hlt₂ hq_eq
+    have : (⟨t k₁.succ, _⟩ : ↥I) = ⟨t k₂.succ, _⟩ := e.symm.injective hq_eq
+    have ht_eq : t k₁.succ = t k₂.succ := Subtype.ext_iff.mp this
+    by_contra hne
+    -- WLOG k₁ < k₂ (without using wlog tactic to avoid type issues)
+    rcases lt_or_gt_of_ne hne with h12 | h21
+    · -- k₁ < k₂ : then t k₁.succ ≤ t k₂.castSucc < t k₂.succ = t k₁.succ, contradiction
+      have hle' : t k₁.succ ≤ t k₂.castSucc := hmono (by
+        exact Fin.le_iff_val_le_val.mpr (by simp [Fin.val_succ]; omega))
+      exact absurd (lt_of_le_of_lt (ht_eq ▸ hle') hlt₂) (lt_irrefl _)
+    · -- k₂ < k₁ : symmetric
+      have hle' : t k₂.succ ≤ t k₁.castSucc := hmono (by
+        exact Fin.le_iff_val_le_val.mpr (by simp [Fin.val_succ]; omega))
+      exact absurd (lt_of_le_of_lt (ht_eq.symm ▸ hle') hlt₁) (lt_irrefl _)
+  -- The goal's LHS and RHS involve the same functions as F_k, just written differently.
+  -- Show the combined preimage equals intersection of component preimages.
+  -- Then rewrite the product's terms to use F_k.
+  -- The preimage of {z} under the combined function = ⋂ k, F_k k ⁻¹' {z k}
+  -- and the RHS products are definitionally equal to the F_k versions.
+  -- So we just need to prove the independence product formula for F_k.
+  suffices h : πμ (⋂ k : Fin n, F_k k ⁻¹' {z k}) = ∏ k : Fin n, πμ (F_k k ⁻¹' {z k}) by
+    -- LHS: preimage of {z} = ⋂ k, F_k k ⁻¹' {z k}
+    have hLHS_set : ((fun (f : (i : ↥I) → ℕ) (j : Fin n) =>
+        (f ⟨t j.succ, Finset.mem_image.mpr ⟨j.succ, Finset.mem_univ _, rfl⟩⟩ : ℤ) -
+        (f ⟨t j.castSucc, Finset.mem_image.mpr ⟨j.castSucc, Finset.mem_univ _, rfl⟩⟩ : ℤ))
+      ∘ poissonProcessIncrToVal I) ⁻¹' {z} = ⋂ k : Fin n, F_k k ⁻¹' {z k} := by
+      ext d; simp only [Set.mem_preimage, Set.mem_singleton_iff, Set.mem_iInter,
+        Function.comp_apply]
+      exact ⟨fun h k => by rw [← h], fun h => funext h⟩
+    rw [hLHS_set]; exact h
+  -- Goal: πμ (⋂ k, F_k k ⁻¹' {z k}) = ∏ k, πμ (F_k k ⁻¹' {z k})
+  -- Step 4: Split into constant and non-constant cases.
+  by_cases h_const_empty : ∃ k : Fin n, t k.castSucc = t k.succ ∧ z k ≠ 0
+  · -- Some constant k has z k ≠ 0, so F_k k ⁻¹' {z k} = ∅
+    obtain ⟨k₀, hk₀_const, hk₀_ne⟩ := h_const_empty
+    have hempty : F_k k₀ ⁻¹' {z k₀} = ∅ := by
+      ext d; simp only [Set.mem_preimage, Set.mem_singleton_iff, Set.mem_empty_iff_false,
+        iff_false]; exact fun h => hk₀_ne (h ▸ hF_k_const k₀ hk₀_const d)
+    rw [show ⋂ k, F_k k ⁻¹' {z k} = ∅ from by
+      rw [Set.eq_empty_iff_forall_notMem]
+      intro d hd
+      have : d ∈ F_k k₀ ⁻¹' {z k₀} := Set.mem_iInter.mp hd k₀
+      rw [hempty] at this; exact this]
+    rw [measure_empty]
+    exact (Finset.prod_eq_zero (Finset.mem_univ k₀) (by rw [hempty, measure_empty])).symm
+  · push_neg at h_const_empty
+    -- All constant k have z k = 0
+    have hconst_univ : ∀ k : Fin n, t k.castSucc = t k.succ → F_k k ⁻¹' {z k} = Set.univ := by
+      intro k hk_const
+      ext d; simp only [Set.mem_preimage, Set.mem_singleton_iff, Set.mem_univ, iff_true]
+      rw [hF_k_const k hk_const d]; exact (h_const_empty k hk_const).symm
+    -- Filter to non-constant indices
+    set S' := Finset.univ.filter (fun k : Fin n => t k.castSucc < t k.succ)
+    -- Intersection over univ = intersection over S'
+    have hinter_eq : ⋂ k, F_k k ⁻¹' {z k} = ⋂ k ∈ S', F_k k ⁻¹' {z k} := by
+      ext d; constructor
+      · intro hd; exact Set.mem_iInter₂.mpr (fun k _ => Set.mem_iInter.mp hd k)
+      · intro hd; apply Set.mem_iInter.mpr; intro k
+        by_cases hlt : t k.castSucc < t k.succ
+        · exact Set.mem_iInter₂.mp hd k (Finset.mem_filter.mpr ⟨Finset.mem_univ k, hlt⟩)
+        · rw [hconst_univ k (le_antisymm (hmono (Fin.castSucc_le_succ k)) (not_lt.mp hlt))]
+          exact Set.mem_univ d
+    rw [hinter_eq]
+    -- Product over univ = product over S'
+    have hprod_eq : ∏ k, πμ (F_k k ⁻¹' {z k}) = ∏ k ∈ S', πμ (F_k k ⁻¹' {z k}) := by
+      have hcompl : ∏ k ∈ Finset.univ.filter (fun (k : Fin n) => ¬t k.castSucc < t k.succ),
+          πμ (F_k k ⁻¹' {z k}) = 1 := by
+        apply Finset.prod_eq_one
+        intro k hk; simp only [Finset.mem_filter, Finset.mem_univ, true_and, not_lt] at hk
+        rw [hconst_univ k (le_antisymm (hmono (Fin.castSucc_le_succ k)) hk), measure_univ]
+      have h_split := Finset.prod_filter_mul_prod_filter_not Finset.univ
+        (fun (k : Fin n) => t k.castSucc < t k.succ) (fun k => πμ (F_k k ⁻¹' {z k}))
+      -- h_split : (∏ k with ..., ...) * (∏ k with ¬..., ...) = ∏ k ∈ univ, ...
+      rw [hcompl, mul_one] at h_split
+      -- h_split : ∏ k with ..., ... = ∏ k ∈ univ, ...
+      exact h_split.symm
+    rw [hprod_eq]
+    -- Now both sides involve only non-constant k's.
+    -- Rewrite preimages using hF_k_eq
+    have hpre_cast : ∀ k ∈ S', F_k k ⁻¹' {z k} =
+        (fun d : Fin I.card → ℕ => (d (q k) : ℤ)) ⁻¹' {z k} := by
+      intro k hk
+      have hlt : t k.castSucc < t k.succ := (Finset.mem_filter.mp hk).2
+      ext d; simp only [Set.mem_preimage, Set.mem_singleton_iff]; rw [hF_k_eq k hlt d]
+    -- coordinate projections are iIndepFun under Measure.pi:
+    haveI : ∀ i, IsProbabilityMeasure (incrMeasure' i) := fun i => inferInstance
+    have hcast_indep : iIndepFun (fun i (d : Fin I.card → ℕ) => (d i : ℤ)) πμ :=
+      (iIndepFun_pi (fun i => aemeasurable_id)).comp
+        (fun _ => Nat.cast) (fun _ => Measurable.of_discrete)
+    -- q is injective on S'
+    have hq_injOn : Set.InjOn q ↑S' := by
+      intro k₁ hk₁ k₂ hk₂ hq_eq
+      exact hq_inj k₁ k₂ (Finset.mem_coe.mp hk₁ |> Finset.mem_filter.mp |>.2)
+        (Finset.mem_coe.mp hk₂ |> Finset.mem_filter.mp |>.2) hq_eq
+    -- Define T = S'.image q ⊆ Fin I.card, and sets' extending sets from q(S')
+    set T := S'.image q
+    classical
+    let sets' : Fin I.card → Set ℤ :=
+      Function.extend (fun k : ↥S' => q k.val) (fun k : ↥S' => {z k.val}) (fun _ => Set.univ)
+    have hinj_sub : Function.Injective (fun k : ↥S' => q k.val) := by
+      intro ⟨a, ha⟩ ⟨b, hb⟩ h; exact Subtype.ext (hq_injOn ha hb h)
+    have hsets'_apply : ∀ k ∈ S', sets' (q k) = {z k} := by
+      intro k hk
+      exact hinj_sub.extend_apply (fun k : ↥S' => {z k.val}) (fun _ => Set.univ) ⟨k, hk⟩
+    -- Product formula from hcast_indep on T
+    have hindep_T := hcast_indep.measure_inter_preimage_eq_mul T
+      (fun (i : Fin I.card) _ => MeasurableSet.of_discrete (s := sets' i))
+    -- LHS: rewrite intersection
+    have hLHS : ⋂ k ∈ S', F_k k ⁻¹' {z k} =
+        ⋂ i ∈ T, (fun d : Fin I.card → ℕ => (d i : ℤ)) ⁻¹' sets' i := by
+      rw [show ⋂ k ∈ S', F_k k ⁻¹' {z k} =
+          ⋂ k ∈ S', (fun d : Fin I.card → ℕ => (d (q k) : ℤ)) ⁻¹' sets' (q k) from by
+        apply Set.iInter₂_congr; intro k hk
+        rw [hpre_cast k hk, hsets'_apply k hk]]
+      -- ⋂ k ∈ S', g (q k) = ⋂ i ∈ S'.image q, g i
+      let g : Fin I.card → Set (Fin I.card → ℕ) :=
+        fun i => (fun d : Fin I.card → ℕ => (d i : ℤ)) ⁻¹' sets' i
+      show ⋂ k ∈ S', g (q k) = ⋂ i ∈ T, g i
+      exact (Finset.set_biInter_finset_image).symm
+    -- RHS: rewrite product
+    have hRHS : ∏ k ∈ S', πμ (F_k k ⁻¹' {z k}) =
+        ∏ i ∈ T, πμ ((fun d : Fin I.card → ℕ => (d i : ℤ)) ⁻¹' sets' i) := by
+      -- Step 1: rewrite each summand using hpre_cast and hsets'_apply
+      have h1 : ∀ k ∈ S', πμ (F_k k ⁻¹' {z k}) =
+          πμ ((fun d : Fin I.card → ℕ => (d (q k) : ℤ)) ⁻¹' sets' (q k)) := by
+        intro k hk; rw [hpre_cast k hk, hsets'_apply k hk]
+      rw [Finset.prod_congr rfl h1]
+      -- Step 2: apply Finset.prod_image
+      let g : Fin I.card → ℝ≥0∞ :=
+        fun i => πμ ((fun d : Fin I.card → ℕ => (d i : ℤ)) ⁻¹' sets' i)
+      show ∏ k ∈ S', g (q k) = ∏ i ∈ T, g i
+      exact (Finset.prod_image hq_injOn).symm
+    rw [hLHS, hRHS]
+    exact hindep_T
+
 /-! ## Existence -/
 
 /-- There exists a probability space supporting a Poisson process with any rate.
@@ -1359,7 +1798,7 @@ poissonProcessFDD ──→ isProjectiveMeasureFamily_poissonProcessFDD
               ┌──────────┼──────────┐
               v          v          v
           start_zero  indep_incr  incr_poisson
-          (proved!)   (sorry)     (proved!)
+          (proved!)   (proved!)   (proved!)
 ```
 -/
 theorem exists_poissonProcess (rate : ℝ≥0) :
@@ -1374,7 +1813,32 @@ theorem exists_poissonProcess (rate : ℝ≥0) :
   · -- start_zero
     ext ω; simp
   · -- indep_increments
-    sorry
+    -- Goal: HasIndependentIncrements (fun t ω => (↑(if t = 0 then 0 else ω t) : ℤ)) μ
+    intro n t hmono
+    -- Step 1: Use a.e. equality to replace ↑(if t=0 then 0 else ω t) with ↑(ω t)
+    -- Since ω 0 = 0 μ-a.e., the two formulations agree a.e.
+    have hzero_ae := kolmogorovExtension_coord_zero_ae rate
+    -- For each k, the k-th increment agrees a.e. with the simpler expression
+    have hae : ∀ k : Fin n,
+        increment (fun (s : ℝ≥0) (ω : ∀ _ : ℝ≥0, ℕ) => (↑(if s = 0 then 0 else ω s) : ℤ))
+          (t k.castSucc) (t k.succ) =ᵐ[μ]
+        (fun ω => (ω (t k.succ) : ℤ) - (ω (t k.castSucc) : ℤ)) := by
+      intro k
+      filter_upwards [hzero_ae] with ω hω0
+      simp only [increment_apply]
+      congr 1
+      · by_cases h : t k.succ = 0 <;> simp [h, hω0]
+      · by_cases h : t k.castSucc = 0 <;> simp [h, hω0]
+    -- Use iIndepFun_congr to reduce to simpler form
+    suffices h : iIndepFun (fun k : Fin n => fun ω : ∀ _ : ℝ≥0, ℕ =>
+        (ω (t k.succ) : ℤ) - (ω (t k.castSucc) : ℤ)) μ from
+      (iIndepFun_congr hae).mpr h
+    -- Step 2: Prove iIndepFun of (fun k ω => (ω(t(k+1)) : ℤ) - (ω(t(k)) : ℤ))
+    -- Use the FDD product structure: the Kolmogorov extension restricted to any finite
+    -- set of times I is a product measure (Measure.pi of Poisson marginals) pushed through
+    -- a cumulative sum bijection. Increments of the process correspond to coordinate
+    -- projections on the product measure, so they're independent.
+    exact kolmogorovExtension_indep_increments rate n t hmono
   · -- increment_poisson
     intro s h
     -- Goal: μ.map (fun ω => (if s+h = 0 then 0 else ω (s+h)) - (if s = 0 then 0 else ω s))
