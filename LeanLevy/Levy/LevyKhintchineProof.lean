@@ -239,8 +239,9 @@ theorem IsInfinitelyDivisible.exists_continuous_log
 sequences `ξ₁, ..., ξₙ` and `c₁, ..., cₙ ∈ ℂ` with `∑ cₖ = 0`,
 the real part of `∑ᵢ ∑ⱼ c̄ᵢ cⱼ ψ(ξᵢ - ξⱼ)` is non-negative.
 
-This follows the convention of Applebaum (Def 3.6.1) and Jacob: a continuous function
-`ψ` with `ψ(0) = 0` is CND iff `exp(-tψ)` is positive definite for all `t > 0`. -/
+This convention means `ψ` is "conditionally positive definite" in some references.
+A continuous function `ψ` with `ψ(0) = 0` is CND in this sense iff `exp(tψ)` is
+positive definite for all `t > 0` (Schoenberg's theorem). -/
 def IsConditionallyNegativeDefinite (ψ : ℝ → ℂ) : Prop :=
   ∀ (n : ℕ) (ξ : Fin n → ℝ) (c : Fin n → ℂ),
     ∑ i, c i = 0 →
@@ -485,18 +486,169 @@ theorem IsInfinitelyDivisible.isConditionallyNegativeDefinite_log
 
 /-! ## Schoenberg's theorem -/
 
-/-- **Schoenberg's theorem.** If `ψ : ℝ → ℂ` is continuous, conditionally negative definite,
-and `ψ(0) = 0`, then for every `t > 0`, the function `ξ ↦ exp(-t · ψ(ξ))` is positive definite.
+/-- The constant function `1` is positive definite. -/
+private theorem isPositiveDefinite_one : IsPositiveDefinite (fun _ => (1 : ℂ)) := by
+  intro n x c
+  simp only [mul_one]
+  simp_rw [← Finset.mul_sum, ← Finset.sum_mul]
+  rw [show (∑ i : Fin n, starRingEnd ℂ (c i)) = starRingEnd ℂ (∑ i, c i) from
+    (map_sum (starRingEnd ℂ) c Finset.univ).symm]
+  rw [← Complex.normSq_eq_conj_mul_self]
+  exact_mod_cast Complex.normSq_nonneg _
 
-The proof uses the power series expansion of exp and closure of PD under pointwise limits.
-For weights `c` with `∑ c = 0`, the CND condition gives `∑∑ c̄ᵢcⱼψ(ξᵢ-ξⱼ) ≥ 0`,
-which means `∑∑ c̄ᵢcⱼ(-ψ(ξᵢ-ξⱼ)) ≤ 0`. The exponential power series transforms this
-into non-negative partial sums. -/
+/-- A non-negative real scalar times a PD function is PD. -/
+private theorem isPositiveDefinite_smul {φ : ℝ → ℂ} (hφ : IsPositiveDefinite φ)
+    {a : ℝ} (ha : 0 ≤ a) : IsPositiveDefinite (fun x => (↑a : ℂ) * φ x) := by
+  intro n x c
+  have : (∑ i : Fin n, ∑ j : Fin n,
+      starRingEnd ℂ (c i) * c j * ((↑a : ℂ) * φ (x i - x j))) =
+    ↑a * (∑ i : Fin n, ∑ j : Fin n,
+      starRingEnd ℂ (c i) * c j * φ (x i - x j)) := by
+    conv_lhs => arg 2; ext i; arg 2; ext j
+              ; rw [show starRingEnd ℂ (c i) * c j * (↑a * φ (x i - x j)) =
+                  ↑a * (starRingEnd ℂ (c i) * c j * φ (x i - x j)) from by ring]
+    simp_rw [← Finset.mul_sum]
+  rw [this, Complex.mul_re, Complex.ofReal_re, Complex.ofReal_im, zero_mul, sub_zero]
+  exact mul_nonneg ha (hφ n x c)
+
+/-- A power of a PD function is PD (by Schur product theorem). -/
+private theorem isPositiveDefinite_pow {φ : ℝ → ℂ} (hφ : IsPositiveDefinite φ) :
+    ∀ k : ℕ, IsPositiveDefinite (fun x => φ x ^ k) := by
+  intro k; induction k with
+  | zero => simpa using isPositiveDefinite_one
+  | succ k ih =>
+    simp_rw [pow_succ]
+    exact ih.mul hφ
+
+/-- Sum of PD functions is PD. -/
+private theorem isPositiveDefinite_add {φ ψ : ℝ → ℂ}
+    (hφ : IsPositiveDefinite φ) (hψ : IsPositiveDefinite ψ) :
+    IsPositiveDefinite (fun x => φ x + ψ x) := by
+  intro n x c
+  have hrw : (∑ i : Fin n, ∑ j : Fin n,
+      starRingEnd ℂ (c i) * c j * (φ (x i - x j) + ψ (x i - x j))) =
+    (∑ i : Fin n, ∑ j : Fin n, starRingEnd ℂ (c i) * c j * φ (x i - x j)) +
+    (∑ i : Fin n, ∑ j : Fin n, starRingEnd ℂ (c i) * c j * ψ (x i - x j)) := by
+    simp_rw [mul_add, Finset.sum_add_distrib]
+  rw [hrw, Complex.add_re]
+  exact add_nonneg (hφ n x c) (hψ n x c)
+
+
+/-- For PD `φ` with `φ(0) = 1` and `t ≥ 0`, the function `exp(t(φ - 1))` is PD.
+
+**Proof:** The Poisson expansion `exp(t(φ-1)) = e^{-t} ∑_{k≥0} t^k/k! · φ^k`
+has PD partial sums, and the pointwise limit is PD by `closure_pointwise`. -/
+private theorem isPositiveDefinite_exp_mul_sub_one
+    {φ : ℝ → ℂ} (hφ : IsPositiveDefinite φ) (_hφ0 : φ 0 = 1)
+    (t : ℝ) (ht : 0 ≤ t) :
+    IsPositiveDefinite (fun x => exp (↑t * (φ x - 1))) := by
+  -- Define partial sums of the Poisson expansion
+  -- exp(t(φ-1)) = e^{-t} · ∑_{k=0}^∞ (tφ)^k/k!
+  -- Approximate by: T_N(x) = ∑_{k=0}^N (t^k/k!) · φ(x)^k · e^{-t}
+  -- Each term (t^k/k!)·φ^k is PD (non-neg scalar × PD^k), and so is the finite sum × e^{-t}.
+  -- As N → ∞, T_N → exp(t(φ-1)) pointwise.
+  --
+  -- We use closure_pointwise with sequence T_N.
+  -- To avoid elaboration issues, we keep the proof simple.
+  --
+  -- Strategy: directly show exp(t(φ-1)) is a pointwise limit of PD functions.
+  -- The key fact: exp(z) = lim_{N→∞} ∑_{k=0}^N z^k/k!
+  -- So exp(t(φ(x)-1)) = lim ∑_{k=0}^N (t(φ(x)-1))^k / k!
+  -- Each partial sum is PD: (t(φ(x)-1))^k = ∑ binomial terms, each PD.
+  -- Actually this is harder. Let's use the Poisson form instead.
+  --
+  -- Alternative: use (1 + t(φ-1)/N)^N → exp(t(φ-1))
+  -- Each (1 + t(φ-1)/N) may not be PD. But (1 + t(φ-1)/N)^N uses Schur product.
+  -- The issue: 1 + t(φ-1)/N = (1-t/N) + (t/N)·φ. For N ≥ t, 1-t/N ≥ 0, t/N ≥ 0.
+  -- So it's a non-neg combination of the constant 1 (PD) and φ (PD) → PD!
+  -- Then (PD)^N is PD, and the limit is PD.
+  --
+  -- This avoids the entire Poisson partial sum approach and its elaboration issues!
+  --
+  -- Step 1: For N large enough, φ_N(x) := (1-t/N) + (t/N)·φ(x) is PD with φ_N(0) = 1.
+  -- Step 2: φ_N^N is PD.
+  -- Step 3: φ_N(x)^N → exp(t(φ(x)-1)) as N → ∞.
+  -- Step 4: By closure_pointwise, exp(t(φ-1)) is PD.
+  --
+  -- For Step 1, we need N > t (so coefficients are non-negative).
+  -- Use the eventual filter.
+
+  -- Step 1: For large N, (1-t/N) + (t/N)·φ(x) is PD
+  have hφN_pd : ∀ᶠ N : ℕ in Filter.atTop,
+      IsPositiveDefinite (fun x => (1 - ↑t / ↑N : ℂ) + (↑t / ↑N : ℂ) * φ x) := by
+    filter_upwards [Filter.Ici_mem_atTop (Nat.ceil t + 1)] with N (hN : Nat.ceil t + 1 ≤ N)
+    have hN_pos : (0 : ℝ) < N := Nat.cast_pos.mpr (by omega)
+    have hN_ne : (↑N : ℂ) ≠ 0 := Complex.ofReal_ne_zero.mpr (ne_of_gt hN_pos)
+    have htN : t / N ≤ 1 := by
+      rw [div_le_one hN_pos]
+      calc t ≤ ↑(Nat.ceil t) := Nat.le_ceil t
+        _ ≤ ↑N := by exact_mod_cast (show Nat.ceil t ≤ N by omega)
+    have htN_nn : 0 ≤ t / N := div_nonneg ht (le_of_lt hN_pos)
+    -- (1-t/N) + (t/N)·φ = (1-t/N)·1 + (t/N)·φ
+    -- Both coefficients non-negative, 1 is PD, φ is PD
+    have hrw : (fun x => (1 - ↑t / ↑N : ℂ) + (↑t / ↑N : ℂ) * φ x) =
+        (fun x => (↑(1 - t/N) : ℂ) * (1 : ℂ) + (↑(t/N) : ℂ) * φ x) := by
+      ext x; push_cast; ring
+    rw [hrw]
+    exact isPositiveDefinite_add
+      (isPositiveDefinite_smul isPositiveDefinite_one (by linarith))
+      (isPositiveDefinite_smul hφ htN_nn)
+
+  -- Step 2: φ_N^N is PD
+  have hφN_pow_pd : ∀ᶠ N : ℕ in Filter.atTop,
+      IsPositiveDefinite (fun x => ((1 - ↑t / ↑N : ℂ) + (↑t / ↑N : ℂ) * φ x) ^ N) := by
+    filter_upwards [hφN_pd] with N hN
+    exact isPositiveDefinite_pow hN N
+
+  -- Step 3: pointwise limit via (1 + z/N)^N → exp(z)
+  have hlim : ∀ x, Tendsto
+      (fun N : ℕ => ((1 - ↑t / ↑N : ℂ) + (↑t / ↑N : ℂ) * φ x) ^ N)
+      Filter.atTop (nhds (exp (↑t * (φ x - 1)))) := by
+    intro x
+    -- (1 + z/N)^N → exp(z) where z = t(φ(x)-1)
+    exact Filter.Tendsto.congr (fun N => by
+      by_cases hN : (N : ℕ) = 0
+      · simp [hN]
+      · congr 1
+        have : (↑N : ℂ) ≠ 0 := Nat.cast_ne_zero.mpr hN
+        field_simp; ring)
+      (Complex.tendsto_one_add_div_pow_exp (↑t * (φ x - 1)))
+
+  -- Step 4: By closure_pointwise, deduce that the limit is PD
+  have hpd_ev : ∀ᶠ N : ℕ in Filter.atTop,
+      IsPositiveDefinite (fun x => ((1 - ↑t / ↑N : ℂ) + (↑t / ↑N : ℂ) * φ x) ^ N) := hφN_pow_pd
+  -- Extract a sequence of PD functions
+  obtain ⟨N₀, hN₀⟩ := hpd_ev.exists_forall_of_atTop
+  exact IsPositiveDefinite.closure_pointwise
+    (fun k => hN₀ (k + N₀) (by omega))
+    (fun x => (hlim x).comp (tendsto_add_atTop_nat N₀))
+
+/-- **Schoenberg's theorem.** If `ψ : ℝ → ℂ` is continuous, conditionally negative definite
+(CND form `∑∑ c̄ᵢcⱼψ(ξᵢ-ξⱼ).re ≥ 0` for zero-sum weights), and `ψ(0) = 0`, then for
+every `t > 0`, the function `ξ ↦ exp(t · ψ(ξ))` is positive definite.
+
+Note: Our CND convention has the quadratic form ≥ 0, matching the convention where
+`charFun = exp(ψ)`. So `exp(tψ)` (positive sign) is PD, corresponding to the `t`-th
+convolution power of the underlying measure.
+
+## Proof strategy
+
+The standard proof uses the PSD matrix characterization: for CND `ψ` with `ψ(0) = 0`,
+the matrix `Aᵢⱼ = ψ(xᵢ) + conj(ψ(xⱼ)) - ψ(xᵢ - xⱼ)` is positive semidefinite.
+Then `exp(-tA)` (entrywise) is PSD by the Schur product theorem applied to the
+power series, giving PD of `exp(tψ)` after factoring out `exp(tψ(xᵢ)) · exp(t·conj(ψ(xⱼ)))`.
+This requires the Schur product theorem for PSD matrices (not just PD functions),
+which is `IsPositiveDefinite.mul` (currently sorry'd in PositiveDefinite.lean).
+
+## Sorry audit
+
+* Requires `IsPositiveDefinite.mul` (Schur product) and PSD matrix infrastructure
+  not yet available in this project. -/
 theorem schoenberg_exp_of_cnd
     {ψ : ℝ → ℂ} (hψ_cont : Continuous ψ) (hψ_zero : ψ 0 = 0)
     (hψ_cnd : IsConditionallyNegativeDefinite ψ)
     (t : ℝ) (ht : 0 < t) :
-    IsPositiveDefinite (fun ξ => exp (-↑t * ψ ξ)) := by
+    IsPositiveDefinite (fun ξ => exp (↑t * ψ ξ)) := by
   sorry
 
 /-! ## Sub-lemma 4: Integral representation (deepest) -/
@@ -505,8 +657,8 @@ theorem schoenberg_exp_of_cnd
 has the Lévy-Khintchine integral representation.
 
 **Proof via Bochner's theorem:**
-1. By Schoenberg, `exp(-tψ)` is PD, continuous, with value 1 at 0 for each `t > 0`.
-2. By Bochner, ∃ probability measure `μ_t` with `charFun(μ_t) = exp(-tψ)`.
+1. By Schoenberg, `exp(tψ)` is PD, continuous, with value 1 at 0 for each `t > 0`.
+2. By Bochner, there exists probability measure `μ_t` with `charFun(μ_t) = exp(tψ)`.
 3. The family `{μ_t}` forms a convolution semigroup.
 4. Differentiating at `t = 0` extracts the Lévy-Khintchine triple `(b, σ², ν)`. -/
 theorem levyKhintchine_of_cnd
@@ -516,22 +668,19 @@ theorem levyKhintchine_of_cnd
       ψ ξ = ↑T.drift * ↑ξ * I
         - ↑(T.gaussianVariance : ℝ) * ↑ξ ^ 2 / 2
         + ∫ x, levyCompensatedIntegrand ξ x ∂T.levyMeasure := by
-  -- Step 1: For each t > 0, exp(-tψ) is PD, continuous, with value 1 at 0
-  have hpd : ∀ t : ℝ, 0 < t → IsPositiveDefinite (fun ξ => exp (-↑t * ψ ξ)) :=
+  -- Step 1: For each t > 0, exp(tψ) is PD, continuous, with value 1 at 0
+  have hpd : ∀ t : ℝ, 0 < t → IsPositiveDefinite (fun ξ => exp (↑t * ψ ξ)) :=
     fun t ht => schoenberg_exp_of_cnd hψ_cont hψ_zero hψ_cnd t ht
-  have hcont : ∀ t : ℝ, Continuous (fun ξ => exp (-(↑t : ℂ) * ψ ξ)) := by
+  have hcont : ∀ t : ℝ, Continuous (fun ξ => exp ((↑t : ℂ) * ψ ξ)) := by
     intro t; fun_prop
-  have hzero : ∀ t : ℝ, exp (-(↑t : ℂ) * ψ 0) = 1 := by
+  have hzero : ∀ t : ℝ, exp ((↑t : ℂ) * ψ 0) = 1 := by
     intro t; rw [hψ_zero, mul_zero, exp_zero]
-  -- Step 2: By Bochner, each exp(-tψ) is a characteristic function
+  -- Step 2: By Bochner, each exp(tψ) is a characteristic function
   have hboch : ∀ t : ℝ, 0 < t → ∃ μ : MeasureTheory.ProbabilityMeasure ℝ,
       ∀ ξ, MeasureTheory.ProbabilityMeasure.characteristicFun μ ξ =
-        exp (-(↑t : ℂ) * ψ ξ) :=
+        exp ((↑t : ℂ) * ψ ξ) :=
     fun t ht => bochner _ (hcont t) (hpd t ht) (hzero t)
   -- Step 3: Extract the triple by differentiating the convolution semigroup at t=0.
-  -- This is the deepest analytical step: from the family {μ_t} of probability measures
-  -- satisfying charFun(μ_t)(ξ) = exp(-tψ(ξ)), extract drift b, variance σ², and Lévy measure ν
-  -- such that ψ has the Lévy-Khintchine integral form.
   sorry
 
 /-! ## Assembly: Lévy-Khintchine representation -/
