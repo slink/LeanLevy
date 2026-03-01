@@ -651,6 +651,61 @@ theorem schoenberg_exp_of_cnd
     IsPositiveDefinite (fun ξ => exp (↑t * ψ ξ)) := by
   sorry
 
+/-! ## Convolution semigroup structure -/
+
+/-- A **convolution semigroup** on `ℝ` is a family of probability measures `μ_t` indexed by
+`t > 0` whose characteristic functions satisfy the semigroup law:
+`charFun(μ_{s+t}) = charFun(μ_s) · charFun(μ_t)` for all `ξ`.
+
+Equivalently, `charFun(μ_t)(ξ) = exp(tψ(ξ))` for a continuous function `ψ` with `ψ(0) = 0`.
+The Lévy-Khintchine theorem extracts the triple `(b, σ², ν)` from `ψ`. -/
+structure ConvolutionSemigroup where
+  /-- The exponent function: `charFun(μ_t) = exp(t · ψ)`. -/
+  exponent : ℝ → ℂ
+  /-- The exponent is continuous. -/
+  exponent_continuous : Continuous exponent
+  /-- The exponent vanishes at 0. -/
+  exponent_zero : exponent 0 = 0
+  /-- For each `t > 0`, a probability measure whose characteristic function is `exp(tψ)`. -/
+  measure : {t : ℝ // 0 < t} → MeasureTheory.ProbabilityMeasure ℝ
+  /-- The characteristic function identity. -/
+  charFun_eq : ∀ (t : {t : ℝ // 0 < t}) (ξ : ℝ),
+    MeasureTheory.ProbabilityMeasure.characteristicFun (measure t) ξ =
+      exp ((↑t.val : ℂ) * exponent ξ)
+
+namespace ConvolutionSemigroup
+
+variable (S : ConvolutionSemigroup)
+
+/-- The semigroup law: `charFun(μ_s) · charFun(μ_t) = charFun(μ_{s+t})` at the level
+of exponents. This follows from the exponential identity `exp(sψ) · exp(tψ) = exp((s+t)ψ)`. -/
+theorem charFun_mul (s t : {r : ℝ // 0 < r}) (ξ : ℝ) :
+    MeasureTheory.ProbabilityMeasure.characteristicFun (S.measure s) ξ *
+    MeasureTheory.ProbabilityMeasure.characteristicFun (S.measure t) ξ =
+    exp ((↑(s.val + t.val) : ℂ) * S.exponent ξ) := by
+  rw [S.charFun_eq s ξ, S.charFun_eq t ξ, ← exp_add]
+  congr 1
+  push_cast; ring
+
+end ConvolutionSemigroup
+
+/-- Build a convolution semigroup from a CND exponent via Schoenberg + Bochner. -/
+noncomputable def convolutionSemigroupOfCND
+    {ψ : ℝ → ℂ} (hψ_cont : Continuous ψ) (hψ_zero : ψ 0 = 0)
+    (hψ_cnd : IsConditionallyNegativeDefinite ψ) :
+    ConvolutionSemigroup where
+  exponent := ψ
+  exponent_continuous := hψ_cont
+  exponent_zero := hψ_zero
+  measure := fun ⟨t, ht⟩ =>
+    (bochner _ (by fun_prop : Continuous (fun ξ => exp ((↑t : ℂ) * ψ ξ)))
+      (schoenberg_exp_of_cnd hψ_cont hψ_zero hψ_cnd t ht)
+      (by rw [hψ_zero, mul_zero, exp_zero])).choose
+  charFun_eq := fun ⟨t, ht⟩ ξ =>
+    (bochner _ (by fun_prop : Continuous (fun ξ => exp ((↑t : ℂ) * ψ ξ)))
+      (schoenberg_exp_of_cnd hψ_cont hψ_zero hψ_cnd t ht)
+      (by rw [hψ_zero, mul_zero, exp_zero])).choose_spec ξ
+
 /-! ## Sub-lemma 4: Integral representation (deepest) -/
 
 /-- A continuous, conditionally negative definite function `ψ : ℝ → ℂ` with `ψ(0) = 0`
@@ -659,8 +714,10 @@ has the Lévy-Khintchine integral representation.
 **Proof via Bochner's theorem:**
 1. By Schoenberg, `exp(tψ)` is PD, continuous, with value 1 at 0 for each `t > 0`.
 2. By Bochner, there exists probability measure `μ_t` with `charFun(μ_t) = exp(tψ)`.
-3. The family `{μ_t}` forms a convolution semigroup.
-4. Differentiating at `t = 0` extracts the Lévy-Khintchine triple `(b, σ², ν)`. -/
+3. The family `{μ_t}` forms a convolution semigroup (see `convolutionSemigroupOfCND`).
+4. Differentiating at `t = 0` extracts the Lévy-Khintchine triple `(b, σ², ν)`.
+
+Steps 1–3 are complete. Step 4 (measure differentiation) is research-level and remains sorry'd. -/
 theorem levyKhintchine_of_cnd
     {ψ : ℝ → ℂ} (hψ_cont : Continuous ψ) (hψ_zero : ψ 0 = 0)
     (hψ_cnd : IsConditionallyNegativeDefinite ψ) :
@@ -668,19 +725,15 @@ theorem levyKhintchine_of_cnd
       ψ ξ = ↑T.drift * ↑ξ * I
         - ↑(T.gaussianVariance : ℝ) * ↑ξ ^ 2 / 2
         + ∫ x, levyCompensatedIntegrand ξ x ∂T.levyMeasure := by
-  -- Step 1: For each t > 0, exp(tψ) is PD, continuous, with value 1 at 0
-  have hpd : ∀ t : ℝ, 0 < t → IsPositiveDefinite (fun ξ => exp (↑t * ψ ξ)) :=
-    fun t ht => schoenberg_exp_of_cnd hψ_cont hψ_zero hψ_cnd t ht
-  have hcont : ∀ t : ℝ, Continuous (fun ξ => exp ((↑t : ℂ) * ψ ξ)) := by
-    intro t; fun_prop
-  have hzero : ∀ t : ℝ, exp ((↑t : ℂ) * ψ 0) = 1 := by
-    intro t; rw [hψ_zero, mul_zero, exp_zero]
-  -- Step 2: By Bochner, each exp(tψ) is a characteristic function
-  have hboch : ∀ t : ℝ, 0 < t → ∃ μ : MeasureTheory.ProbabilityMeasure ℝ,
-      ∀ ξ, MeasureTheory.ProbabilityMeasure.characteristicFun μ ξ =
-        exp ((↑t : ℂ) * ψ ξ) :=
-    fun t ht => bochner _ (hcont t) (hpd t ht) (hzero t)
-  -- Step 3: Extract the triple by differentiating the convolution semigroup at t=0.
+  -- Steps 1–2: Build the convolution semigroup via Schoenberg + Bochner
+  set S := convolutionSemigroupOfCND hψ_cont hψ_zero hψ_cnd
+  -- Step 3: The semigroup satisfies charFun(μ_t)(ξ) = exp(tψ(ξ))
+  have _hcharfun : ∀ (t : {t : ℝ // 0 < t}) (ξ : ℝ),
+      MeasureTheory.ProbabilityMeasure.characteristicFun (S.measure t) ξ =
+        exp ((↑t.val : ℂ) * ψ ξ) := S.charFun_eq
+  -- Step 4: Extract the triple by differentiating the convolution semigroup at t=0.
+  -- This requires: vague limit of (μ_t - δ_0)/t as t↓0, identification of the
+  -- limit as ν + σ²δ₀ + b·δ₀', and verification of the Lévy measure conditions.
   sorry
 
 /-! ## Assembly: Lévy-Khintchine representation -/
