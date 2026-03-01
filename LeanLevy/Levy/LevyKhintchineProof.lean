@@ -36,7 +36,7 @@ probability measures, then (sorry) differentiates the convolution semigroup.
 -/
 
 open MeasureTheory MeasureTheory.Measure ProbabilityTheory Complex Filter Topology
-open scoped NNReal ENNReal
+open scoped NNReal ENNReal ComplexOrder
 
 namespace ProbabilityTheory
 
@@ -508,8 +508,8 @@ private theorem isPositiveDefinite_smul {φ : ℝ → ℂ} (hφ : IsPositiveDefi
               ; rw [show starRingEnd ℂ (c i) * c j * (↑a * φ (x i - x j)) =
                   ↑a * (starRingEnd ℂ (c i) * c j * φ (x i - x j)) from by ring]
     simp_rw [← Finset.mul_sum]
-  rw [this, Complex.mul_re, Complex.ofReal_re, Complex.ofReal_im, zero_mul, sub_zero]
-  exact mul_nonneg ha (hφ n x c)
+  rw [this]
+  exact mul_nonneg (by exact_mod_cast ha) (hφ n x c)
 
 /-- A power of a PD function is PD (by Schur product theorem). -/
 private theorem isPositiveDefinite_pow {φ : ℝ → ℂ} (hφ : IsPositiveDefinite φ) :
@@ -530,7 +530,7 @@ private theorem isPositiveDefinite_add {φ ψ : ℝ → ℂ}
     (∑ i : Fin n, ∑ j : Fin n, starRingEnd ℂ (c i) * c j * φ (x i - x j)) +
     (∑ i : Fin n, ∑ j : Fin n, starRingEnd ℂ (c i) * c j * ψ (x i - x j)) := by
     simp_rw [mul_add, Finset.sum_add_distrib]
-  rw [hrw, Complex.add_re]
+  rw [hrw]
   exact add_nonneg (hφ n x c) (hψ n x c)
 
 
