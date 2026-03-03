@@ -4,7 +4,7 @@ Released under MIT license as described in the file LICENSE.
 Authors: LeanLevy Contributors
 -/
 import LeanLevy.Fourier.MeasureFourier
-import Mathlib.MeasureTheory.Measure.CharacteristicFunction
+import Mathlib.MeasureTheory.Measure.CharacteristicFunction.Basic
 import Mathlib.MeasureTheory.Measure.ProbabilityMeasure
 
 /-!
@@ -138,7 +138,10 @@ theorem characteristicFun_positiveSemiDefinite
     simp only [map_mul, ← exp_conj, map_neg, conj_ofReal, conj_I, mul_neg, neg_neg]
     ring
   -- Pull constants into integrals
-  simp_rw [← integral_const_mul]
+  have h_pull : ∀ (r : ℂ) (f : ℝ → ℂ),
+      r * ∫ a, f a ∂(μ : Measure ℝ) = ∫ a, r * f a ∂(μ : Measure ℝ) :=
+    fun r f => (integral_const_mul r f).symm
+  simp_rw [h_pull]
   -- Merge inner sums: for each j, ∑_k ∫ f_jk = ∫ ∑_k f_jk
   simp_rw [(integral_finset_sum Finset.univ (fun k _ => hint _ k)).symm]
   -- Merge outer sum: ∑_j ∫ g_j = ∫ ∑_j g_j

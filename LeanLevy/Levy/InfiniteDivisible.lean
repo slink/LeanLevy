@@ -210,7 +210,7 @@ theorem IsLevyProcess.isInfinitelyDivisible_marginal
   -- Key: n * δ = t
   have hn_ne : (n : ℝ≥0) ≠ 0 := Nat.cast_ne_zero.mpr (by omega)
   have ht_eq : ↑n * δ = t := by
-    simp [hδ_def, mul_div_cancel₀ t hn_ne]
+    rw [hδ_def]; exact mul_div_cancel₀ t hn_ne
   rw [← ht_eq]
   -- Prove by induction: ∀ k, μ.map (X (↑k * δ)) = ν.iteratedConv k
   suffices key : ∀ k : ℕ, μ.map (X (↑k * δ)) = ν.iteratedConv k from key n

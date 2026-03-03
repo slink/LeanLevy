@@ -74,8 +74,10 @@ theorem finiteDimDistribution_restrict (hX : ∀ t, Measurable (X t))
     (finiteDimDistribution X μ I).map (Finset.restrict₂ (π := fun _ => E) hJI) =
       finiteDimDistribution X μ J := by
   simp only [finiteDimDistribution]
-  rw [Measure.map_map (Finset.measurable_restrict₂ hJI) (measurable_finiteDimMap hX I)]
-  rfl
+  rw [Measure.map_map]
+  · rfl
+  · exact Finset.measurable_restrict₂ hJI
+  · exact measurable_finiteDimMap hX I
 
 /-- The finite-dimensional distributions of a measurable process form a
 projective measure family: marginalizing from a larger time set to a smaller

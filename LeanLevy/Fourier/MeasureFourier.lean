@@ -72,6 +72,7 @@ theorem fourierTransform_apply_zero :
   unfold fourierTransform
   simp only [zero_mul, Complex.ofReal_zero, zero_mul, Complex.exp_zero]
   rw [integral_const]
-  simp [Measure.real, ← ennreal_mass, ENNReal.coe_toReal]
+  simp only [Measure.real, ← ennreal_mass, ENNReal.coe_toReal]
+  erw [Algebra.smul_def]; rw [mul_one]; rfl
 
 end MeasureTheory.FiniteMeasure

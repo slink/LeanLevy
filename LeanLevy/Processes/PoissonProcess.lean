@@ -152,10 +152,10 @@ theorem hasStationaryIncrements (h : IsPoissonProcess N rate μ) :
         rw [show (↑ξ : ℂ) * ↑(n : ℝ) * I = ↑(ξ * ↑n) * I from by push_cast; ring,
           norm_exp_ofReal_mul_I]
     rw [PMF.integral_eq_tsum _ _ hint]
-    simp_rw [poissonPMF_toReal, RCLike.real_smul_eq_coe_mul]
+    simp only [poissonPMF_toReal]
     convert poissonCharFun_eq r ξ using 1
     unfold poissonCharFun
-    congr 1; ext n; exact mul_comm _ _
+    congr 1; ext n; erw [Algebra.smul_def]; exact mul_comm _ _
   -- Now prove charFun of N t marginal
   have hcf_Nt : ∀ t : ℝ≥0, ∀ ξ : ℝ,
       charFun (μ.map (fun ω => (N t ω : ℝ))) ξ =
@@ -258,12 +258,12 @@ theorem charFun_poissonMeasure_eq (r : ℝ≥0) (ξ : ℝ) :
         norm_exp_ofReal_mul_I]
   rw [PMF.integral_eq_tsum _ _ hint]
   -- Step 5: Rewrite smul to mul and match poissonCharFun
-  simp_rw [poissonPMF_toReal, RCLike.real_smul_eq_coe_mul]
-  -- Now: ∑' n, ↑(poissonPMFReal r n) * cexp (↑ξ * ↑(n : ℝ) * I) = ...
+  simp only [poissonPMF_toReal]
+  -- Now: ∑' n, poissonPMFReal r n • cexp (↑ξ * ↑(n : ℝ) * I) = ...
   -- Match poissonCharFun (which has the factors in opposite order) via commutativity
   convert poissonCharFun_eq r ξ using 1
   unfold poissonCharFun
-  congr 1; ext n; exact mul_comm _ _
+  congr 1; ext n; erw [Algebra.smul_def]; exact mul_comm _ _
 
 /-- The pushforward measure of `N t` (as ℝ) equals `(poissonMeasure (rate * t)).map Nat.cast`. -/
 private theorem IsPoissonProcess.map_natCast_eq {N : ℝ≥0 → Ω → ℕ} {rate : ℝ≥0} {μ : Measure Ω}

@@ -5,7 +5,7 @@ Authors: LeanLevy Contributors
 -/
 import LeanLevy.Processes.StochasticProcess
 import LeanLevy.Processes.Cadlag
-import Mathlib.MeasureTheory.Measure.CharacteristicFunction
+import Mathlib.MeasureTheory.Measure.CharacteristicFunction.Basic
 import Mathlib.Probability.Independence.CharacteristicFunction
 import Mathlib.Analysis.SpecialFunctions.Complex.Log
 
@@ -198,15 +198,15 @@ private theorem lk_charFun_ne_zero
   intro habs
   have key : ∀ n : ℕ, charFun (μ.map (X (t / (2 ^ n : ℝ≥0)))) ξ = 0 := by
     intro n; induction n with
-    | zero => simp [habs]
+    | zero =>
+      have : t / (2 ^ 0 : ℝ≥0) = t := by exact div_one t
+      rw [this]; exact habs
     | succ n ih =>
       have hsplit : t / (2 ^ n : ℝ≥0) =
           t / (2 ^ (n + 1) : ℝ≥0) + t / (2 ^ (n + 1) : ℝ≥0) := by
         have h2n : (2 : ℝ≥0) ^ (n + 1) ≠ 0 := pow_ne_zero _ (by positivity)
         rw [← add_div, ← two_mul, show (2 : ℝ≥0) ^ (n + 1) = 2 * 2 ^ n from by ring]
-        rw [show (2 : ℝ≥0) * t / (2 * 2 ^ n) = t / 2 ^ n from by
-          rw [mul_div_mul_left _ _ (by positivity : (2 : ℝ≥0) ≠ 0)]
-          ]
+        exact (mul_div_mul_left _ _ (by positivity : (2 : ℝ≥0) ≠ 0)).symm
       rw [hsplit, lk_charFun_mul h hX] at ih
       exact mul_self_eq_zero.mp ih
   have htend : Tendsto (fun n : ℕ => t / (2 ^ n : ℝ≥0)) atTop (𝓝 0) := by
@@ -349,11 +349,13 @@ theorem charFun_eq_exp_mul
     have hN_ne : (N : ℝ≥0) ≠ 0 := Nat.cast_ne_zero.mpr (by omega)
     -- Key identities in ℝ≥0
     have hNnN : (N : ℝ≥0) * (1 / ((n * N : ℕ) : ℝ≥0)) = 1 / (n : ℝ≥0) := by
-      rw [Nat.cast_mul, one_div, one_div, mul_inv, mul_comm (n : ℝ≥0)⁻¹,
+      rw [Nat.cast_mul, one_div, one_div]
+      rw [show (↑n * ↑N : ℝ≥0)⁻¹ = (↑N)⁻¹ * (↑n)⁻¹ from mul_inv_rev _ _,
           ← mul_assoc, mul_inv_cancel₀ hN_ne, one_mul]
     have hnnN : (n : ℝ≥0) * (1 / ((n * N : ℕ) : ℝ≥0)) = 1 / (N : ℝ≥0) := by
-      rw [Nat.cast_mul, one_div, one_div, mul_inv, ← mul_assoc,
-          mul_inv_cancel₀ hn_ne, one_mul]
+      rw [Nat.cast_mul, one_div, one_div]
+      rw [show (↑n * ↑N : ℝ≥0)⁻¹ = (↑N)⁻¹ * (↑n)⁻¹ from mul_inv_rev _ _,
+          mul_comm (↑N : ℝ≥0)⁻¹, ← mul_assoc, mul_inv_cancel₀ hn_ne, one_mul]
     -- Apply hlog_pow in both directions
     have h1 := hlog_pow N (1 / ((n * N : ℕ) : ℝ≥0)) (by rw [hNnN]; exact hn_lt)
     rw [hNnN] at h1
@@ -391,7 +393,8 @@ theorem charFun_eq_exp_mul
       exact (div_eq_of_eq_mul hne hmul.symm).symm
     -- φ(1/n) = φ(N/(nN)) = φ(1/(nN))^N
     have hNnN : (N : ℝ≥0) * (1 / ((n * N : ℕ) : ℝ≥0)) = 1 / (n : ℝ≥0) := by
-      rw [Nat.cast_mul, one_div, one_div, mul_inv, mul_comm (n : ℝ≥0)⁻¹,
+      rw [Nat.cast_mul, one_div, one_div]
+      rw [show (↑n * ↑N : ℝ≥0)⁻¹ = (↑N)⁻¹ * (↑n)⁻¹ from mul_inv_rev _ _,
           ← mul_assoc, mul_inv_cancel₀ hN_ne, one_mul]
     rw [← hNnN, hφ_pow N, hφ_nN, ← exp_nat_mul]; congr 1
     push_cast [Nat.cast_mul]

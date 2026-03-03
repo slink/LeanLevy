@@ -384,7 +384,8 @@ theorem levyLocalCharExponent_eq_charExponent
   induction n with
   | zero =>
     intro ξ' hξ'
-    simp only [pow_zero, div_one]
+    have h1 : (1 : ℝ≥0) / (2 : ℝ≥0) ^ 0 = 1 := by simp [pow_zero]
+    rw [h1, show (2 : ℂ) ^ (0 : ℕ) = 1 from by norm_num, div_one]
     exact (Complex.exp_log (charFun_marginal_ne_zero h hX 1 ξ')).symm
   | succ n ih =>
     intro ξ' hξ'

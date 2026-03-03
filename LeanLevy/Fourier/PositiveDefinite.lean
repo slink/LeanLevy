@@ -273,7 +273,10 @@ theorem of_charFun (μ : ProbabilityMeasure ℝ) :
     have hF_int : Integrable (fun (a : ℝ) => ∑ i, ∑ j,
         starRingEnd ℂ (c i) * c j * exp (↑(x i - x j) * ↑a * I)) (μ : Measure ℝ) :=
       integrable_finset_sum _ fun i _ => integrable_finset_sum _ fun j _ => hint i j
-    simp_rw [← integral_const_mul]
+    have h_pull : ∀ (r : ℂ) (f : ℝ → ℂ),
+        r * ∫ a, f a ∂(μ : Measure ℝ) = ∫ a, r * f a ∂(μ : Measure ℝ) :=
+      fun r f => (integral_const_mul r f).symm
+    simp_rw [h_pull]
     simp_rw [(integral_finset_sum Finset.univ (fun j _ => hint _ j)).symm]
     rw [(integral_finset_sum Finset.univ
       (fun i _ => integrable_finset_sum _ (fun j _ => hint i j))).symm]
