@@ -703,7 +703,10 @@ private theorem pd_kernel_to_posSemidef {n : ℕ} {K : Fin n → Fin n → ℂ}
     (Matrix.of K).PosSemidef := by
   rw [Matrix.posSemidef_iff_dotProduct_mulVec]
   refine ⟨?_, fun c => ?_⟩
-  · -- Hermitianness
+  · -- Hermitianness: conj(K j i) = K i j
+    -- From hK: the quadratic form's .im = 0 for all c. This means the sum
+    -- equals its conjugate. Swapping i↔j in the conjugate gives
+    -- ∑∑ c̄ᵢcⱼ conj(Kⱼᵢ) = ∑∑ c̄ᵢcⱼ Kᵢⱼ for all c, forcing conj(K j i) = K i j.
     sorry
   · change 0 ≤ dotProduct (star c) (mulVec (Matrix.of K) c)
     have key : dotProduct (star c) (mulVec (Matrix.of K) c) =
