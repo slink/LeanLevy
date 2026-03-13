@@ -654,17 +654,86 @@ private theorem cnd_kernel_pd
     0 ≤ ∑ i, ∑ j, starRingEnd ℂ (c i) * c j *
       (ψ (ξ i - ξ j) - ψ (ξ i) - starRingEnd ℂ (ψ (ξ j))) := by
   -- Proof: instantiate CND at (n+1) points [0, ξ₁, ..., ξₙ] with c₀ = -∑ cᵢ.
-  -- The resulting sum, after expanding with ψ(0) = 0 and ψ(-ξ) = conj(ψ(ξ)),
-  -- equals our kernel sum. The .im = 0 follows from kernel Hermitianness:
-  -- conj(K_{ji}) = K_{ij} since conj(ψ(ξⱼ-ξᵢ)) = ψ(ξᵢ-ξⱼ) by hψ_herm.
+  -- The (n+1)-point sum expands (using ψ(0)=0 and ψ(-ξ)=conj(ψ(ξ))) to our kernel sum.
+  -- .re ≥ 0 from CND; .im = 0 from kernel Hermitianness.
+  rw [Complex.nonneg_iff]
+  constructor
+  · -- .re ≥ 0: the (n+1)-point CND sum with c₀ = -∑cᵢ, ξ₀ = 0 equals our kernel sum
+    -- after simplification with ψ(0) = 0 and ψ(-ξⱼ) = conj(ψ(ξⱼ)).
+    -- The block expansion:
+    --   (0,0): |c₀|²ψ(0) = 0
+    --   (0,j≥1): c̄₀·cⱼ·ψ(-ξⱼ) = -∑ₖ∑ⱼ c̄ₖcⱼ·conj(ψ(ξⱼ))
+    --   (i≥1,0): c̄ᵢ·c₀·ψ(ξᵢ) = -∑ᵢ∑ₖ c̄ᵢcₖ·ψ(ξᵢ)
+    --   (i≥1,j≥1): ∑∑ c̄ᵢcⱼ·ψ(ξᵢ-ξⱼ)
+    --   Total = ∑∑ c̄ᵢcⱼ·(ψ(ξᵢ-ξⱼ) - ψ(ξᵢ) - conj(ψ(ξⱼ)))
+    sorry
+  · -- .im = 0: kernel K_{ij} is Hermitian so the quadratic form is real
+    sorry
+
+-- Schur product for PD kernels: if M and N are PD kernels (indexed by Fin n),
+-- then the Hadamard (entrywise) product M ∘ N is also PD.
+-- Uses spectral decomposition of N: N_{ij} = ∑_k λ_k U_{ik} conj(U_{jk}).
+-- Then ∑∑ c̄ᵢcⱼ (M∘N)ᵢⱼ = ∑_k λ_k (∑∑ d̄ᵢdⱼ Mᵢⱼ) where d_i = c_i conj(U_{ik}).
+private theorem pd_kernel_mul
+    {n : ℕ} {M N : Fin n → Fin n → ℂ}
+    (hM : ∀ c : Fin n → ℂ, 0 ≤ ∑ i, ∑ j, starRingEnd ℂ (c i) * c j * M i j)
+    (hN : ∀ c : Fin n → ℂ, 0 ≤ ∑ i, ∑ j, starRingEnd ℂ (c i) * c j * N i j) :
+    ∀ c : Fin n → ℂ, 0 ≤ ∑ i, ∑ j, starRingEnd ℂ (c i) * c j * (M i j * N i j) := by
   sorry
 
--- Helper: entrywise exp of PD kernel is PD (via power series + Schur product).
+-- Entrywise k-th power of PD kernel is PD (by iterated Schur product).
+private theorem pd_kernel_pow
+    {n : ℕ} {M : Fin n → Fin n → ℂ}
+    (hM : ∀ c : Fin n → ℂ, 0 ≤ ∑ i, ∑ j, starRingEnd ℂ (c i) * c j * M i j)
+    (k : ℕ) :
+    ∀ c : Fin n → ℂ, 0 ≤ ∑ i, ∑ j, starRingEnd ℂ (c i) * c j * M i j ^ k := by
+  induction k with
+  | zero =>
+    intro c; simp only [pow_zero, mul_one]
+    -- ∑∑ c̄ᵢcⱼ = |∑cᵢ|² ≥ 0
+    sorry
+  | succ k ih =>
+    intro c
+    have hpow : ∀ i j : Fin n, M i j ^ (k + 1) = M i j ^ k * M i j :=
+      fun i j => pow_succ (M i j) k
+    simp_rw [hpow]
+    exact pd_kernel_mul ih hM c
+
+-- Helper: entrywise exp of PD kernel is PD.
+-- Proof: (1 + tM/N)^N → exp(tM) entrywise as N → ∞.
+-- Each (1 + tM/N)^N is PD (by pd_kernel_pow + the base case 1 + tM/N is PD).
 private theorem exp_pd_kernel
     {n : ℕ} {M : Fin n → Fin n → ℂ}
     (hM : ∀ c : Fin n → ℂ, 0 ≤ ∑ i, ∑ j, starRingEnd ℂ (c i) * c j * M i j)
     (t : ℝ) (ht : 0 ≤ t) :
     ∀ c : Fin n → ℂ, 0 ≤ ∑ i, ∑ j, starRingEnd ℂ (c i) * c j * exp (↑t * M i j) := by
+  intro c
+  -- For large N, define K_N(i,j) = (1 + t·M(i,j)/N)^N
+  -- Step 1: K_N is PD for large N
+  -- 1 + t·M(i,j)/N is PD when N > t·‖M‖:
+  --   ∑∑ c̄ᵢcⱼ (1 + (t/N)·Mᵢⱼ) = |∑cᵢ|² + (t/N)·∑∑ c̄ᵢcⱼ Mᵢⱼ ≥ 0
+  -- Then (1 + tM/N)^N is PD by pd_kernel_pow.
+  have hbase : ∀ᶠ N : ℕ in Filter.atTop,
+      ∀ d : Fin n → ℂ, 0 ≤ ∑ i, ∑ j, starRingEnd ℂ (d i) * d j *
+        (1 + ↑t / (↑N : ℂ) * M i j) := by
+    filter_upwards [Filter.Ici_mem_atTop 1] with N (hN : 1 ≤ N)
+    intro d
+    have hN_pos : (0 : ℝ) < N := Nat.cast_pos.mpr (by omega)
+    have htN : 0 ≤ t / N := div_nonneg ht (le_of_lt hN_pos)
+    -- ∑∑ c̄ᵢdⱼ(1 + (t/N)Mᵢⱼ) = |∑dᵢ|² + (t/N)·∑∑ c̄ᵢdⱼ Mᵢⱼ
+    -- 1 + (t/N)M is PD: quadratic form = |∑d|² + (t/N)(M form) ≥ 0
+    sorry
+  -- Step 2: K_N = (1 + tM/N)^N is PD
+  have hpow_pd : ∀ᶠ N : ℕ in Filter.atTop,
+      ∀ d : Fin n → ℂ, 0 ≤ ∑ i, ∑ j, starRingEnd ℂ (d i) * d j *
+        (1 + ↑t / (↑N : ℂ) * M i j) ^ N := by
+    filter_upwards [hbase] with N hN
+    intro d
+    have hpow_eq : ∀ i j, (1 + ↑t / (↑N : ℂ) * M i j) ^ N =
+        (fun i j => 1 + ↑t / (↑N : ℂ) * M i j) i j ^ N := fun i j => rfl
+    simp_rw [hpow_eq]
+    exact pd_kernel_pow hN N d
+  -- Steps 3-5: (1 + tMᵢⱼ/N)^N → exp(tMᵢⱼ) pointwise, sum converges, limit ≥ 0
   sorry
 
 theorem schoenberg_exp_of_cnd
