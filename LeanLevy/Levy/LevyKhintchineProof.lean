@@ -644,20 +644,19 @@ which is `IsPositiveDefinite.mul` (currently sorry'd in PositiveDefinite.lean).
 
 * Requires `IsPositiveDefinite.mul` (Schur product) and PSD matrix infrastructure
   not yet available in this project. -/
--- Helper: CND Hermitian symmetry. ψ(-ξ) = conj(ψ(ξ)) for CND ψ with ψ(0) = 0.
--- Uses CND with 3 points [0, ξ, -ξ] and carefully chosen zero-sum weights.
-private theorem cnd_conj_neg
-    {ψ : ℝ → ℂ} (hψ_cnd : IsConditionallyNegativeDefinite ψ) (hψ_zero : ψ 0 = 0)
-    (ξ : ℝ) : ψ (-ξ) = starRingEnd ℂ (ψ ξ) := by
-  sorry
-
 -- Helper: The CND kernel M_{ij} = ψ(ξᵢ-ξⱼ) - ψ(ξᵢ) - conj(ψ(ξⱼ)) is PD.
 -- Proved by instantiating CND at n+1 points [0, ξ₁, ..., ξₙ] with weight c₀ = -∑ cᵢ.
+-- Requires Hermitian symmetry ψ(-ξ) = conj(ψ(ξ)) to relate ψ(-ξⱼ) → conj(ψ(ξⱼ)).
 private theorem cnd_kernel_pd
     {ψ : ℝ → ℂ} (hψ_cnd : IsConditionallyNegativeDefinite ψ) (hψ_zero : ψ 0 = 0)
+    (hψ_herm : ∀ ξ, ψ (-ξ) = starRingEnd ℂ (ψ ξ))
     (n : ℕ) (ξ : Fin n → ℝ) (c : Fin n → ℂ) :
     0 ≤ ∑ i, ∑ j, starRingEnd ℂ (c i) * c j *
       (ψ (ξ i - ξ j) - ψ (ξ i) - starRingEnd ℂ (ψ (ξ j))) := by
+  -- Proof: instantiate CND at (n+1) points [0, ξ₁, ..., ξₙ] with c₀ = -∑ cᵢ.
+  -- The resulting sum, after expanding with ψ(0) = 0 and ψ(-ξ) = conj(ψ(ξ)),
+  -- equals our kernel sum. The .im = 0 follows from kernel Hermitianness:
+  -- conj(K_{ji}) = K_{ij} since conj(ψ(ξⱼ-ξᵢ)) = ψ(ξᵢ-ξⱼ) by hψ_herm.
   sorry
 
 -- Helper: entrywise exp of PD kernel is PD (via power series + Schur product).
@@ -671,11 +670,12 @@ private theorem exp_pd_kernel
 theorem schoenberg_exp_of_cnd
     {ψ : ℝ → ℂ} (hψ_cont : Continuous ψ) (hψ_zero : ψ 0 = 0)
     (hψ_cnd : IsConditionallyNegativeDefinite ψ)
+    (hψ_herm : ∀ ξ, ψ (-ξ) = starRingEnd ℂ (ψ ξ))
     (t : ℝ) (ht : 0 < t) :
     IsPositiveDefinite (fun ξ => exp (↑t * ψ ξ)) := by
   intro n x c
   -- The kernel M_{ij} = ψ(x_i - x_j) - ψ(x_i) - conj(ψ(x_j)) is PD
-  have hM := fun d => cnd_kernel_pd hψ_cnd hψ_zero n x d
+  have hM := fun d => cnd_kernel_pd hψ_cnd hψ_zero hψ_herm n x d
   -- exp(tM) is PD
   have hexpM := exp_pd_kernel hM t (le_of_lt ht)
   -- Factorization: exp(t·ψ(x_i-x_j)) = exp(t·ψ(x_i))·exp(t·conj(ψ(x_j)))·exp(t·M_{ij})
@@ -747,18 +747,19 @@ end ConvolutionSemigroup
 /-- Build a convolution semigroup from a CND exponent via Schoenberg + Bochner. -/
 noncomputable def convolutionSemigroupOfCND
     {ψ : ℝ → ℂ} (hψ_cont : Continuous ψ) (hψ_zero : ψ 0 = 0)
-    (hψ_cnd : IsConditionallyNegativeDefinite ψ) :
+    (hψ_cnd : IsConditionallyNegativeDefinite ψ)
+    (hψ_herm : ∀ ξ, ψ (-ξ) = starRingEnd ℂ (ψ ξ)) :
     ConvolutionSemigroup where
   exponent := ψ
   exponent_continuous := hψ_cont
   exponent_zero := hψ_zero
   measure := fun ⟨t, ht⟩ =>
     (bochner _ (by fun_prop : Continuous (fun ξ => exp ((↑t : ℂ) * ψ ξ)))
-      (schoenberg_exp_of_cnd hψ_cont hψ_zero hψ_cnd t ht)
+      (schoenberg_exp_of_cnd hψ_cont hψ_zero hψ_cnd hψ_herm t ht)
       (by rw [hψ_zero, mul_zero, exp_zero])).choose
   charFun_eq := fun ⟨t, ht⟩ ξ =>
     (bochner _ (by fun_prop : Continuous (fun ξ => exp ((↑t : ℂ) * ψ ξ)))
-      (schoenberg_exp_of_cnd hψ_cont hψ_zero hψ_cnd t ht)
+      (schoenberg_exp_of_cnd hψ_cont hψ_zero hψ_cnd hψ_herm t ht)
       (by rw [hψ_zero, mul_zero, exp_zero])).choose_spec ξ
 
 /-! ## Sub-lemma 4: Integral representation (deepest) -/
@@ -775,13 +776,14 @@ has the Lévy-Khintchine integral representation.
 Steps 1–3 are complete. Step 4 (measure differentiation) is research-level and remains sorry'd. -/
 theorem levyKhintchine_of_cnd
     {ψ : ℝ → ℂ} (hψ_cont : Continuous ψ) (hψ_zero : ψ 0 = 0)
-    (hψ_cnd : IsConditionallyNegativeDefinite ψ) :
+    (hψ_cnd : IsConditionallyNegativeDefinite ψ)
+    (hψ_herm : ∀ ξ, ψ (-ξ) = starRingEnd ℂ (ψ ξ)) :
     ∃ T : LevyKhintchineTriple, ∀ ξ : ℝ,
       ψ ξ = ↑T.drift * ↑ξ * I
         - ↑(T.gaussianVariance : ℝ) * ↑ξ ^ 2 / 2
         + ∫ x, levyCompensatedIntegrand ξ x ∂T.levyMeasure := by
   -- Steps 1–2: Build the convolution semigroup via Schoenberg + Bochner
-  set S := convolutionSemigroupOfCND hψ_cont hψ_zero hψ_cnd
+  set S := convolutionSemigroupOfCND hψ_cont hψ_zero hψ_cnd hψ_herm
   -- Step 3: The semigroup satisfies charFun(μ_t)(ξ) = exp(tψ(ξ))
   have _hcharfun : ∀ (t : {t : ℝ // 0 < t}) (ξ : ℝ),
       MeasureTheory.ProbabilityMeasure.characteristicFun (S.measure t) ξ =
@@ -815,7 +817,11 @@ theorem levyKhintchine_representation
   -- Sub-lemma 3: ψ is conditionally negative definite
   have hψ_cnd := h.isConditionallyNegativeDefinite_log hψ_cont hψ_zero hψ_exp
   -- Sub-lemma 4: CND function has LK integral representation
-  obtain ⟨T, hT⟩ := levyKhintchine_of_cnd hψ_cont hψ_zero hψ_cnd
+  -- Hermitian symmetry: ψ(-ξ) = conj(ψ(ξ)) from charFun(-ξ) = conj(charFun(ξ))
+  -- Follows from exp(ψ(-ξ)) = charFun(-ξ) = conj(charFun(ξ)) = exp(conj(ψ(ξ)))
+  -- and injectivity of exp on the strip (continuous log stays in strip with ψ(0)=0).
+  have hψ_herm : ∀ ξ, ψ (-ξ) = starRingEnd ℂ (ψ ξ) := by sorry
+  obtain ⟨T, hT⟩ := levyKhintchine_of_cnd hψ_cont hψ_zero hψ_cnd hψ_herm
   -- Combine: charFun μ ξ = exp(ψ ξ) = exp(ibξ - σ²ξ²/2 + ∫ f dν)
   exact ⟨T, fun ξ => by rw [hψ_exp ξ, hT ξ]⟩
 
