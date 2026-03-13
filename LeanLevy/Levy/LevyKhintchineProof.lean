@@ -644,12 +644,67 @@ which is `IsPositiveDefinite.mul` (currently sorry'd in PositiveDefinite.lean).
 
 * Requires `IsPositiveDefinite.mul` (Schur product) and PSD matrix infrastructure
   not yet available in this project. -/
+-- Helper: CND Hermitian symmetry. ψ(-ξ) = conj(ψ(ξ)) for CND ψ with ψ(0) = 0.
+-- Uses CND with 3 points [0, ξ, -ξ] and carefully chosen zero-sum weights.
+private theorem cnd_conj_neg
+    {ψ : ℝ → ℂ} (hψ_cnd : IsConditionallyNegativeDefinite ψ) (hψ_zero : ψ 0 = 0)
+    (ξ : ℝ) : ψ (-ξ) = starRingEnd ℂ (ψ ξ) := by
+  sorry
+
+-- Helper: The CND kernel M_{ij} = ψ(ξᵢ-ξⱼ) - ψ(ξᵢ) - conj(ψ(ξⱼ)) is PD.
+-- Proved by instantiating CND at n+1 points [0, ξ₁, ..., ξₙ] with weight c₀ = -∑ cᵢ.
+private theorem cnd_kernel_pd
+    {ψ : ℝ → ℂ} (hψ_cnd : IsConditionallyNegativeDefinite ψ) (hψ_zero : ψ 0 = 0)
+    (n : ℕ) (ξ : Fin n → ℝ) (c : Fin n → ℂ) :
+    0 ≤ ∑ i, ∑ j, starRingEnd ℂ (c i) * c j *
+      (ψ (ξ i - ξ j) - ψ (ξ i) - starRingEnd ℂ (ψ (ξ j))) := by
+  sorry
+
+-- Helper: entrywise exp of PD kernel is PD (via power series + Schur product).
+private theorem exp_pd_kernel
+    {n : ℕ} {M : Fin n → Fin n → ℂ}
+    (hM : ∀ c : Fin n → ℂ, 0 ≤ ∑ i, ∑ j, starRingEnd ℂ (c i) * c j * M i j)
+    (t : ℝ) (ht : 0 ≤ t) :
+    ∀ c : Fin n → ℂ, 0 ≤ ∑ i, ∑ j, starRingEnd ℂ (c i) * c j * exp (↑t * M i j) := by
+  sorry
+
 theorem schoenberg_exp_of_cnd
     {ψ : ℝ → ℂ} (hψ_cont : Continuous ψ) (hψ_zero : ψ 0 = 0)
     (hψ_cnd : IsConditionallyNegativeDefinite ψ)
     (t : ℝ) (ht : 0 < t) :
     IsPositiveDefinite (fun ξ => exp (↑t * ψ ξ)) := by
-  sorry
+  intro n x c
+  -- The kernel M_{ij} = ψ(x_i - x_j) - ψ(x_i) - conj(ψ(x_j)) is PD
+  have hM := fun d => cnd_kernel_pd hψ_cnd hψ_zero n x d
+  -- exp(tM) is PD
+  have hexpM := exp_pd_kernel hM t (le_of_lt ht)
+  -- Factorization: exp(t·ψ(x_i-x_j)) = exp(t·ψ(x_i))·exp(t·conj(ψ(x_j)))·exp(t·M_{ij})
+  -- Use d_i = c_i · exp(t · conj(ψ(x_i))) so conj(d_i) = conj(c_i) · exp(t · ψ(x_i))
+  set d : Fin n → ℂ := fun i => c i * exp (↑t * starRingEnd ℂ (ψ (x i)))
+  suffices hsuff : ∀ i j : Fin n,
+      starRingEnd ℂ (c i) * c j * exp (↑t * ψ (x i - x j)) =
+      starRingEnd ℂ (d i) * d j *
+        exp (↑t * (ψ (x i - x j) - ψ (x i) - starRingEnd ℂ (ψ (x j)))) by
+    simp_rw [hsuff]
+    exact hexpM d
+  intro i j
+  simp only [d, map_mul]
+  -- conj(exp(t * conj(ψ(x i)))) = exp(conj(t * conj(ψ(x i)))) = exp(t * ψ(x i))
+  rw [show starRingEnd ℂ (exp (↑t * starRingEnd ℂ (ψ (x i)))) =
+      exp (↑t * ψ (x i)) from by
+    rw [← Complex.exp_conj]; congr 1
+    simp [starRingEnd_self_apply, Complex.conj_ofReal]]
+  -- Now: conj(c i) * exp(t*ψ(x i)) * (c j * exp(t*conj(ψ(x j)))) * exp(t*M_ij)
+  --    = conj(c i) * c j * exp(t*ψ(x i - x j))
+  rw [show starRingEnd ℂ (c i) * exp (↑t * ψ (x i)) *
+      (c j * exp (↑t * starRingEnd ℂ (ψ (x j)))) *
+      exp (↑t * (ψ (x i - x j) - ψ (x i) - starRingEnd ℂ (ψ (x j)))) =
+    starRingEnd ℂ (c i) * c j *
+      (exp (↑t * ψ (x i)) * exp (↑t * starRingEnd ℂ (ψ (x j))) *
+        exp (↑t * (ψ (x i - x j) - ψ (x i) - starRingEnd ℂ (ψ (x j))))) from by ring]
+  congr 1
+  rw [← exp_add, ← exp_add]
+  congr 1; ring
 
 /-! ## Convolution semigroup structure -/
 
