@@ -691,7 +691,11 @@ private theorem pd_kernel_pow
   | zero =>
     intro c; simp only [pow_zero, mul_one]
     -- ∑∑ c̄ᵢcⱼ = |∑cᵢ|² ≥ 0
-    sorry
+    -- Factor: ∑_i ∑_j conj(c_i) * c_j = (∑ conj(c_i)) * (∑ c_j) = conj(∑ c_i) * ∑ c_j
+    rw [show ∑ i : Fin n, ∑ j : Fin n, starRingEnd ℂ (c i) * c j =
+        starRingEnd ℂ (∑ i, c i) * ∑ j, c j from by
+      rw [_root_.map_sum]; simp_rw [Finset.sum_mul, Finset.mul_sum]]
+    exact star_mul_self_nonneg _
   | succ k ih =>
     intro c
     have hpow : ∀ i j : Fin n, M i j ^ (k + 1) = M i j ^ k * M i j :=
@@ -733,8 +737,26 @@ private theorem exp_pd_kernel
         (fun i j => 1 + ↑t / (↑N : ℂ) * M i j) i j ^ N := fun i j => rfl
     simp_rw [hpow_eq]
     exact pd_kernel_pow hN N d
-  -- Steps 3-5: (1 + tMᵢⱼ/N)^N → exp(tMᵢⱼ) pointwise, sum converges, limit ≥ 0
-  sorry
+  -- Step 3: pointwise convergence (1 + tMᵢⱼ/N)^N → exp(tMᵢⱼ)
+  have hlim : ∀ i j : Fin n, Filter.Tendsto
+      (fun N : ℕ => starRingEnd ℂ (c i) * c j * (1 + ↑t / (↑N : ℂ) * M i j) ^ N)
+      Filter.atTop (nhds (starRingEnd ℂ (c i) * c j * exp (↑t * M i j))) := by
+    intro i j
+    apply Filter.Tendsto.const_mul
+    exact (Complex.tendsto_one_add_div_pow_exp (↑t * M i j)).congr fun N => by
+      by_cases hN : (N : ℕ) = 0
+      · simp [hN]
+      · have hNne : (↑N : ℂ) ≠ 0 := Nat.cast_ne_zero.mpr hN
+        congr 1; field_simp
+  -- Step 4: sum convergence (finite sum + pointwise → sum converges)
+  have hsum_lim : Filter.Tendsto
+      (fun N : ℕ => ∑ i : Fin n, ∑ j : Fin n, starRingEnd ℂ (c i) * c j *
+        (1 + ↑t / (↑N : ℂ) * M i j) ^ N)
+      Filter.atTop
+      (nhds (∑ i : Fin n, ∑ j : Fin n, starRingEnd ℂ (c i) * c j * exp (↑t * M i j))) :=
+    tendsto_finset_sum _ fun i _ => tendsto_finset_sum _ fun j _ => hlim i j
+  -- Step 5: limit of nonneg is nonneg
+  exact ge_of_tendsto hsum_lim (by filter_upwards [hpow_pd] with N hN; exact hN c)
 
 theorem schoenberg_exp_of_cnd
     {ψ : ℝ → ℂ} (hψ_cont : Continuous ψ) (hψ_zero : ψ 0 = 0)
