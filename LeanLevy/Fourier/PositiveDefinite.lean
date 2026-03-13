@@ -233,7 +233,44 @@ Proof sketch: Take `n = 2`, `x = (0, ξ)`, `c = (1, -φ(ξ)/‖φ(ξ)‖)`. The 
 which follows from the PD condition. -/
 theorem norm_le_one (hφ : IsPositiveDefinite φ) (h0 : φ 0 = 1) (ξ : ℝ) :
     ‖φ ξ‖ ≤ 1 := by
-  sorry
+  by_cases hξ : φ ξ = 0
+  · simp [hξ]
+  have hnorm_pos : (0 : ℝ) < ‖φ ξ‖ := norm_pos_iff.mpr hξ
+  have hpd := hφ.re_nonneg 2 ![0, ξ] ![↑‖φ ξ‖, -(φ ξ)]
+  simp only [Fin.sum_univ_two,
+    show (![0, ξ] : Fin 2 → ℝ) 0 = 0 from rfl,
+    show (![0, ξ] : Fin 2 → ℝ) 1 = ξ from rfl,
+    show (![↑‖φ ξ‖, -(φ ξ)] : Fin 2 → ℂ) 0 = ↑‖φ ξ‖ from rfl,
+    show (![↑‖φ ξ‖, -(φ ξ)] : Fin 2 → ℂ) 1 = -(φ ξ) from rfl] at hpd
+  simp only [sub_self, sub_zero, zero_sub, h0, hφ.conj_neg ξ, map_neg,
+    Complex.conj_ofReal, mul_neg, neg_mul, neg_neg, mul_one] at hpd
+  -- hpd : 0 ≤ (↑‖φ ξ‖ * ↑‖φ ξ‖ + -(↑‖φ ξ‖ * φ ξ * conj(φ ξ))
+  --     + (-(conj(φ ξ) * ↑‖φ ξ‖ * φ ξ) + conj(φ ξ) * φ ξ)).re
+  -- Replace conj*z products with normSq = ‖z‖²
+  have hns : φ ξ * starRingEnd ℂ (φ ξ) = ↑(Complex.normSq (φ ξ)) := by
+    rw [← Complex.mul_conj]
+  have hns' : starRingEnd ℂ (φ ξ) * φ ξ = ↑(Complex.normSq (φ ξ)) :=
+    Complex.normSq_eq_conj_mul_self.symm
+  have hns_eq : (Complex.normSq (φ ξ) : ℝ) = ‖φ ξ‖ ^ 2 := Complex.normSq_eq_norm_sq _
+  -- Reassociate and replace in hpd
+  have hrw1 : ↑‖φ ξ‖ * φ ξ * starRingEnd ℂ (φ ξ) =
+      ↑‖φ ξ‖ * ↑(Complex.normSq (φ ξ)) := by rw [mul_assoc, hns]
+  have hrw2 : starRingEnd ℂ (φ ξ) * ↑‖φ ξ‖ * φ ξ =
+      ↑‖φ ξ‖ * ↑(Complex.normSq (φ ξ)) := by
+    rw [show starRingEnd ℂ (φ ξ) * ↑‖φ ξ‖ * φ ξ =
+        ↑‖φ ξ‖ * (starRingEnd ℂ (φ ξ) * φ ξ) from by ring, hns']
+  rw [hrw1, hrw2, hns'] at hpd
+  -- Now hpd only involves ↑‖φ ξ‖ and ↑(normSq (φ ξ)) — all real-valued
+  -- All terms are real-valued ofReal casts, so .re extracts the real part cleanly
+  -- After rewriting, hpd has form: 0 ≤ (↑a * ↑b + -(↑a * ↑c) + (-(↑a * ↑c) + ↑c)).re
+  -- where a = ‖φ ξ‖, c = normSq(φ ξ). These are all ofReal products.
+  -- Extract .re from each ofReal product
+  simp only [Complex.add_re, Complex.neg_re, Complex.ofReal_re,
+    Complex.mul_re, Complex.ofReal_im, mul_zero, sub_zero] at hpd
+  rw [hns_eq] at hpd
+  -- hpd : 0 ≤ ‖φ ξ‖ * ‖φ ξ‖ + -(‖φ ξ‖ * ‖φ ξ‖ ^ 2) + (-(‖φ ξ‖ * ‖φ ξ‖ ^ 2) + ‖φ ξ‖ ^ 2)
+  -- = 2‖φ ξ‖²(1 - ‖φ ξ‖). Since ‖φ ξ‖ > 0, we get ‖φ ξ‖ ≤ 1.
+  nlinarith [sq_nonneg ‖φ ξ‖, sq_nonneg (‖φ ξ‖ - 1)]
 
 /-- The characteristic function of a probability measure is positive definite. -/
 theorem of_charFun (μ : ProbabilityMeasure ℝ) :
