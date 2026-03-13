@@ -668,7 +668,30 @@ private theorem cnd_kernel_pd
     --   Total = ∑∑ c̄ᵢcⱼ·(ψ(ξᵢ-ξⱼ) - ψ(ξᵢ) - conj(ψ(ξⱼ)))
     sorry
   · -- .im = 0: kernel K_{ij} is Hermitian so the quadratic form is real
-    sorry
+    -- K_{ij} = ψ(ξᵢ-ξⱼ) - ψ(ξᵢ) - conj(ψ(ξⱼ))
+    -- conj(K_{ji}) = conj(ψ(ξⱼ-ξᵢ)) - conj(ψ(ξⱼ)) - ψ(ξᵢ) = ψ(ξᵢ-ξⱼ) - conj(ψ(ξⱼ)) - ψ(ξᵢ) = K_{ij}
+    have hK_herm : ∀ i j : Fin n,
+        starRingEnd ℂ (ψ (ξ i - ξ j) - ψ (ξ i) - starRingEnd ℂ (ψ (ξ j))) =
+        ψ (ξ j - ξ i) - ψ (ξ j) - starRingEnd ℂ (ψ (ξ i)) := by
+      intro i j
+      simp only [map_sub, starRingEnd_self_apply]
+      -- Goal: conj(ψ(ξᵢ-ξⱼ)) - conj(ψ(ξᵢ)) - ψ(ξⱼ) = ψ(ξⱼ-ξᵢ) - ψ(ξⱼ) - conj(ψ(ξᵢ))
+      -- Use hψ_herm: conj(ψ(a)) = ψ(-a)
+      rw [← hψ_herm (ξ i - ξ j), show -(ξ i - ξ j) = ξ j - ξ i from by ring]; ring
+    -- conj(∑∑ c̄ᵢcⱼ Kᵢⱼ) = ∑∑ c̄ⱼcᵢ Kⱼᵢ [swap conj inside] = ∑∑ c̄ᵢcⱼ Kᵢⱼ [swap i↔j]
+    have hself_conj : starRingEnd ℂ (∑ i, ∑ j, starRingEnd ℂ (c i) * c j *
+        (ψ (ξ i - ξ j) - ψ (ξ i) - starRingEnd ℂ (ψ (ξ j)))) =
+      ∑ i, ∑ j, starRingEnd ℂ (c i) * c j *
+        (ψ (ξ i - ξ j) - ψ (ξ i) - starRingEnd ℂ (ψ (ξ j))) := by
+      simp only [_root_.map_sum, map_mul, starRingEnd_self_apply, hK_herm]
+      -- Goal: ∑_i ∑_j c_i * conj(c_j) * K_{ji} = ∑_i ∑_j conj(c_i) * c_j * K_{ij}
+      -- Swap i ↔ j in the LHS using Finset.sum_comm for the outer pair
+      rw [Finset.sum_comm]
+      congr 1; ext i; congr 1; ext j; ring
+    -- z = conj(z) implies z.im = 0
+    have h := congr_arg Complex.im hself_conj
+    simp only [Complex.conj_im, neg_eq_iff_eq_neg] at h
+    linarith
 
 -- Schur product for PD kernels: if M and N are PD kernels (indexed by Fin n),
 -- then the Hadamard (entrywise) product M ∘ N is also PD.
