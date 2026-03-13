@@ -697,12 +697,79 @@ private theorem cnd_kernel_pd
 -- then the Hadamard (entrywise) product M ∘ N is also PD.
 -- Uses spectral decomposition of N: N_{ij} = ∑_k λ_k U_{ik} conj(U_{jk}).
 -- Then ∑∑ c̄ᵢcⱼ (M∘N)ᵢⱼ = ∑_k λ_k (∑∑ d̄ᵢdⱼ Mᵢⱼ) where d_i = c_i conj(U_{ik}).
+open Matrix in
+private theorem pd_kernel_to_posSemidef {n : ℕ} {K : Fin n → Fin n → ℂ}
+    (hK : ∀ c : Fin n → ℂ, 0 ≤ ∑ i, ∑ j, starRingEnd ℂ (c i) * c j * K i j) :
+    (Matrix.of K).PosSemidef := by
+  rw [Matrix.posSemidef_iff_dotProduct_mulVec]
+  refine ⟨?_, fun c => ?_⟩
+  · -- Hermitianness
+    sorry
+  · change 0 ≤ dotProduct (star c) (mulVec (Matrix.of K) c)
+    have key : dotProduct (star c) (mulVec (Matrix.of K) c) =
+        ∑ i, ∑ j, starRingEnd ℂ (c i) * c j * K i j := by
+      simp only [dotProduct, mulVec, Matrix.of_apply, Pi.star_apply, RCLike.star_def]
+      congr 1; ext i; rw [Finset.mul_sum]; congr 1; ext j; ring
+    rw [key]; exact hK c
+
 private theorem pd_kernel_mul
     {n : ℕ} {M N : Fin n → Fin n → ℂ}
     (hM : ∀ c : Fin n → ℂ, 0 ≤ ∑ i, ∑ j, starRingEnd ℂ (c i) * c j * M i j)
     (hN : ∀ c : Fin n → ℂ, 0 ≤ ∑ i, ∑ j, starRingEnd ℂ (c i) * c j * N i j) :
     ∀ c : Fin n → ℂ, 0 ≤ ∑ i, ∑ j, starRingEnd ℂ (c i) * c j * (M i j * N i j) := by
-  sorry
+  open Matrix in
+  intro c
+  -- Convert N to PSD matrix and get spectral decomposition
+  have hN_psd := pd_kernel_to_posSemidef hN
+  have hN_herm := hN_psd.isHermitian
+  set B : Matrix (Fin n) (Fin n) ℂ := Matrix.of N
+  set ev := hN_herm.eigenvalues
+  set U : Matrix (Fin n) (Fin n) ℂ := ↑hN_herm.eigenvectorUnitary
+  have hev_nonneg : ∀ k, 0 ≤ ev k := fun k => hN_psd.eigenvalues_nonneg k
+  -- Spectral decomposition: N i j = B i j = ∑_k (ev k : ℂ) * U i k * conj(U j k)
+  have hN_spec : ∀ i j : Fin n, N i j = ∑ k, (↑(ev k) : ℂ) * U i k *
+      starRingEnd ℂ (U j k) := by
+    intro i j
+    have h := hN_herm.spectral_theorem
+    have hBij : B i j = ((Unitary.conjStarAlgAut ℂ _) hN_herm.eigenvectorUnitary
+        (Matrix.diagonal (RCLike.ofReal ∘ hN_herm.eigenvalues))) i j :=
+      congr_fun (congr_fun h i) j
+    rw [show N i j = B i j from rfl, hBij, Unitary.conjStarAlgAut_apply, Matrix.mul_apply]
+    congr 1; ext k
+    simp only [Matrix.star_apply, star_def, Matrix.mul_apply, Matrix.diagonal_apply,
+      Function.comp]
+    have key := Fintype.sum_eq_single k
+      (show ∀ l : Fin n, l ≠ k →
+        (↑hN_herm.eigenvectorUnitary : Matrix _ _ ℂ) i l *
+        (if l = k then (↑(hN_herm.eigenvalues l) : ℂ) else 0) = 0
+      from fun l hlk => by simp [hlk])
+    calc _ = (↑hN_herm.eigenvectorUnitary : Matrix _ _ ℂ) i k *
+            (if k = k then (↑(hN_herm.eigenvalues k) : ℂ) else 0) *
+            starRingEnd ℂ ((↑hN_herm.eigenvectorUnitary : Matrix _ _ ℂ) j k) := by
+              exact congrArg (· * _) key
+         _ = (↑(ev k) : ℂ) * U i k * starRingEnd ℂ (U j k) := by
+              simp only [ite_true, U, ev]; ring
+  -- Weights: d k i = c i * conj(U i k)
+  set d : Fin n → Fin n → ℂ := fun k i => c i * starRingEnd ℂ (U i k)
+  -- The product form = ∑_k ev_k * (M form with d_k)
+  have hsuff : ∑ i, ∑ j, starRingEnd ℂ (c i) * c j * (M i j * N i j) =
+      ∑ k, (↑(ev k) : ℂ) *
+        (∑ i, ∑ j, starRingEnd ℂ (d k i) * d k j * M i j) := by
+    simp_rw [hN_spec]
+    simp_rw [Finset.mul_sum]
+    conv_lhs =>
+      arg 2; ext i; rw [Finset.sum_comm]
+    rw [Finset.sum_comm]
+    congr 1; ext k
+    have hterm : ∀ i j : Fin n,
+        starRingEnd ℂ (c i) * c j * (M i j * (↑(ev k) * U i k * starRingEnd ℂ (U j k)))
+        = ↑(ev k) * (starRingEnd ℂ (d k i) * d k j * M i j) := by
+      intro i j; simp only [d, map_mul, starRingEnd_self_apply]; ring
+    simp_rw [hterm]
+  rw [hsuff]
+  apply Finset.sum_nonneg
+  intro k _
+  exact mul_nonneg (by exact_mod_cast hev_nonneg k) (hM (d k))
 
 -- Entrywise k-th power of PD kernel is PD (by iterated Schur product).
 private theorem pd_kernel_pow
