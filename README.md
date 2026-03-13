@@ -78,21 +78,21 @@ A Lean 4 formalization of Lévy processes, built on top of mathlib.
 - Statement of the representation theorem
 - Sub-lemmas 1–3 fully proved: non-vanishing, continuous logarithm, conditional negative definiteness
 - Schoenberg helper lemmas, convolution semigroup structure
-- Sub-lemma 4: Schoenberg + Bochner infrastructure in place; measure differentiation remains
+- Sub-lemma 4: Schoenberg's theorem proved via kernel factorization + spectral decomposition; convolution semigroup construction complete
+- Measure differentiation at `t = 0` remains for extracting the Lévy-Khintchine triple
 
 ## Incomplete
 
-Five declarations contain sorry:
+Four sorry keywords remain across three declarations:
 
-- **`IsPositiveDefinite.norm_le_one`** — PD bound `‖φ(ξ)‖ ≤ 1` when `φ(0) = 1`.
-- **`exists_probMeasure_of_pd_integrable`** — Fourier inversion for positive definite L¹ functions (needs Parseval).
-- **`isTight_of_charFun_pointwise_tendsto`** — Tightness from pointwise charfun convergence to a continuous limit.
-- **`schoenberg_exp_of_cnd`** — Schoenberg's theorem: `exp(tψ)` is PD when `ψ` is CND.
-- **`levyKhintchine_of_cnd`** — Extracting the Lévy-Khintchine triple from the convolution semigroup.
+- **`cnd_kernel_pd`** (`.re` part) — Expanding the (n+1)-point CND sum via `Fin.cons` to recover the kernel quadratic form. Block expansion with ψ(0) = 0 and Hermitian symmetry.
+- **`pd_kernel_to_posSemidef`** (Hermitianness) — Showing a PD kernel defines a Hermitian matrix, from the `.im = 0` condition of the quadratic form in `ComplexOrder`.
+- **`exists_probMeasure_of_pd_integrable`** — Fourier inversion for positive definite L¹ functions. Requires constructing the inverse Fourier transform density, proving non-negativity via Fejér means, and normalization + charfun recovery via Gaussian regularization.
+- **`levyKhintchine_of_cnd`** — Extracting the Lévy-Khintchine triple `(b, σ², ν)` from the convolution semigroup by differentiating at `t = 0`.
 
 ## Building
 
-Requires Lean 4 (v4.28.0-rc1) and mathlib.
+Requires Lean 4 (v4.29.0-rc3) and mathlib.
 
 ```
 lake build
