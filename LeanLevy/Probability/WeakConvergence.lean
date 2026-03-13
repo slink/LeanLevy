@@ -188,6 +188,117 @@ private theorem tendsto_tail_bound_of_charFun
   have hstep : 2⁻¹ * r * (ε / 4 * (4 * r⁻¹)) = ε / 2 := by field_simp
   linarith
 
+/-- Generalized tail bound: for any continuous `φ` with `φ 0 = 1`, the quantity
+`2⁻¹ * r * ‖∫ t in (-2/r)..(2/r), 1 - φ t‖ → 0` as `r → ∞`.
+
+Same proof as `tendsto_tail_bound_of_charFun` with `charFun μ` replaced by abstract `φ`. -/
+theorem tendsto_tail_bound_of_continuous
+    {φ : ℝ → ℂ} (hφc : Continuous φ) (hφ0 : φ 0 = 1) :
+    Tendsto (fun r => 2⁻¹ * r *
+      ‖∫ t in (-2 * r⁻¹)..(2 * r⁻¹), (1 : ℂ) - φ t‖)
+      atTop (𝓝 0) := by
+  set f : ℝ → ℂ := fun t => 1 - φ t with hf_def
+  have hf_cont : Continuous f := continuous_const.sub hφc
+  have hf_zero : f 0 = 0 := by simp [hf_def, hφ0]
+  rw [Metric.tendsto_atTop]
+  intro ε hε
+  have hf_cont_at : ContinuousAt f 0 := hf_cont.continuousAt
+  rw [ContinuousAt, hf_zero, Metric.tendsto_nhds] at hf_cont_at
+  have hev := hf_cont_at (ε / 4) (by linarith)
+  rw [Metric.eventually_nhds_iff] at hev
+  obtain ⟨η, hη_pos, hη⟩ := hev
+  refine ⟨max (2 / η + 1) 1, fun r hr => ?_⟩
+  have hr_pos : (0 : ℝ) < r := lt_of_lt_of_le one_pos (le_of_max_le_right hr)
+  have hr_ge : r ≥ 2 / η + 1 := le_of_max_le_left hr
+  have h2r_lt : 2 * r⁻¹ < η := by
+    rw [show (2 : ℝ) * r⁻¹ = 2 / r from by ring]
+    calc 2 / r < 2 / (2 / η) := by
+          apply div_lt_div_of_pos_left (by norm_num : (0:ℝ) < 2)
+            (by positivity) (by linarith)
+      _ = η := by field_simp
+  have h2r_pos : (0 : ℝ) < 2 * r⁻¹ := by positivity
+  have hf_bound : ∀ t ∈ Set.uIoc (-2 * r⁻¹) (2 * r⁻¹), ‖f t‖ ≤ ε / 4 := by
+    intro t ht
+    rw [Set.uIoc_of_le (by linarith : -2 * r⁻¹ ≤ 2 * r⁻¹)] at ht
+    have ht_abs : |t| < η := by
+      rw [abs_lt]; constructor <;> linarith [ht.1, ht.2]
+    have ht_dist : dist t 0 < η := by rwa [Real.dist_eq, sub_zero]
+    have := hη ht_dist
+    rw [dist_zero_right] at this
+    exact le_of_lt this
+  have hintegral_bound : ‖∫ t in (-2 * r⁻¹)..(2 * r⁻¹), f t‖ ≤
+      ε / 4 * |2 * r⁻¹ - (-2 * r⁻¹)| :=
+    intervalIntegral.norm_integral_le_of_norm_le_const hf_bound
+  have habs : |2 * r⁻¹ - (-2 * r⁻¹)| = 4 * r⁻¹ := by
+    rw [show 2 * r⁻¹ - (-2 * r⁻¹) = 4 * r⁻¹ from by ring]
+    exact abs_of_pos (by positivity)
+  rw [Real.dist_eq, sub_zero, abs_of_nonneg (by positivity)]
+  have hint_le : ‖∫ t in (-2 * r⁻¹)..(2 * r⁻¹), f t‖ ≤ ε / 4 * (4 * r⁻¹) := by
+    calc ‖∫ t in (-2 * r⁻¹)..(2 * r⁻¹), f t‖
+        ≤ ε / 4 * |2 * r⁻¹ - (-2 * r⁻¹)| := hintegral_bound
+      _ = ε / 4 * (4 * r⁻¹) := by rw [habs]
+  have h2r_nonneg : (0 : ℝ) ≤ 2⁻¹ * r := by positivity
+  have hle := mul_le_mul_of_nonneg_left hint_le h2r_nonneg
+  have hstep : 2⁻¹ * r * (ε / 4 * (4 * r⁻¹)) = ε / 2 := by field_simp
+  linarith
+
+/-- Generalized radius/threshold: for a sequence of probability measures whose charfuns
+converge pointwise to a continuous `φ` with `φ 0 = 1`, there exist r > 0 and n₀ such that
+for all n ≥ n₀, the tail measure (μs n){x | r < |x|} < δ. -/
+theorem exists_radius_and_threshold_of_continuous_tendsto
+    {μs : ℕ → ProbabilityMeasure ℝ} {φ : ℝ → ℂ}
+    (hφc : Continuous φ) (hφ0 : φ 0 = 1)
+    (hconv : ∀ ξ, Tendsto (fun n => charFun (μs n : Measure ℝ) ξ) atTop (𝓝 (φ ξ)))
+    {δ : ℝ} (hδ : 0 < δ) :
+    ∃ (r : ℝ) (_ : 0 < r) (n₀ : ℕ),
+      ∀ n, n₀ ≤ n → (μs n : Measure ℝ).real {x | r < |x|} < δ := by
+  -- Choose r₀ large enough that the tail bound for abstract φ is < δ/2
+  have hlim := tendsto_tail_bound_of_continuous hφc hφ0
+  rw [Metric.tendsto_atTop] at hlim
+  obtain ⟨r₀, hr₀⟩ := hlim (δ / 2) (half_pos hδ)
+  set r := max r₀ 1 with hr_def
+  have hr_pos : (0 : ℝ) < r := lt_of_lt_of_le one_pos (le_max_right _ _)
+  have hr_ge : r₀ ≤ r := le_max_left _ _
+  have hφ_bound : 2⁻¹ * r * ‖∫ t in (-2 * r⁻¹)..(2 * r⁻¹),
+      (1 : ℂ) - φ t‖ < δ / 2 := by
+    have := hr₀ r hr_ge
+    rwa [Real.dist_eq, sub_zero, abs_of_nonneg] at this
+    positivity
+  -- The integral for μₙ converges to the integral for φ on [-2/r, 2/r]
+  have hneg_rw : -(2 * r⁻¹) = -2 * r⁻¹ := by ring
+  have hconv₀ : Tendsto
+      (fun n => ∫ t in (-2 * r⁻¹)..(2 * r⁻¹), (1 : ℂ) - charFun (μs n : Measure ℝ) t)
+      atTop (𝓝 (∫ t in (-2 * r⁻¹)..(2 * r⁻¹), (1 : ℂ) - φ t)) := by
+    rw [show (-2 * r⁻¹ : ℝ) = -(2 * r⁻¹) from by ring]
+    apply intervalIntegral.tendsto_integral_filter_of_dominated_convergence (bound := fun _ => 2)
+    · exact Eventually.of_forall fun n =>
+        (stronglyMeasurable_const.sub stronglyMeasurable_charFun).aestronglyMeasurable
+    · exact Eventually.of_forall fun n => ae_of_all _ fun t _ => norm_one_sub_charFun_le_two
+    · exact intervalIntegrable_const
+    · apply ae_of_all; intro t _
+      exact tendsto_const_nhds.sub (hconv t)
+  have hconv_scaled : Tendsto
+      (fun n => 2⁻¹ * r * ‖∫ t in (-2 * r⁻¹)..(2 * r⁻¹),
+        (1 : ℂ) - charFun (μs n : Measure ℝ) t‖) atTop
+      (𝓝 (2⁻¹ * r * ‖∫ t in (-2 * r⁻¹)..(2 * r⁻¹),
+        (1 : ℂ) - φ t‖)) :=
+    hconv₀.norm.const_mul _
+  have hev : ∀ᶠ n in atTop, 2⁻¹ * r * ‖∫ t in (-2 * r⁻¹)..(2 * r⁻¹),
+      (1 : ℂ) - charFun (μs n : Measure ℝ) t‖ < δ := by
+    apply (hconv_scaled.eventually (Iio_mem_nhds hφ_bound)).mono
+    intro n hn
+    calc 2⁻¹ * r * ‖∫ t in (-2 * r⁻¹)..(2 * r⁻¹),
+            (1 : ℂ) - charFun (μs n : Measure ℝ) t‖
+        < δ / 2 := hn
+      _ < δ := half_lt_self hδ
+  obtain ⟨n₀, hn₀⟩ := hev.exists_forall_of_atTop
+  refine ⟨r, hr_pos, n₀, fun n hn => ?_⟩
+  calc (μs n : Measure ℝ).real {x | r < |x|}
+      ≤ 2⁻¹ * r * ‖∫ t in (-2 * r⁻¹)..(2 * r⁻¹),
+          (1 : ℂ) - charFun (μs n : Measure ℝ) t‖ :=
+        measureReal_abs_gt_le_integral_charFun hr_pos
+    _ < δ := hn₀ n hn
+
 private theorem exists_radius_and_threshold_of_charFunTendsto
     {μs : ℕ → ProbabilityMeasure ℝ} {μ : ProbabilityMeasure ℝ}
     (h : CharFunTendsto μs atTop μ)

@@ -65,7 +65,50 @@ private theorem isTight_of_charFun_pointwise_tendsto
     (_hφc : Continuous φ) (_hφ0 : φ 0 = 1)
     (_hconv : ∀ ξ, Tendsto (fun n => charFun (μs n : Measure ℝ) ξ) atTop (𝓝 (φ ξ))) :
     IsTightMeasureSet (range (fun n => (μs n : Measure ℝ))) := by
-  sorry
+  rw [isTightMeasureSet_iff_exists_isCompact_measure_compl_le]
+  intro ε hε
+  by_cases hε_top : ε = ⊤
+  · exact ⟨∅, isCompact_empty, fun _ _ => hε_top ▸ le_top⟩
+  set δ := ε.toReal with hδ_def
+  have hδ_pos : 0 < δ := ENNReal.toReal_pos hε.ne' hε_top
+  have hδ_le : ENNReal.ofReal δ ≤ ε := by
+    rw [hδ_def, ENNReal.ofReal_toReal hε_top]
+  obtain ⟨r, hr, n₀, htail⟩ :=
+    MeasureTheory.ProbabilityMeasure.exists_radius_and_threshold_of_continuous_tendsto _hφc _hφ0 _hconv hδ_pos
+  have hfin : ∀ n : Fin n₀, ∃ K : Set ℝ, IsCompact K ∧ (μs n : Measure ℝ) Kᶜ ≤ ε := by
+    intro ⟨n, hn⟩
+    have := isTightMeasureSet_iff_exists_isCompact_measure_compl_le.mp
+      (isTightMeasureSet_singleton (μ := (μs n : Measure ℝ))) ε hε
+    obtain ⟨K, hK, hKε⟩ := this
+    exact ⟨K, hK, hKε _ rfl⟩
+  choose Kfin hKfin_compact hKfin_meas using hfin
+  refine ⟨(⋃ i : Fin n₀, Kfin i) ∪ Metric.closedBall 0 r,
+    (isCompact_iUnion fun i => hKfin_compact i).union (isCompact_closedBall 0 r), ?_⟩
+  intro ν hν
+  obtain ⟨n, rfl⟩ := hν
+  by_cases hn : n < n₀
+  · calc (μs n : Measure ℝ) ((⋃ i : Fin n₀, Kfin i) ∪ Metric.closedBall 0 r)ᶜ
+        ≤ (μs n : Measure ℝ) (Kfin ⟨n, hn⟩)ᶜ := by
+          apply measure_mono
+          apply compl_subset_compl.mpr
+          exact subset_union_of_subset_left (subset_iUnion Kfin ⟨n, hn⟩) _
+      _ ≤ ε := hKfin_meas ⟨n, hn⟩
+  · push_neg at hn
+    have hcompl_sub : ((⋃ i : Fin n₀, Kfin i) ∪ Metric.closedBall 0 r)ᶜ ⊆
+        (Metric.closedBall (0 : ℝ) r)ᶜ :=
+      compl_subset_compl.mpr subset_union_right
+    have hball_eq : (Metric.closedBall (0 : ℝ) r)ᶜ = {x | r < |x|} := by
+      ext x
+      simp only [mem_compl_iff, Metric.mem_closedBall, Real.dist_eq, sub_zero, not_le,
+        mem_setOf_eq, lt_abs]
+    calc (μs n : Measure ℝ) ((⋃ i : Fin n₀, Kfin i) ∪ Metric.closedBall 0 r)ᶜ
+        ≤ (μs n : Measure ℝ) (Metric.closedBall 0 r)ᶜ := measure_mono hcompl_sub
+      _ = (μs n : Measure ℝ) {x | r < |x|} := by rw [hball_eq]
+      _ = ENNReal.ofReal ((μs n : Measure ℝ).real {x | r < |x|}) := by
+          rw [ofReal_measureReal]
+      _ ≤ ENNReal.ofReal δ := by
+          exact ENNReal.ofReal_le_ofReal (le_of_lt (htail n hn))
+      _ ≤ ε := hδ_le
 
 /-! ### Gaussian smoothing infrastructure -/
 
