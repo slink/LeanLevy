@@ -725,8 +725,32 @@ private theorem exp_pd_kernel
     have hN_pos : (0 : ℝ) < N := Nat.cast_pos.mpr (by omega)
     have htN : 0 ≤ t / N := div_nonneg ht (le_of_lt hN_pos)
     -- ∑∑ c̄ᵢdⱼ(1 + (t/N)Mᵢⱼ) = |∑dᵢ|² + (t/N)·∑∑ c̄ᵢdⱼ Mᵢⱼ
-    -- 1 + (t/N)M is PD: quadratic form = |∑d|² + (t/N)(M form) ≥ 0
-    sorry
+    -- Split: ∑∑ c̄ᵢdⱼ(1 + (t/N)Mᵢⱼ) = ∑∑ c̄ᵢdⱼ + (t/N)·∑∑ c̄ᵢdⱼ Mᵢⱼ
+    have hsplit : ∑ i : Fin n, ∑ j : Fin n,
+        starRingEnd ℂ (d i) * d j * (1 + ↑t / (↑N : ℂ) * M i j) =
+      ∑ i, ∑ j, starRingEnd ℂ (d i) * d j +
+        (↑t / ↑N : ℂ) * ∑ i, ∑ j, starRingEnd ℂ (d i) * d j * M i j := by
+      trans ∑ i : Fin n, (∑ j, starRingEnd ℂ (d i) * d j +
+        ↑t / ↑N * ∑ j, starRingEnd ℂ (d i) * d j * M i j)
+      · congr 1; ext i
+        trans ∑ j : Fin n, (starRingEnd ℂ (d i) * d j +
+          ↑t / ↑N * (starRingEnd ℂ (d i) * d j * M i j))
+        · congr 1; ext j; ring
+        · rw [Finset.sum_add_distrib, Finset.mul_sum]
+      · rw [Finset.sum_add_distrib, Finset.mul_sum]
+    rw [hsplit]
+    apply add_nonneg
+    · -- |∑dᵢ|² ≥ 0
+      rw [show ∑ i : Fin n, ∑ j : Fin n, starRingEnd ℂ (d i) * d j =
+          starRingEnd ℂ (∑ i, d i) * ∑ j, d j from by
+        rw [_root_.map_sum]; simp_rw [Finset.sum_mul, Finset.mul_sum]]
+      exact star_mul_self_nonneg _
+    · -- (t/N) · (PD sum) ≥ 0
+      have hcoeff : (0 : ℂ) ≤ ↑t / ↑N := by
+        rw [Complex.nonneg_iff]; constructor
+        · simp [Complex.div_ofReal_re]; exact div_nonneg ht (le_of_lt hN_pos)
+        · simp [Complex.div_ofReal_im]
+      exact mul_nonneg hcoeff (hM d)
   -- Step 2: K_N = (1 + tM/N)^N is PD
   have hpow_pd : ∀ᶠ N : ℕ in Filter.atTop,
       ∀ d : Fin n → ℂ, 0 ≤ ∑ i, ∑ j, starRingEnd ℂ (d i) * d j *
