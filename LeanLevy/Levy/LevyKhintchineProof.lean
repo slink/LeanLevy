@@ -1187,7 +1187,47 @@ theorem levyKhintchine_representation
   -- Hermitian symmetry: ψ(-ξ) = conj(ψ(ξ)) from charFun(-ξ) = conj(charFun(ξ))
   -- Follows from exp(ψ(-ξ)) = charFun(-ξ) = conj(charFun(ξ)) = exp(conj(ψ(ξ)))
   -- and injectivity of exp on the strip (continuous log stays in strip with ψ(0)=0).
-  have hψ_herm : ∀ ξ, ψ (-ξ) = starRingEnd ℂ (ψ ξ) := by sorry
+  have hψ_herm : ∀ ξ, ψ (-ξ) = starRingEnd ℂ (ψ ξ) := by
+    -- Strategy: both ψ and g := conj ∘ ψ ∘ neg are continuous lifts of charFun μ through exp
+    -- with value 0 at 0. By uniqueness of covering map lifts, they are equal.
+    -- That gives conj(ψ(-ξ)) = ψ(ξ), hence ψ(-ξ) = conj(ψ(ξ)).
+    have hcont : Continuous (charFun μ) := MeasureTheory.continuous_charFun
+    have hne : ∀ ξ, charFun μ ξ ≠ 0 := h.charFun_ne_zero
+    have hφ0 : charFun μ 0 = 1 := by simp [charFun_zero, Measure.real, measure_univ]
+    -- Set up the continuous map for charFun
+    set f : C(ℝ, ℂ) := ⟨charFun μ, hcont⟩
+    have he : Complex.exp (0 : ℂ) = f (0 : ℝ) := by simp [f, hφ0]
+    have hs : ∀ ξ : ℝ, f ξ ∈ ({0}ᶜ : Set ℂ) := fun ξ => Set.mem_compl_singleton_iff.mpr (hne ξ)
+    -- Get the unique lift
+    obtain ⟨F, ⟨hF0, hFexp⟩, hF_unique⟩ :=
+      Complex.isCoveringMapOn_exp.existsUnique_continuousMap_lifts f he hs
+    -- ψ as a ContinuousMap is a lift
+    set Ψ : C(ℝ, ℂ) := ⟨ψ, hψ_cont⟩
+    have hΨ_lift : Ψ 0 = 0 ∧ Complex.exp ∘ Ψ = f := by
+      constructor
+      · exact hψ_zero
+      · ext ξ; simp [Ψ, f, hψ_exp ξ]
+    -- g(ξ) := conj(ψ(-ξ)) is also a continuous lift
+    set G : C(ℝ, ℂ) := ⟨fun ξ => starRingEnd ℂ (ψ (-ξ)), by
+      exact continuous_star.comp (hψ_cont.comp continuous_neg)⟩
+    have hG_lift : G 0 = 0 ∧ Complex.exp ∘ G = f := by
+      constructor
+      · simp [G, hψ_zero]
+      · ext ξ; simp only [G, ContinuousMap.coe_mk, Function.comp_apply, f]
+        rw [exp_conj, ← hψ_exp (-ξ), charFun_neg, starRingEnd_self_apply]
+    -- By uniqueness, Ψ = F and G = F, hence Ψ = G
+    have hΨ_eq : Ψ = F := hF_unique Ψ hΨ_lift
+    have hG_eq : G = F := hF_unique G hG_lift
+    -- Therefore Ψ = G pointwise: ψ(ξ) = conj(ψ(-ξ))
+    have hΨG : ∀ ξ, ψ ξ = starRingEnd ℂ (ψ (-ξ)) := by
+      intro ξ
+      have := congr_arg (· ξ) (hΨ_eq.trans hG_eq.symm)
+      exact this
+    -- We need ψ(-ξ) = conj(ψ(ξ)). Apply hΨG at -ξ and simplify.
+    intro ξ
+    have := hΨG (-ξ)
+    simp only [neg_neg] at this
+    exact this
   obtain ⟨T, hT⟩ := levyKhintchine_of_cnd hψ_cont hψ_zero hψ_cnd hψ_herm
   -- Combine: charFun μ ξ = exp(ψ ξ) = exp(ibξ - σ²ξ²/2 + ∫ f dν)
   exact ⟨T, fun ξ => by rw [hψ_exp ξ, hT ξ]⟩
