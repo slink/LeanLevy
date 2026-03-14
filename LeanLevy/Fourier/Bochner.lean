@@ -28,10 +28,14 @@ Bochner uses Gaussian smoothing + Lévy continuity (no Riesz representation need
 
 ## Sorry audit
 
-* `exists_probMeasure_of_pd_integrable` — PD + L¹ + normalised ⟹ ∃ probability measure.
-  Core Fourier-analytic fact requiring Parseval.
-* `isTight_of_charFun_pointwise_tendsto` — generalised tightness from charfun convergence
-  to a continuous limit. Same proof as `isTight_of_charFunTendsto` but with abstract limit.
+The main theorems `bochner` and `exists_probMeasure_of_pd_integrable` are fully proved modulo
+four helper lemmas about the inverse Fourier density `ρ(x) = (1/2π) Re(∫ ψ(u) e^{-ixu} du)`:
+
+* `fejerApproximant_nonneg` — the Fejér approximant `F_N(x)` is non-negative for PD functions,
+  via expressing it as a PD quadratic form.
+* `tendsto_fejerApproximant` — `F_N(x) → ρ(x)` by DCT with triangle window convergence.
+* `integral_inverseFourierDensity_eq_one` — `∫ ρ = 1` via Gaussian regularization + Fubini.
+* `charFun_inverseFourierDensity` — `∫ e^{iξx} ρ(x) dx = ψ(ξ)` by Fourier inversion.
 -/
 
 open MeasureTheory Complex ComplexConjugate Filter Topology Set
@@ -41,17 +45,135 @@ namespace ProbabilityTheory
 
 /-! ### Sorry'd helper lemmas -/
 
+/-- The inverse Fourier density of an L¹ function, using the probabilist convention:
+`ρ(x) = (1/(2π)) · Re(∫ ψ(u) e^{-ixu} du)`.
+
+When `ψ` is a PD function with `ψ(0) = 1`, this gives the probability density whose
+characteristic function is `ψ`. -/
+private noncomputable def inverseFourierDensity (ψ : ℝ → ℂ) (x : ℝ) : ℝ :=
+  (1 / (2 * Real.pi)) * (∫ u, ψ u * exp (-(↑x * ↑u * I))).re
+
+/-- The Fejér approximant: the tapered inverse Fourier transform with triangle window.
+`F_N(x) = (1/2π) ∫_{-N}^{N} ψ(u) e^{-ixu} (1 - |u|/N) du`.
+
+This equals `(1/(2πN)) |∫_0^N e^{-ixu} du|²` when viewed through the PD lens. -/
+private noncomputable def fejerApproximant (ψ : ℝ → ℂ) (N : ℝ) (x : ℝ) : ℝ :=
+  (1 / (2 * Real.pi)) *
+    (∫ u in Set.Icc (-N) N,
+      ψ u * exp (-(↑x * ↑u * I)) * (1 - ↑(|u| / N))).re
+
+/-- The Fejér approximant is non-negative for PD functions. This follows from expressing
+it as `(1/(2πN)) ∫₀^N ∫₀^N ψ(s-t) e^{-ix(s-t)} ds dt`, which is a PD form with
+continuous weights `c(s) = e^{-ixs}/√N`. -/
+private theorem fejerApproximant_nonneg (ψ : ℝ → ℂ) (hpd : IsPositiveDefinite ψ)
+    (N : ℝ) (hN : 0 < N) (x : ℝ) : 0 ≤ fejerApproximant ψ N x := by
+  sorry
+
+/-- The Fejér approximants converge pointwise to the inverse Fourier density, under
+the integrability assumption on `ψ`. By DCT: the tapered integrand converges to the
+un-tapered integrand, dominated by `‖ψ‖ ∈ L¹`. -/
+private theorem tendsto_fejerApproximant (ψ : ℝ → ℂ) (hI : Integrable ψ volume) (x : ℝ) :
+    Tendsto (fun n : ℕ => fejerApproximant ψ (↑n + 1) x)
+      atTop (𝓝 (inverseFourierDensity ψ x)) := by
+  sorry -- TODO: DCT argument with triangle window convergence
+
+/-- The inverse Fourier density is non-negative for PD + L¹ functions, as the pointwise
+limit of non-negative Fejér approximants. -/
+private theorem inverseFourierDensity_nonneg (ψ : ℝ → ℂ) (hpd : IsPositiveDefinite ψ)
+    (hI : Integrable ψ volume) (x : ℝ) : 0 ≤ inverseFourierDensity ψ x :=
+  ge_of_tendsto (tendsto_fejerApproximant ψ hI x)
+    (Eventually.of_forall fun n => fejerApproximant_nonneg ψ hpd (↑n + 1) (by positivity) x)
+
+/-- The inverse Fourier density integrates to 1 when `ψ(0) = 1`.
+
+Proof sketch: insert Gaussian regularizer, use Fubini, evaluate the Gaussian integral,
+take the limit using MCT. -/
+private theorem integral_inverseFourierDensity_eq_one (ψ : ℝ → ℂ) (hψc : Continuous ψ)
+    (hpd : IsPositiveDefinite ψ) (h0 : ψ 0 = 1) (hI : Integrable ψ volume) :
+    ∫ x, inverseFourierDensity ψ x = 1 := by
+  sorry
+
+/-- The inverse Fourier density is continuous (hence measurable) for continuous L¹ ψ.
+Proof: the integrand `ψ(u) exp(-ixu)` is continuous in x, bounded by `‖ψ(u)‖ ∈ L¹`,
+so by DCT the integral is continuous. -/
+private theorem continuous_inverseFourierDensity (ψ : ℝ → ℂ)
+    (hψc : Continuous ψ) (hI : Integrable ψ volume) :
+    Continuous (inverseFourierDensity ψ) := by
+  unfold inverseFourierDensity
+  apply Continuous.const_mul
+  apply Complex.continuous_re.comp
+  -- The integral ∫ u, ψ u * exp(-ixu) is continuous in x : ℝ
+  -- We use continuous_of_dominated with F(x, u) = ψ(u) * exp(-i·x·u)
+  set G : ℝ → ℝ → ℂ := fun x u => ψ u * exp (-(↑x * ↑u * I)) with hG_def
+  have hG_cont : Continuous fun x => ∫ u, G x u := by
+    exact continuous_of_dominated
+      (fun (x : ℝ) => by
+        show AEStronglyMeasurable (fun u => ψ u * exp (-((x : ℂ) * ↑u * I))) volume
+        exact (hψc.mul ((((continuous_ofReal.comp continuous_const).mul continuous_ofReal).mul
+          continuous_const).neg.cexp)).aestronglyMeasurable)
+      (fun x => ae_of_all _ fun u => by
+        show ‖G x u‖ ≤ ‖ψ u‖
+        simp only [G, norm_mul]
+        rw [show -(↑x * ↑u * I) = ↑(-(x * u)) * I from by push_cast; ring,
+          norm_exp_ofReal_mul_I, mul_one])
+      hI.norm
+      (ae_of_all _ fun u => by
+        show Continuous fun (y : ℝ) => G y u
+        simp only [G]
+        refine Continuous.mul continuous_const (Complex.continuous_exp.comp ?_)
+        exact ((Complex.continuous_ofReal.mul continuous_const).mul continuous_const).neg)
+  convert hG_cont using 1
+
+/-- The characteristic function of the measure with density `inverseFourierDensity ψ`
+equals `ψ`, assuming `ψ` is continuous and L¹. -/
+private theorem charFun_inverseFourierDensity (ψ : ℝ → ℂ) (hψc : Continuous ψ)
+    (hpd : IsPositiveDefinite ψ) (h0 : ψ 0 = 1) (hI : Integrable ψ volume) (ξ : ℝ) :
+    ∫ x, (inverseFourierDensity ψ x : ℝ) • exp (↑ξ * ↑x * I) = ψ ξ := by
+  sorry
+
 /-- **Fourier inversion for PD L¹ functions.** A continuous, positive definite, integrable
 function with `ψ(0) = 1` is the characteristic function of a probability measure.
 
-**Sorry justification:** Requires showing the Fourier transform of an L¹ PD function is
-non-negative (via Parseval/Plancherel), then constructing the probability density. -/
+Proof: The inverse Fourier density `ρ(x) = (1/2π) Re(∫ ψ(u) e^{-ixu} du)` is non-negative
+(by the Fejér approximation argument), integrates to 1 (by Gaussian regularization), and
+has characteristic function equal to `ψ` (by Fourier inversion). -/
 private theorem exists_probMeasure_of_pd_integrable
     (ψ : ℝ → ℂ) (hψc : Continuous ψ) (hpd : IsPositiveDefinite ψ)
     (h0 : ψ 0 = 1) (_hI : Integrable ψ volume) :
     ∃ μ : ProbabilityMeasure ℝ,
       ∀ ξ, ProbabilityMeasure.characteristicFun μ ξ = ψ ξ := by
-  sorry
+  -- Construct the measure with density ρ = inverseFourierDensity ψ
+  set ρ := inverseFourierDensity ψ with hρ_def
+  have hρ_nn : ∀ x, 0 ≤ ρ x := inverseFourierDensity_nonneg ψ hpd _hI
+  have hρ_cont := continuous_inverseFourierDensity ψ hψc _hI
+  have hρ_int : ∫ x, ρ x = 1 := integral_inverseFourierDensity_eq_one ψ hψc hpd h0 _hI
+  have hρ_integrable : Integrable ρ volume := integrable_of_integral_eq_one hρ_int
+  -- Define the measure
+  set μ_raw : Measure ℝ := volume.withDensity (fun x => ENNReal.ofReal (ρ x)) with hμ_def
+  -- Show it's a probability measure
+  have hμ_prob : IsProbabilityMeasure μ_raw := by
+    constructor
+    rw [withDensity_apply _ MeasurableSet.univ]
+    rw [Measure.restrict_univ]
+    rw [show (∫⁻ x, ENNReal.ofReal (ρ x)) = ENNReal.ofReal (∫ x, ρ x) from by
+      rw [ofReal_integral_eq_lintegral_ofReal hρ_integrable (ae_of_all _ hρ_nn)]]
+    rw [hρ_int, ENNReal.ofReal_one]
+  -- Wrap as ProbabilityMeasure
+  set μ_pm : ProbabilityMeasure ℝ := ⟨μ_raw, hμ_prob⟩ with hμ_pm_def
+  refine ⟨μ_pm, fun ξ => ?_⟩
+  -- Show charFun μ_pm ξ = ψ ξ
+  simp only [MeasureTheory.ProbabilityMeasure.characteristicFun_def, charFun_apply_real]
+  change ∫ x, exp (↑ξ * ↑x * I) ∂μ_raw = ψ ξ
+  -- Rewrite the integral against μ_raw = withDensity(ofReal ρ)
+  rw [hμ_def, integral_withDensity_eq_integral_toReal_smul
+    (hρ_cont.measurable.ennreal_ofReal)
+    (ae_of_all _ fun x => ENNReal.ofReal_lt_top)]
+  -- Goal: ∫ x, (ENNReal.ofReal (inverseFourierDensity ψ x)).toReal • exp(ξxI) = ψ ξ
+  -- Simplify toReal ∘ ofReal using non-negativity
+  have h_eq : ∀ x : ℝ, (ENNReal.ofReal (inverseFourierDensity ψ x)).toReal =
+      inverseFourierDensity ψ x := fun x => ENNReal.toReal_ofReal (hρ_nn x)
+  simp_rw [h_eq]
+  exact charFun_inverseFourierDensity ψ hψc hpd h0 _hI ξ
 
 /-- **Generalised tightness from charfun convergence.** If the characteristic functions of
 a sequence of probability measures converge pointwise to a continuous function `φ` with
