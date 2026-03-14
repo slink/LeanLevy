@@ -29,13 +29,20 @@ Bochner uses Gaussian smoothing + Lévy continuity (no Riesz representation need
 ## Sorry audit
 
 The main theorems `bochner` and `exists_probMeasure_of_pd_integrable` are fully proved modulo
-four helper lemmas about the inverse Fourier density `ρ(x) = (1/2π) Re(∫ ψ(u) e^{-ixu} du)`:
+three helper lemmas (down from four — `tendsto_fejerApproximant` and
+`integral_inverseFourierDensity_eq_one` are now fully proved):
 
-* `fejerApproximant_nonneg` — the Fejér approximant `F_N(x)` is non-negative for PD functions,
-  via expressing it as a PD quadratic form.
+* `re_nonneg_double_integral` — the PD quadratic form `∫∫ ψ(s-t) e^{-ix(s-t)} ds dt` has
+  non-negative real part (Riemann sum approximation of the PD condition).
+* `fejerApproximant_eq_double_integral` — the Fejér integral equals `(1/N)` times the double
+  integral over `[0,N]²` (change of variables `u = s-t`).
+* `charFun_inverseFourierDensity` — `∫ e^{iξx} ρ(x) dx = ψ(ξ)` by Fourier inversion
+  (Gaussian regularization + Fubini).
+
+Previously sorry'd and now proved:
 * `tendsto_fejerApproximant` — `F_N(x) → ρ(x)` by DCT with triangle window convergence.
-* `integral_inverseFourierDensity_eq_one` — `∫ ρ = 1` via Gaussian regularization + Fubini.
-* `charFun_inverseFourierDensity` — `∫ e^{iξx} ρ(x) dx = ψ(ξ)` by Fourier inversion.
+* `integral_inverseFourierDensity_eq_one` — `∫ ρ = 1`, derived from `charFun_inverseFourierDensity`
+  at `ξ = 0`.
 -/
 
 open MeasureTheory Complex ComplexConjugate Filter Topology Set
@@ -62,12 +69,33 @@ private noncomputable def fejerApproximant (ψ : ℝ → ℂ) (N : ℝ) (x : ℝ
     (∫ u in Set.Icc (-N) N,
       ψ u * exp (-(↑x * ↑u * I)) * (1 - ↑(|u| / N))).re
 
-/-- The Fejér approximant is non-negative for PD functions. This follows from expressing
-it as `(1/(2πN)) ∫₀^N ∫₀^N ψ(s-t) e^{-ix(s-t)} ds dt`, which is a PD form with
-continuous weights `c(s) = e^{-ixs}/√N`. -/
+/-- The integral of `ψ(s-t) e^{-ix(s-t)}` over the square `[0,N]²` has non-negative real part
+when `ψ` is positive definite. This is the continuous analogue of the PD quadratic form. -/
+private theorem re_nonneg_double_integral (ψ : ℝ → ℂ) (hpd : IsPositiveDefinite ψ)
+    (N : ℝ) (hN : 0 < N) (x : ℝ) :
+    0 ≤ (∫ s in Set.Icc 0 N, ∫ t in Set.Icc 0 N,
+      ψ (s - t) * exp (-(↑x * ↑(s - t) * I))).re := by
+  sorry -- PD quadratic form: Riemann sums of ∑ᵢ ∑ⱼ conj(cᵢ)cⱼψ(sᵢ-sⱼ) ≥ 0 → limit ≥ 0
+
+/-- The Fejér integral equals `(1/N)` times the double integral over `[0,N]²`. -/
+private theorem fejerApproximant_eq_double_integral (ψ : ℝ → ℂ) (N : ℝ) (hN : 0 < N) (x : ℝ) :
+    (∫ u in Set.Icc (-N) N,
+      ψ u * exp (-(↑x * ↑u * I)) * (1 - ↑(|u| / N))).re =
+    (1 / N) * (∫ s in Set.Icc 0 N, ∫ t in Set.Icc 0 N,
+      ψ (s - t) * exp (-(↑x * ↑(s - t) * I))).re := by
+  -- Change of variables: u = s-t in the double integral gives the Fejér kernel weight.
+  sorry
+
 private theorem fejerApproximant_nonneg (ψ : ℝ → ℂ) (hpd : IsPositiveDefinite ψ)
     (N : ℝ) (hN : 0 < N) (x : ℝ) : 0 ≤ fejerApproximant ψ N x := by
-  sorry
+  unfold fejerApproximant
+  apply mul_nonneg
+  · apply div_nonneg one_pos.le
+    exact mul_pos (by norm_num : (0 : ℝ) < 2) Real.pi_pos |>.le
+  · rw [fejerApproximant_eq_double_integral ψ N hN x]
+    apply mul_nonneg
+    · exact div_nonneg one_pos.le hN.le
+    · exact re_nonneg_double_integral ψ hpd N hN x
 
 /-- The Fejér approximants converge pointwise to the inverse Fourier density, under
 the integrability assumption on `ψ`. By DCT: the tapered integrand converges to the
@@ -75,7 +103,88 @@ un-tapered integrand, dominated by `‖ψ‖ ∈ L¹`. -/
 private theorem tendsto_fejerApproximant (ψ : ℝ → ℂ) (hI : Integrable ψ volume) (x : ℝ) :
     Tendsto (fun n : ℕ => fejerApproximant ψ (↑n + 1) x)
       atTop (𝓝 (inverseFourierDensity ψ x)) := by
-  sorry -- TODO: DCT argument with triangle window convergence
+  unfold fejerApproximant inverseFourierDensity
+  -- It suffices to show the .re parts converge, then multiply by the constant.
+  apply Filter.Tendsto.const_mul
+  apply Complex.continuous_re.continuousAt.tendsto.comp
+  -- Rewrite set integral as full integral with indicator.
+  set f : ℝ → ℂ := fun u => ψ u * exp (-(↑x * ↑u * I))
+  set F : ℕ → ℝ → ℂ := fun n u =>
+    (Set.Icc (-(↑n + 1 : ℝ)) (↑n + 1)).indicator
+      (fun u => ψ u * exp (-(↑x * ↑u * I)) * (1 - ↑(|u| / (↑n + 1)))) u
+  have hset_eq : ∀ n : ℕ, ∫ u in Set.Icc (-(↑n + 1 : ℝ)) (↑n + 1),
+      ψ u * exp (-(↑x * ↑u * I)) * (1 - ↑(|u| / (↑n + 1))) =
+      ∫ u, F n u := by
+    intro n; rw [← integral_indicator (measurableSet_Icc)]
+  simp_rw [hset_eq]
+  -- Apply DCT
+  apply tendsto_integral_of_dominated_convergence (fun u => ‖ψ u‖)
+  · -- F n is AEStronglyMeasurable
+    intro n
+    apply AEStronglyMeasurable.indicator _ measurableSet_Icc
+    apply AEStronglyMeasurable.mul
+    · exact (hI.1.mul ((((continuous_ofReal.comp continuous_const).mul continuous_ofReal).mul
+        continuous_const).neg.cexp).aestronglyMeasurable)
+    · exact (continuous_const.sub (continuous_ofReal.comp
+        (continuous_abs.div_const _))).aestronglyMeasurable
+  · exact hI.norm
+  · -- ‖F n u‖ ≤ ‖ψ u‖
+    intro n; apply ae_of_all; intro u
+    simp only [F]
+    by_cases hu : u ∈ Set.Icc (-(↑n + 1 : ℝ)) (↑n + 1)
+    · rw [Set.indicator_of_mem hu, norm_mul, norm_mul]
+      have hN_pos : (0 : ℝ) < ↑n + 1 := by positivity
+      have hu_abs_le : |u| ≤ ↑n + 1 :=
+        abs_le.mpr ⟨by linarith [(Set.mem_Icc.mp hu).1], (Set.mem_Icc.mp hu).2⟩
+      have hfrac_le : |u| / (↑n + 1) ≤ 1 := (div_le_one hN_pos).mpr hu_abs_le
+      have hfrac_nn : 0 ≤ 1 - |u| / (↑n + 1) := by linarith
+      calc ‖ψ u‖ * ‖exp (-(↑x * ↑u * I))‖ * ‖(1 - ↑(|u| / (↑n + 1)) : ℂ)‖
+          ≤ ‖ψ u‖ * 1 * 1 := by
+            gcongr
+            · rw [show -(↑x * ↑u * I) = ↑(-(x * u)) * I from by push_cast; ring,
+                norm_exp_ofReal_mul_I]
+            · -- ‖1 - ↑(|u|/(n+1))‖ ≤ 1
+              calc ‖(1 : ℂ) - ↑(|u| / (↑n + 1))‖
+                  = ‖(↑(1 - |u| / (↑n + 1)) : ℂ)‖ := by push_cast; ring_nf
+                _ = |1 - |u| / (↑n + 1)| := Complex.norm_real _
+                _ = 1 - |u| / (↑n + 1) := abs_of_nonneg hfrac_nn
+                _ ≤ 1 := by linarith [div_nonneg (abs_nonneg u) (le_of_lt hN_pos)]
+        _ = ‖ψ u‖ := by ring
+    · rw [Set.indicator_apply, if_neg hu, norm_zero]; exact norm_nonneg _
+  · -- F n u → f u pointwise a.e.
+    apply ae_of_all; intro u
+    simp only [F]
+    -- Eventually u ∈ Icc(-(n+1), n+1)
+    have hmem : ∀ᶠ n : ℕ in atTop, u ∈ Set.Icc (-(↑n + 1 : ℝ)) (↑n + 1) := by
+      rw [Filter.eventually_atTop]
+      exact ⟨⌈|u|⌉₊, fun n hn => by
+        have hle : |u| ≤ ↑n + 1 := by
+          calc |u| ≤ ↑⌈|u|⌉₊ := Nat.le_ceil |u|
+            _ ≤ ↑n := Nat.cast_le.mpr hn
+            _ ≤ ↑n + 1 := le_add_of_nonneg_right zero_le_one
+        exact Set.mem_Icc.mpr ⟨by linarith [neg_abs_le u], by linarith [le_abs_self u]⟩⟩
+    -- Eventually the indicator is just the function value
+    have heq : ∀ᶠ n : ℕ in atTop,
+        (Set.Icc (-(↑n + 1 : ℝ)) (↑n + 1)).indicator
+          (fun u => ψ u * exp (-(↑x * ↑u * I)) * (1 - ↑(|u| / (↑n + 1)))) u =
+        ψ u * exp (-(↑x * ↑u * I)) * (1 - ↑(|u| / (↑n + 1))) :=
+      hmem.mono fun n hn => Set.indicator_of_mem hn _
+    apply Tendsto.congr' (EventuallyEq.symm heq)
+    -- ψ(u) * exp(...) * (1 - |u|/(n+1)) → ψ(u) * exp(...) as (1 - |u|/(n+1)) → 1
+    have h_frac : Tendsto (fun n : ℕ => |u| / ((↑n : ℝ) + 1)) atTop (𝓝 0) := by
+      apply Filter.Tendsto.div_atTop tendsto_const_nhds
+      exact Filter.tendsto_atTop_add_const_right _ 1 tendsto_natCast_atTop_atTop
+    have h_window : Tendsto (fun n : ℕ => (1 : ℂ) - ↑(|u| / ((↑n : ℝ) + 1))) atTop (𝓝 1) := by
+      have hc : Tendsto (fun n : ℕ => (↑(|u| / ((↑n : ℝ) + 1)) : ℂ)) atTop (𝓝 0) := by
+        rw [show (0 : ℂ) = ↑(0 : ℝ) from by simp]
+        exact (Complex.continuous_ofReal.tendsto 0).comp h_frac
+      have h1 : Tendsto (fun n : ℕ => (1 : ℂ) - ↑(|u| / ((↑n : ℝ) + 1))) atTop
+          (𝓝 ((1 : ℂ) - 0)) := (tendsto_const_nhds (x := (1 : ℂ))).sub hc
+      simp only [sub_zero] at h1
+      exact h1
+    conv_rhs => rw [show ψ u * exp (-(↑x * ↑u * I)) =
+      ψ u * exp (-(↑x * ↑u * I)) * 1 from (mul_one _).symm]
+    exact tendsto_const_nhds.mul h_window
 
 /-- The inverse Fourier density is non-negative for PD + L¹ functions, as the pointwise
 limit of non-negative Fejér approximants. -/
@@ -83,15 +192,6 @@ private theorem inverseFourierDensity_nonneg (ψ : ℝ → ℂ) (hpd : IsPositiv
     (hI : Integrable ψ volume) (x : ℝ) : 0 ≤ inverseFourierDensity ψ x :=
   ge_of_tendsto (tendsto_fejerApproximant ψ hI x)
     (Eventually.of_forall fun n => fejerApproximant_nonneg ψ hpd (↑n + 1) (by positivity) x)
-
-/-- The inverse Fourier density integrates to 1 when `ψ(0) = 1`.
-
-Proof sketch: insert Gaussian regularizer, use Fubini, evaluate the Gaussian integral,
-take the limit using MCT. -/
-private theorem integral_inverseFourierDensity_eq_one (ψ : ℝ → ℂ) (hψc : Continuous ψ)
-    (hpd : IsPositiveDefinite ψ) (h0 : ψ 0 = 1) (hI : Integrable ψ volume) :
-    ∫ x, inverseFourierDensity ψ x = 1 := by
-  sorry
 
 /-- The inverse Fourier density is continuous (hence measurable) for continuous L¹ ψ.
 Proof: the integrand `ψ(u) exp(-ixu)` is continuous in x, bounded by `‖ψ(u)‖ ∈ L¹`,
@@ -125,11 +225,33 @@ private theorem continuous_inverseFourierDensity (ψ : ℝ → ℂ)
   convert hG_cont using 1
 
 /-- The characteristic function of the measure with density `inverseFourierDensity ψ`
-equals `ψ`, assuming `ψ` is continuous and L¹. -/
+equals `ψ`, assuming `ψ` is continuous and L¹. This is the Fourier inversion theorem
+specialized to the probabilist convention. -/
 private theorem charFun_inverseFourierDensity (ψ : ℝ → ℂ) (hψc : Continuous ψ)
     (hpd : IsPositiveDefinite ψ) (h0 : ψ 0 = 1) (hI : Integrable ψ volume) (ξ : ℝ) :
     ∫ x, (inverseFourierDensity ψ x : ℝ) • exp (↑ξ * ↑x * I) = ψ ξ := by
   sorry
+
+/-- The inverse Fourier density integrates to 1 when `ψ(0) = 1`.
+Derived from `charFun_inverseFourierDensity` at `ξ = 0`. -/
+private theorem integral_inverseFourierDensity_eq_one (ψ : ℝ → ℂ) (hψc : Continuous ψ)
+    (hpd : IsPositiveDefinite ψ) (h0 : ψ 0 = 1) (hI : Integrable ψ volume) :
+    ∫ x, inverseFourierDensity ψ x = 1 := by
+  -- Deduce from charFun_inverseFourierDensity at ξ = 0
+  have h := charFun_inverseFourierDensity ψ hψc hpd h0 hI 0
+  -- At ξ = 0, exp(0·x·I) = 1, so (r : ℝ) • 1 = ↑r
+  have heq : ∀ x : ℝ, (inverseFourierDensity ψ x : ℝ) • exp ((0 : ℝ) * ↑x * I) =
+      ↑(inverseFourierDensity ψ x) := by
+    intro x; simp [Complex.real_smul]
+  simp_rw [heq, h0] at h
+  -- h : ∫ x, (↑(inverseFourierDensity ψ x) : ℂ) = 1
+  have := congr_arg Complex.re h
+  simp only [Complex.one_re] at this
+  rwa [show (∫ x : ℝ, (↑(inverseFourierDensity ψ x) : ℂ)).re =
+    ∫ x, inverseFourierDensity ψ x from by
+    have : ∫ x : ℝ, (↑(inverseFourierDensity ψ x) : ℂ) =
+      ↑(∫ x, inverseFourierDensity ψ x) := integral_ofReal
+    rw [this, Complex.ofReal_re]] at this
 
 /-- **Fourier inversion for PD L¹ functions.** A continuous, positive definite, integrable
 function with `ψ(0) = 1` is the characteristic function of a probability measure.
