@@ -666,7 +666,66 @@ private theorem cnd_kernel_pd
     --   (i≥1,0): c̄ᵢ·c₀·ψ(ξᵢ) = -∑ᵢ∑ₖ c̄ᵢcₖ·ψ(ξᵢ)
     --   (i≥1,j≥1): ∑∑ c̄ᵢcⱼ·ψ(ξᵢ-ξⱼ)
     --   Total = ∑∑ c̄ᵢcⱼ·(ψ(ξᵢ-ξⱼ) - ψ(ξᵢ) - conj(ψ(ξⱼ)))
-    sorry
+    -- Build extended vectors: ξ' = (0, ξ₁, ..., ξₙ), c' = (-∑cᵢ, c₁, ..., cₙ)
+    set ξ' : Fin (n + 1) → ℝ := Fin.cons 0 ξ
+    set c' : Fin (n + 1) → ℂ := Fin.cons (-∑ i, c i) c
+    -- c' sums to zero
+    have hc'_sum : ∑ i, c' i = 0 := by
+      simp only [c', Fin.sum_univ_succ, Fin.cons_zero, Fin.cons_succ]
+      ring
+    -- Apply CND to get .re ≥ 0 for the (n+1)-point sum
+    have hcnd := hψ_cnd (n + 1) ξ' c' hc'_sum
+    -- Show the (n+1)-point sum equals our kernel sum
+    suffices heq : (∑ a : Fin (n + 1), ∑ b : Fin (n + 1),
+        starRingEnd ℂ (c' a) * c' b * ψ (ξ' a - ξ' b)).re =
+      (∑ i, ∑ j, starRingEnd ℂ (c i) * c j *
+        (ψ (ξ i - ξ j) - ψ (ξ i) - starRingEnd ℂ (ψ (ξ j)))).re by
+      linarith
+    -- The (n+1)-point CND sum = our kernel sum. Prove by direct algebraic manipulation.
+    -- Key: ∑_{a,b:Fin(n+1)} conj(c'_a) * c'_b * ψ(ξ'_a - ξ'_b)
+    --     = ∑_{i,j:Fin n} conj(c_i) * c_j * (ψ(ξ_i - ξ_j) - ψ(ξ_i) - conj(ψ(ξ_j)))
+    -- Split the (n+1)-sum into head + tail for both indices.
+    have key : ∑ a : Fin (n + 1), ∑ b : Fin (n + 1),
+        starRingEnd ℂ (c' a) * c' b * ψ (ξ' a - ξ' b) =
+      ∑ i, ∑ j, starRingEnd ℂ (c i) * c j *
+        (ψ (ξ i - ξ j) - ψ (ξ i) - starRingEnd ℂ (ψ (ξ j))) := by
+      -- Split outer and inner sums at index 0
+      simp_rw [Fin.sum_univ_succ]
+      simp only [Fin.cons_zero, Fin.cons_succ, c', ξ']
+      -- Expand and simplify using ψ(0) = 0, ψ(-x) = conj(ψ(x))
+      simp only [sub_zero, hψ_zero, mul_zero, zero_add]
+      -- Goal shape (from trace_state):
+      -- ∑ x, conj(-∑c) * c x * ψ(0 - ξ x) +
+      --   ∑ x, ((conj(c x) * (-∑c)) * ψ(ξ x) + ∑ j, conj(c x) * c j * ψ(ξ x - ξ j))
+      -- = ∑ i, ∑ j, conj(c i) * c j * (ψ(ξ i - ξ j) - ψ(ξ i) - conj(ψ(ξ j)))
+      -- Step 1: Replace ψ(0 - ξ x) → ψ(-ξ x) → conj(ψ(ξ x))
+      simp_rw [show ∀ x, (0 : ℝ) - ξ x = -(ξ x) from fun x => by ring, hψ_herm]
+      -- Step 2: Factor conj(-∑c) = -conj(∑c) and distribute into double sums
+      -- The LHS has three components after expansion:
+      -- T1 = ∑_j conj(-∑c) * c_j * conj(ψ(ξ_j)) = -(∑_i conj(c_i)) * ∑_j c_j * conj(ψ(ξ_j))
+      -- T2 = ∑_i (conj(c_i) * (-∑c)) * ψ(ξ_i) = -∑_i conj(c_i) * (∑_j c_j) * ψ(ξ_i)
+      -- T3 = ∑_i ∑_j conj(c_i) * c_j * ψ(ξ_i - ξ_j)
+      -- We need T1 + T2 + T3 = ∑∑ conj(c_i)*c_j*(ψ(ξ_i-ξ_j) - ψ(ξ_i) - conj(ψ(ξ_j)))
+      -- Proof: factor T1 = -∑∑ conj(c_i)*c_j*conj(ψ(ξ_j))
+      --        factor T2 = -∑∑ conj(c_i)*c_j*ψ(ξ_i)
+      --        then T3 - T2' - T1' = ∑∑ conj(c_i)*c_j*(ψ(ξ_i-ξ_j) - ψ(ξ_i) - conj(ψ(ξ_j)))
+      -- Use transitivity through the double sum form
+      have hT1 : ∑ x, (starRingEnd ℂ) (-∑ i, c i) * c x * (starRingEnd ℂ) (ψ (ξ x)) =
+          -(∑ i, ∑ j, (starRingEnd ℂ) (c i) * c j * (starRingEnd ℂ) (ψ (ξ j))) := by
+        simp_rw [map_neg, _root_.map_sum, neg_mul, Finset.sum_neg_distrib, Finset.sum_mul]
+        rw [Finset.sum_comm]
+      have hT2 : ∀ x, ((starRingEnd ℂ) (c x) * -∑ i, c i) * ψ (ξ x) =
+          -(∑ j, (starRingEnd ℂ) (c x) * c j * ψ (ξ x)) := by
+        intro x; ring_nf
+        congr 1
+        rw [show (starRingEnd ℂ) (c x) * (∑ i, c i) * ψ (ξ x) =
+          (starRingEnd ℂ) (c x) * ψ (ξ x) * ∑ i, c i from by ring]
+        rw [Finset.mul_sum]
+      rw [hT1]; simp_rw [hT2]
+      -- Goal: -∑∑ conj(c_i)*c_j*conj(ψ(ξ_j)) + ∑_x(-∑_j ... + ∑_j ...) = ∑∑ conj(c_i)*c_j*(...)
+      simp_rw [Finset.sum_add_distrib, Finset.sum_neg_distrib, mul_sub, Finset.sum_sub_distrib]
+      ring
+    rw [key]
   · -- .im = 0: kernel K_{ij} is Hermitian so the quadratic form is real
     -- K_{ij} = ψ(ξᵢ-ξⱼ) - ψ(ξᵢ) - conj(ψ(ξⱼ))
     -- conj(K_{ji}) = conj(ψ(ξⱼ-ξᵢ)) - conj(ψ(ξⱼ)) - ψ(ξᵢ) = ψ(ξᵢ-ξⱼ) - conj(ψ(ξⱼ)) - ψ(ξᵢ) = K_{ij}
@@ -707,7 +766,107 @@ private theorem pd_kernel_to_posSemidef {n : ℕ} {K : Fin n → Fin n → ℂ}
     -- From hK: the quadratic form's .im = 0 for all c. This means the sum
     -- equals its conjugate. Swapping i↔j in the conjugate gives
     -- ∑∑ c̄ᵢcⱼ conj(Kⱼᵢ) = ∑∑ c̄ᵢcⱼ Kᵢⱼ for all c, forcing conj(K j i) = K i j.
-    sorry
+    -- Step 1: for all c, the sum equals its conjugate (since .im = 0)
+    have hself_conj : ∀ c : Fin n → ℂ,
+        starRingEnd ℂ (∑ i, ∑ j, starRingEnd ℂ (c i) * c j * K i j) =
+        ∑ i, ∑ j, starRingEnd ℂ (c i) * c j * K i j := by
+      intro c
+      have h0 := hK c
+      rw [Complex.nonneg_iff] at h0
+      rw [Complex.conj_eq_iff_im]
+      exact h0.2.symm
+    -- Step 2: conjugating and swapping indices gives ∑∑ c̄ᵢcⱼ conj(Kⱼᵢ) = ∑∑ c̄ᵢcⱼ Kᵢⱼ
+    have hswap : ∀ c : Fin n → ℂ,
+        ∑ i, ∑ j, starRingEnd ℂ (c i) * c j * starRingEnd ℂ (K j i) =
+        ∑ i, ∑ j, starRingEnd ℂ (c i) * c j * K i j := by
+      intro c
+      have h := hself_conj c
+      simp only [_root_.map_sum, map_mul, starRingEnd_self_apply] at h
+      -- h : ∑ i, ∑ j, c i * conj(c j) * conj(K i j) = ∑ i, ∑ j, conj(c i) * c j * K i j
+      rw [Finset.sum_comm] at h
+      -- h : ∑ j, ∑ i, c i * conj(c j) * conj(K i j) = ...
+      -- Rename i↔j: ∑ i, ∑ j, c j * conj(c i) * conj(K j i) = ...
+      -- = ∑ i, ∑ j, conj(c i) * c j * conj(K j i)
+      have := h
+      simp_rw [show ∀ i j : Fin n, c j * (starRingEnd ℂ) (c i) * (starRingEnd ℂ) (K j i) =
+        (starRingEnd ℂ) (c i) * c j * (starRingEnd ℂ) (K j i) from fun i j => by ring] at this
+      exact this
+    -- Step 3: pointwise extraction via Pi.single
+    -- hdiff_zero : ∀ c, ∑∑ c̄ₐcᵦ (Kₐᵦ - conj(Kᵦₐ)) = 0
+    have hdiff_zero : ∀ c : Fin n → ℂ,
+        ∑ a, ∑ b, starRingEnd ℂ (c a) * c b * (K a b - starRingEnd ℂ (K b a)) = 0 := by
+      intro c
+      have h := hswap c
+      have : ∑ a, ∑ b, starRingEnd ℂ (c a) * c b * (K a b - starRingEnd ℂ (K b a)) =
+          (∑ a, ∑ b, starRingEnd ℂ (c a) * c b * K a b) -
+          (∑ a, ∑ b, starRingEnd ℂ (c a) * c b * starRingEnd ℂ (K b a)) := by
+        simp_rw [mul_sub, ← Finset.sum_sub_distrib]
+      rw [this, h, _root_.sub_self]
+    -- For c = Pi.single a 1: sum collapses to D a a = 0
+    have hD_diag : ∀ a : Fin n, K a a - starRingEnd ℂ (K a a) = 0 := by
+      intro a
+      have := hdiff_zero (Pi.single a 1)
+      simp only [Pi.single_apply, apply_ite (starRingEnd ℂ), map_one, map_zero, ite_mul,
+        one_mul, zero_mul, mul_ite, mul_one, mul_zero, Finset.sum_ite_eq',
+        Finset.mem_univ, ite_true] at this
+      exact this
+    -- For off-diagonal: use two test vectors
+    -- hdiff_single : ∀ a b c_a c_b, sum at (Pi.single a c_a + Pi.single b c_b)
+    -- We need: ∀ a b, K a b = conj(K b a)
+    ext i j
+    simp only [conjTranspose_apply, of_apply, star_def]
+    -- Goal: conj(K j i) = K i j, i.e., K i j - conj(K j i) = 0 → conj(K j i) = K i j
+    -- Equivalently: K j i - conj(K i j) = 0 (swapped), then take conj
+    -- Actually we want conj(K j i) = K i j, which is K i j = conj(K j i),
+    -- i.e., K i j - conj(K j i) = 0
+    -- Step: prove ∀ a b, K a b - conj(K b a) = 0
+    suffices hD : ∀ a b : Fin n, K a b - starRingEnd ℂ (K b a) = 0 by
+      have := hD i j; rw [sub_eq_zero] at this; exact this.symm
+    intro a b
+    by_cases hab : a = b
+    · subst hab; exact hD_diag a
+    · -- Use two-point test vectors to show D(a,b) = K(a,b) - conj(K(b,a)) = 0
+      -- Helper: simplify sums at 2-entry vectors using sum_ite_eq'
+      have heval : ∀ s t : ℂ,
+          starRingEnd ℂ s * s * (K a a - starRingEnd ℂ (K a a)) +
+          starRingEnd ℂ s * t * (K a b - starRingEnd ℂ (K b a)) +
+          (starRingEnd ℂ t * s * (K b a - starRingEnd ℂ (K a b)) +
+          starRingEnd ℂ t * t * (K b b - starRingEnd ℂ (K b b))) = 0 := by
+        intro s t
+        have key := hdiff_zero (fun k => (if k = a then s else 0) + (if k = b then t else 0))
+        simp only [map_add, apply_ite (starRingEnd ℂ), map_zero, add_mul, mul_add,
+          ite_mul, mul_ite, mul_zero, zero_mul, Finset.sum_add_distrib,
+          Finset.sum_ite_eq', Finset.mem_univ, ite_true] at key
+        convert key using 1
+        ring
+      -- Specialize: D(a,a) = D(b,b) = 0 simplifies the evaluation
+      have hDa := hD_diag a
+      have hDb := hD_diag b
+      -- Test 1: s = 1, t = 1 gives D(a,b) + D(b,a) = 0
+      have htest1 := heval 1 1
+      simp only [map_one, one_mul, hDa, hDb, mul_zero, zero_add, add_zero] at htest1
+      -- htest1 : (K a b - conj(K b a)) + (K b a - conj(K a b)) = 0
+      -- Test 2: s = 1, t = I gives I·D(a,b) + (-I)·D(b,a) = 0
+      have htest2 := heval 1 I
+      simp only [map_one, one_mul, mul_one, conj_I, hDa, hDb, mul_zero, zero_add,
+        add_zero] at htest2
+      set D₁ := K a b - starRingEnd ℂ (K b a)
+      set D₂ := K b a - starRingEnd ℂ (K a b)
+      have h_sum : D₁ + D₂ = 0 := htest1
+      -- htest2 : I * D₁ + (-I) * D₂ = 0 (or with extra 1)
+      -- Strategy: D₁ + D₂ = 0 and I*D₁ - I*D₂ = 0 → D₁ = D₂, then 2D₁ = 0.
+      have h_eq : D₁ = D₂ := by
+        have h_Idiff : I * D₁ - I * D₂ = 0 := by
+          have := htest2
+          -- htest2 might have form: I * D₁ + -I * D₂ = 0
+          -- Need: I * D₁ - I * D₂ = 0
+          -- -I * D₂ = -(I * D₂), so I*D₁ + (-I)*D₂ = I*D₁ - I*D₂
+          linear_combination this
+        have : I * (D₁ - D₂) = 0 := by rw [mul_sub]; exact h_Idiff
+        exact sub_eq_zero.mp ((mul_eq_zero.mp this).resolve_left I_ne_zero)
+      -- D₁ = D₂ and D₁ + D₂ = 0 → 2D₁ = 0
+      have : D₁ + D₁ = 0 := by rw [show D₁ + D₁ = D₁ + D₂ from by rw [h_eq]]; exact h_sum
+      rw [show D₁ = (2 : ℂ)⁻¹ * (D₁ + D₁) from by ring, this, mul_zero]
   · change 0 ≤ dotProduct (star c) (mulVec (Matrix.of K) c)
     have key : dotProduct (star c) (mulVec (Matrix.of K) c) =
         ∑ i, ∑ j, starRingEnd ℂ (c i) * c j * K i j := by
