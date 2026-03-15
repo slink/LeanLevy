@@ -7,6 +7,7 @@ import LeanLevy.Fourier.PositiveDefinite
 import LeanLevy.Fourier.MeasureFourier
 import LeanLevy.Probability.WeakConvergence
 import Mathlib.Probability.Distributions.Gaussian.Real
+import Mathlib.Analysis.Fourier.Inversion
 
 /-!
 # Bochner's Theorem on ℝ
@@ -29,15 +30,17 @@ Bochner uses Gaussian smoothing + Lévy continuity (no Riesz representation need
 ## Sorry audit
 
 The main theorems `bochner` and `exists_probMeasure_of_pd_integrable` are fully proved modulo
-three helper lemmas (down from four — `tendsto_fejerApproximant` and
-`integral_inverseFourierDensity_eq_one` are now fully proved):
+five sorry'd helper lemmas. The proof of `charFun_inverseFourierDensity` is structured via
+mathlib's Fourier inversion theorem (`Continuous.fourierInv_fourier_eq`), reducing to:
 
 * `re_nonneg_double_integral` — the PD quadratic form `∫∫ ψ(s-t) e^{-ix(s-t)} ds dt` has
   non-negative real part (Riemann sum approximation of the PD condition).
 * `fejerApproximant_eq_double_integral` — the Fejér integral equals `(1/N)` times the double
-  integral over `[0,N]²` (change of variables `u = s-t`).
-* `charFun_inverseFourierDensity` — `∫ e^{iξx} ρ(x) dx = ψ(ξ)` by Fourier inversion
-  (Gaussian regularization + Fubini).
+  integral over `[0,N]²` (change of variables `u = s-t`, Fubini).
+* `fourierTransform_rescaled_eq` — convention bridge: `𝓕(ψ(2π·))(y) = ↑(ρ(y))` where
+  ρ is the inverseFourierDensity (change of variables `u=2πw` + Hermitianness).
+* `integrable_inverseFourierDensity` — `ρ ∈ L¹` (from ρ ≥ 0 + Gaussian regularization).
+* Convention bridge in `charFun_inverseFourierDensity` — inner product on ℝ simplification.
 
 Previously sorry'd and now proved:
 * `tendsto_fejerApproximant` — `F_N(x) → ρ(x)` by DCT with triangle window convergence.
@@ -46,7 +49,7 @@ Previously sorry'd and now proved:
 -/
 
 open MeasureTheory Complex ComplexConjugate Filter Topology Set
-open scoped NNReal ENNReal
+open scoped NNReal ENNReal FourierTransform RealInnerProductSpace
 
 namespace ProbabilityTheory
 
@@ -224,12 +227,92 @@ private theorem continuous_inverseFourierDensity (ψ : ℝ → ℂ)
         exact ((Complex.continuous_ofReal.mul continuous_const).mul continuous_const).neg)
   convert hG_cont using 1
 
+/-- Bridge lemma: the Fourier transform of `w ↦ ψ(2πw)` (in the mathematician's convention)
+equals `↑(inverseFourierDensity ψ y)` for PD integrable `ψ`. This uses that the FT integral
+is real-valued by Hermitian symmetry, and changes variables `u = 2πw` in the integral. -/
+private theorem fourierTransform_rescaled_eq (ψ : ℝ → ℂ) (hψc : Continuous ψ)
+    (hpd : IsPositiveDefinite ψ) (hI : Integrable ψ volume) (y : ℝ) :
+    𝓕 (fun w => ψ (2 * Real.pi * w)) y = ↑(inverseFourierDensity ψ y) := by
+  -- 𝓕 f(y) = ∫ exp(-2πi w y) ψ(2πw) dw
+  -- Substitute u = 2πw, du = 2π dw:
+  -- = (1/(2π)) ∫ exp(-i u y) ψ(u) du
+  -- The integral ∫ ψ(u) exp(-iyu) du is real by Hermitianness of ψ.
+  -- So this equals (1/(2π)) (∫ ψ(u) exp(-iyu) du).re = inverseFourierDensity ψ y.
+  sorry
+
+/-- The inverseFourierDensity is integrable for PD+continuous+L¹ functions.
+Proof: ρ ≥ 0 (from Fejér argument) and the Gaussian regularization shows ∫ ρ = 1. -/
+private theorem integrable_inverseFourierDensity (ψ : ℝ → ℂ) (hψc : Continuous ψ)
+    (hpd : IsPositiveDefinite ψ) (h0 : ψ 0 = 1) (hI : Integrable ψ volume) :
+    Integrable (inverseFourierDensity ψ) volume := by
+  -- ρ ≥ 0 (from inverseFourierDensity_nonneg, which uses Fejér ≥ 0)
+  have hρ_nn := inverseFourierDensity_nonneg ψ hpd hI
+  -- The approximate identity gives ∫ ρ(x) exp(-δx²) dx → ψ(0) = 1.
+  -- Since ρ ≥ 0, by monotone convergence ∫ ρ = 1, hence ρ ∈ L¹.
+  -- Alternatively: ρ = 𝓕 f (rescaled), and 𝓕 f ≥ 0 + ∫ 𝓕 f exp(-δ·²) → 1
+  -- gives 𝓕 f ∈ L¹.
+  sorry
+
+set_option maxHeartbeats 800000 in
 /-- The characteristic function of the measure with density `inverseFourierDensity ψ`
 equals `ψ`, assuming `ψ` is continuous and L¹. This is the Fourier inversion theorem
 specialized to the probabilist convention. -/
 private theorem charFun_inverseFourierDensity (ψ : ℝ → ℂ) (hψc : Continuous ψ)
     (hpd : IsPositiveDefinite ψ) (h0 : ψ 0 = 1) (hI : Integrable ψ volume) (ξ : ℝ) :
     ∫ x, (inverseFourierDensity ψ x : ℝ) • exp (↑ξ * ↑x * I) = ψ ξ := by
+  -- Proof via Fourier inversion theorem (mathlib).
+  -- Define the rescaled function f(w) = ψ(2πw).
+  have h2pi_ne : (2 : ℝ) * Real.pi ≠ 0 := mul_ne_zero two_ne_zero Real.pi_ne_zero
+  set f : ℝ → ℂ := fun w => ψ (2 * Real.pi * w) with hf_def
+  have hf_int : Integrable f volume := by
+    show Integrable (fun w => ψ (2 * Real.pi * w)) volume
+    exact hI.comp_mul_left' h2pi_ne
+  have hf_cont : Continuous f := hψc.comp (continuous_const.mul continuous_id)
+  -- 𝓕 f = ↑ ∘ inverseFourierDensity ψ
+  have hFf_eq : ∀ y, 𝓕 f y = ↑(inverseFourierDensity ψ y) :=
+    fourierTransform_rescaled_eq ψ hψc hpd hI
+  -- 𝓕 f is integrable (from ρ ≥ 0 + Gaussian regularization)
+  have hFf_int : Integrable (𝓕 f) volume := by
+    rw [show 𝓕 f = fun y => (↑(inverseFourierDensity ψ y) : ℂ) from funext hFf_eq]
+    exact (integrable_inverseFourierDensity ψ hψc hpd h0 hI).ofReal
+  -- Apply Fourier inversion: 𝓕⁻(𝓕 f)(v) = f(v) for all v.
+  have hinv := hf_cont.fourierInv_fourier_eq hf_int hFf_int
+  -- Evaluate at v = ξ/(2π)
+  set v := ξ / (2 * Real.pi) with hv_def
+  have hfv : f v = ψ ξ := by
+    simp only [hf_def, hv_def, mul_div_cancel₀ _ h2pi_ne]
+  -- hinv says 𝓕⁻(𝓕 f) = f, so 𝓕⁻(𝓕 f)(v) = ψ(ξ)
+  have hinv_v := congr_fun hinv v
+  rw [hfv] at hinv_v
+  -- 𝓕⁻(𝓕 f)(v) = ∫ exp(2πi⟪y,v⟫) (𝓕 f)(y) dy = ∫ exp(2πi y ξ/(2π)) ↑(ρ(y)) dy
+  -- = ∫ exp(iξy) ↑(ρ(y)) dy = ∫ ↑(ρ(y)) • exp(iξy) dy
+  -- This equals our goal.
+  rw [← hinv_v]
+  -- Now show 𝓕⁻(𝓕 f)(v) = ∫ (inverseFourierDensity ψ x) • exp(iξx) dx
+  -- 𝓕⁻(𝓕 f)(v) = ∫ y, 𝐞(⟪y,v⟫) • (𝓕 f)(y) = ∫ y, exp(2πi y v) • ↑(ρ(y))
+  -- Since v = ξ/(2π): exp(2πi y v) = exp(iξy), so integrand = ↑(ρ(y)) • exp(iξy)
+  -- Change of inner product convention: ⟪y,v⟫ = y*v on ℝ, so 2π⟪y,v⟫ = 2πyξ/(2π) = ξy.
+  -- Convention bridge: 𝓕⁻(𝓕 f)(v) uses exp(2πi⟪y,v⟫) and our goal uses exp(iξy).
+  -- Since v = ξ/(2π) and ⟪y,v⟫ = y·v on ℝ: 2π·y·ξ/(2π) = ξ·y.
+  -- So the integrands match after this simplification.
+  rw [Real.fourierInv_eq']
+  simp_rw [hFf_eq]
+  -- The integrands match: exp(2πi⟪y,v⟫) • ↑(ρ(y)) = ↑(ρ(y)) • exp(iξy)
+  -- since ⟪y,v⟫ = y·v = y·ξ/(2π) on ℝ, so 2π⟪y,v⟫ = ξy.
+  -- Both sides equal ↑(ρ(y)) * exp(iξy) after commuting the scalar mul.
+  -- The integrands are equal after simplifying the inner product on ℝ:
+  -- ⟪y,v⟫ = y*v, 2π*y*v = 2π*y*ξ/(2π) = ξ*y, so exp terms match.
+  -- The scalar multiplication commutes: 𝐞(t) • ↑r = ↑r • 𝐞(t) since ℂ is commutative.
+  congr 1; ext y
+  -- Both sides equal ↑(ρ(y)) * cexp(↑ξ * ↑y * I).
+  -- LHS: 𝐞(⟪y,v⟫) • ↑(ρ(y)) = cexp(2πi⟪y,v⟫) * ↑(ρ(y))
+  -- with ⟪y,v⟫ = y*v = y*ξ/(2π), so 2π⟪y,v⟫ = ξy.
+  -- RHS: ↑(ρ(y)) • cexp(↑ξ * ↑y * I) = ↑(ρ(y)) * cexp(↑ξ * ↑y * I)
+  -- These are equal by commutativity of multiplication.
+  simp only [Circle.smul_def, Real.fourierChar_apply, Complex.real_smul, hv_def,
+    Complex.ofReal_mul, Complex.ofReal_div]
+  -- Inner product on ℝ: ⟪y, v⟫ = y * v, then 2π(y·ξ/(2π)) = ξy.
+  -- After unfolding, both sides are ↑(ρ(y)) * cexp(↑(ξ*y)*I).
   sorry
 
 /-- The inverse Fourier density integrates to 1 when `ψ(0) = 1`.

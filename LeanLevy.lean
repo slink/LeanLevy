@@ -1,6 +1,7 @@
 -- This module serves as the root of the `LeanLevy` library.
 -- Import modules here that should be built as part of the library.
 import LeanLevy.Basic
+import LeanLevy.Representation.BochnerGaussian
 import LeanLevy.Fourier.MeasureFourier
 import LeanLevy.Fourier.PositiveDefinite
 import LeanLevy.Fourier.Bochner
