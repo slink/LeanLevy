@@ -829,6 +829,201 @@ private theorem fourierTransform_rescaled_eq (ψ : ℝ → ℂ) (hψc : Continuo
   rw [one_div]
 
 set_option maxHeartbeats 800000 in
+/-- Fubini + Gaussian Fourier identity:
+`∫_x Re(∫_u ψ(u) exp(-ixu)) · exp(-x²/(2σ²)) = √(2πσ²) · Re(∫_u ψ(u) exp(-σ²u²/2))`.
+This swaps the x and u integrals using Fubini, then evaluates the inner x-integral
+via `fourierIntegral_gaussian`. -/
+private theorem fubini_gaussianFourier_identity (ψ : ℝ → ℂ) (hψc : Continuous ψ)
+    (hI : Integrable ψ volume) (σ2 : ℝ) (hσ2 : 0 < σ2) :
+    ∫ x : ℝ, (∫ u : ℝ, ψ u * exp (-(↑x * ↑u * I))).re *
+      Real.exp (-(x ^ 2 / (2 * σ2))) =
+    Real.sqrt (2 * Real.pi * σ2) *
+      (∫ u : ℝ, ψ u * ↑(Real.exp (-(σ2 * u ^ 2 / 2)))).re := by
+    -- Step 1: Re(z) * r = Re(z * ↑r)
+    have hstep1 : ∀ x : ℝ,
+        (∫ u : ℝ, ψ u * exp (-(↑x * ↑u * I))).re *
+          Real.exp (-(x ^ 2 / (2 * σ2))) =
+        ((∫ u : ℝ, ψ u * exp (-(↑x * ↑u * I))) *
+          ↑(Real.exp (-(x ^ 2 / (2 * σ2))))).re := by
+      intro x
+      simp only [Complex.mul_re, Complex.ofReal_re, Complex.ofReal_im, mul_zero, sub_zero]
+    simp_rw [hstep1]
+    -- Step 2: ∫_x Re(f(x)) = Re(∫_x f(x)) by integral_re
+    -- Need integrability of x ↦ (∫_u ψ exp(-ixu)) * ↑(exp(-x²/(2σ²)))
+    have hψ_int_bdd : ∀ x : ℝ,
+        ‖∫ u : ℝ, ψ u * exp (-(↑x * ↑u * I))‖ ≤ ∫ u, ‖ψ u‖ := by
+      intro x
+      calc ‖∫ u, ψ u * exp (-(↑x * ↑u * I))‖
+          ≤ ∫ u, ‖ψ u * exp (-(↑x * ↑u * I))‖ := norm_integral_le_integral_norm _
+        _ = ∫ u, ‖ψ u‖ := by
+            congr 1; ext u; rw [norm_mul,
+              show -(↑x * ↑u * I) = ↑(-(x * u)) * I from by push_cast; ring,
+              norm_exp_ofReal_mul_I, mul_one]
+    have hgauss_int : Integrable (fun x : ℝ =>
+        Real.exp (-(x ^ 2 / (2 * σ2)))) volume := by
+      have h := integrable_exp_neg_mul_sq (show 0 < 1 / (2 * σ2) by positivity)
+      convert h using 1; ext x; congr 1; ring
+    have hf_int : Integrable (fun x : ℝ =>
+        (∫ u : ℝ, ψ u * exp (-(↑x * ↑u * I))) *
+          ↑(Real.exp (-(x ^ 2 / (2 * σ2))))) volume := by
+      -- Bound: ‖f(x)‖ ≤ (∫ ‖ψ‖) * exp(-x²/(2σ²))
+      apply (hgauss_int.const_mul (∫ u, ‖ψ u‖)).mono'
+      · apply AEStronglyMeasurable.mul
+        · -- x ↦ ∫ ψ(u) exp(-ixu) du is continuous (by continuous_of_dominated)
+          -- hence AEStronglyMeasurable
+          have hcont_param : Continuous (fun x : ℝ =>
+              ∫ u : ℝ, ψ u * exp (-(↑x * ↑u * I))) := by
+            set G : ℝ → ℝ → ℂ := fun x u => ψ u * exp (-(↑x * ↑u * I))
+            exact continuous_of_dominated
+              (fun (x : ℝ) => (hψc.mul ((((continuous_ofReal.comp continuous_const).mul
+                continuous_ofReal).mul continuous_const).neg.cexp)).aestronglyMeasurable)
+              (fun x => ae_of_all _ fun u => by
+                show ‖G x u‖ ≤ ‖ψ u‖
+                simp only [G, norm_mul]
+                rw [show -(↑x * ↑u * I) = ↑(-(x * u)) * I from by push_cast; ring,
+                  norm_exp_ofReal_mul_I, mul_one])
+              hI.norm
+              (ae_of_all _ fun u => by
+                show Continuous fun (y : ℝ) => G y u
+                simp only [G]
+                refine Continuous.mul continuous_const (Complex.continuous_exp.comp ?_)
+                exact ((Complex.continuous_ofReal.mul continuous_const).mul
+                  continuous_const).neg)
+          exact hcont_param.aestronglyMeasurable
+        · exact (Complex.continuous_ofReal.comp (Real.continuous_exp.comp
+            (continuous_neg.comp ((continuous_pow 2).div_const _)))).aestronglyMeasurable
+      · exact ae_of_all _ fun x => by
+          rw [norm_mul, Complex.norm_real, Real.norm_eq_abs,
+            abs_of_nonneg (Real.exp_nonneg _)]
+          exact mul_le_mul_of_nonneg_right (hψ_int_bdd x) (Real.exp_nonneg _)
+    -- ∫ Re(f(x)) = Re(∫ f(x))
+    conv_lhs =>
+      arg 2; ext x
+      rw [show ((∫ u : ℝ, ψ u * exp (-(↑x * ↑u * I))) *
+          ↑(Real.exp (-(x ^ 2 / (2 * σ2))))).re =
+        Complex.re ((∫ u : ℝ, ψ u * exp (-(↑x * ↑u * I))) *
+          ↑(Real.exp (-(x ^ 2 / (2 * σ2))))) from rfl]
+    rw [show (fun x : ℝ => Complex.re ((∫ u : ℝ, ψ u * exp (-(↑x * ↑u * I))) *
+          ↑(Real.exp (-(x ^ 2 / (2 * σ2)))))) =
+      (fun x : ℝ => RCLike.re ((∫ u : ℝ, ψ u * exp (-(↑x * ↑u * I))) *
+          ↑(Real.exp (-(x ^ 2 / (2 * σ2)))))) from rfl,
+      integral_re hf_int]
+    -- Prove the complex identity, then take .re
+    suffices hcomplex : (∫ x : ℝ, (∫ u : ℝ, ψ u * exp (-(↑x * ↑u * I))) *
+        ↑(Real.exp (-(x ^ 2 / (2 * σ2))))) =
+      ↑(Real.sqrt (2 * Real.pi * σ2)) *
+        ∫ u : ℝ, ψ u * ↑(Real.exp (-(σ2 * u ^ 2 / 2))) by
+      show (∫ x : ℝ, (∫ u : ℝ, ψ u * exp (-(↑x * ↑u * I))) *
+          ↑(Real.exp (-(x ^ 2 / (2 * σ2))))).re =
+        Real.sqrt (2 * Real.pi * σ2) *
+          (∫ u : ℝ, ψ u * ↑(Real.exp (-(σ2 * u ^ 2 / 2)))).re
+      rw [hcomplex]
+      simp only [mul_re, ofReal_re, ofReal_im, zero_mul, sub_zero]
+    -- Pull ↑exp inside the inner integral
+    have hpull : ∀ x : ℝ,
+        (∫ u : ℝ, ψ u * exp (-(↑x * ↑u * I))) * ↑(Real.exp (-(x ^ 2 / (2 * σ2)))) =
+        ∫ u : ℝ, ψ u * exp (-(↑x * ↑u * I)) * ↑(Real.exp (-(x ^ 2 / (2 * σ2)))) := by
+      intro x; exact (integral_mul_const _ _).symm
+    simp_rw [hpull]
+    -- Product integrability for Fubini
+    have hcont_prod : Continuous (fun p : ℝ × ℝ =>
+        ψ p.2 * exp (-(↑p.1 * ↑p.2 * I)) *
+          ↑(Real.exp (-(p.1 ^ 2 / (2 * σ2))))) :=
+      ((hψc.comp continuous_snd).mul
+        (Complex.continuous_exp.comp
+          (((continuous_ofReal.comp continuous_fst).mul
+            (continuous_ofReal.comp continuous_snd)).mul
+            continuous_const).neg)).mul
+        (Complex.continuous_ofReal.comp (Real.continuous_exp.comp
+          (continuous_neg.comp ((continuous_pow 2 |>.comp continuous_fst).div_const _))))
+    have hprod_int : Integrable (fun p : ℝ × ℝ =>
+        ψ p.2 * exp (-(↑p.1 * ↑p.2 * I)) *
+          ↑(Real.exp (-(p.1 ^ 2 / (2 * σ2))))) (volume.prod volume) := by
+      rw [integrable_prod_iff hcont_prod.aestronglyMeasurable]
+      refine ⟨?_, ?_⟩
+      · exact ae_of_all _ fun x => by
+          show Integrable (fun u => ψ u * exp (-(↑x * ↑u * I)) *
+            ↑(Real.exp (-(x ^ 2 / (2 * σ2))))) volume
+          apply Integrable.mono' (hI.norm.mul_const (Real.exp (-(x ^ 2 / (2 * σ2)))))
+          · exact (hcont_prod.comp
+              (continuous_const.prodMk continuous_id)).aestronglyMeasurable
+          · exact ae_of_all _ fun u => by
+              rw [norm_mul, norm_mul, Complex.norm_real, Real.norm_eq_abs,
+                abs_of_nonneg (Real.exp_nonneg _),
+                show -(↑x * ↑u * I) = ↑(-(x * u)) * I from by push_cast; ring,
+                norm_exp_ofReal_mul_I, mul_one]
+      · have hnorm_eq : (fun x => ∫ u, ‖(fun p : ℝ × ℝ => ψ p.2 *
+            exp (-(↑p.1 * ↑p.2 * I)) *
+              ↑(Real.exp (-(p.1 ^ 2 / (2 * σ2))))) (x, u)‖) =
+            fun x => (∫ u, ‖ψ u‖) * Real.exp (-(x ^ 2 / (2 * σ2))) := by
+          ext x
+          show ∫ u, ‖ψ u * exp (-(↑x * ↑u * I)) *
+            ↑(Real.exp (-(x ^ 2 / (2 * σ2))))‖ =
+            (∫ u, ‖ψ u‖) * Real.exp (-(x ^ 2 / (2 * σ2)))
+          simp_rw [norm_mul, Complex.norm_real, Real.norm_eq_abs,
+            abs_of_nonneg (Real.exp_nonneg _)]
+          rw [← integral_mul_const]
+          congr 1; ext u
+          rw [show -(↑x * ↑u * I) = ↑(-(x * u)) * I from by push_cast; ring,
+            norm_exp_ofReal_mul_I, mul_one]
+        rw [hnorm_eq]
+        exact hgauss_int.const_mul _
+    -- Apply Fubini
+    rw [integral_integral_swap hprod_int]
+    -- Evaluate the inner x-integral for each u
+    have hinner_eq : ∀ u : ℝ,
+        (∫ x : ℝ, ψ u * exp (-(↑x * ↑u * I)) *
+          ↑(Real.exp (-(x ^ 2 / (2 * σ2))))) =
+        ψ u * (↑(Real.sqrt (2 * Real.pi * σ2)) *
+          ↑(Real.exp (-(σ2 * u ^ 2 / 2)))) := by
+      intro u
+      have hassoc : ∀ x : ℝ, ψ u * exp (-(↑x * ↑u * I)) *
+          ↑(Real.exp (-(x ^ 2 / (2 * σ2)))) =
+        ψ u * (exp (-(↑x * ↑u * I)) *
+          ↑(Real.exp (-(x ^ 2 / (2 * σ2))))) := fun x => by ring
+      simp_rw [hassoc]
+      rw [show (∫ x : ℝ, ψ u * (exp (-(↑x * ↑u * I)) *
+          ↑(Real.exp (-(x ^ 2 / (2 * σ2)))))) =
+        ψ u * ∫ x : ℝ, exp (-(↑x * ↑u * I)) *
+          ↑(Real.exp (-(x ^ 2 / (2 * σ2))))
+        from integral_const_mul _ _]
+      congr 1
+      -- Evaluate via fourierIntegral_gaussian
+      have hrw : ∀ x : ℝ,
+          exp (-(↑x * ↑u * I)) * ↑(Real.exp (-(x ^ 2 / (2 * σ2)))) =
+          cexp (I * (-↑u) * ↑x) *
+            cexp (-(↑(1 / (2 * σ2)) : ℂ) * (↑x) ^ 2) := by
+        intro x
+        congr 1
+        · congr 1; ring
+        · rw [Complex.ofReal_exp]; congr 1; push_cast; ring
+      simp_rw [hrw]
+      have hb_re : (0 : ℝ) < (↑(1 / (2 * σ2)) : ℂ).re := by
+        simp [Complex.ofReal_re]; positivity
+      rw [fourierIntegral_gaussian hb_re (-↑u)]
+      have h1 : (↑(1 / (2 * σ2)) : ℂ) = 1 / (2 * ↑σ2) := by push_cast; ring
+      rw [h1]
+      have h2piσ_nn : (0 : ℝ) ≤ 2 * Real.pi * σ2 := by positivity
+      have hbase : (↑Real.pi : ℂ) / (1 / (2 * ↑σ2)) = ↑(2 * Real.pi * σ2) := by
+        push_cast; field_simp
+      rw [hbase, show (1 / 2 : ℂ) = ↑(1 / 2 : ℝ) from by push_cast; ring,
+        ← ofReal_cpow h2piσ_nn,
+        show (2 * Real.pi * σ2) ^ (1 / 2 : ℝ) = Real.sqrt (2 * Real.pi * σ2) from
+          (Real.sqrt_eq_rpow _).symm]
+      congr 1
+      rw [Complex.ofReal_exp]; congr 1
+      push_cast
+      have hσ2_ne : (↑σ2 : ℂ) ≠ 0 := ofReal_ne_zero.mpr (ne_of_gt hσ2)
+      field_simp; ring
+    -- Rewrite inner integrals and finish
+    simp_rw [hinner_eq]
+    simp_rw [show ∀ u : ℝ, ψ u * (↑(Real.sqrt (2 * Real.pi * σ2)) *
+        ↑(Real.exp (-(σ2 * u ^ 2 / 2)))) =
+      ↑(Real.sqrt (2 * Real.pi * σ2)) * (ψ u * ↑(Real.exp (-(σ2 * u ^ 2 / 2))))
+      from fun u => by ring]
+    exact integral_const_mul _ _
+
+set_option maxHeartbeats 800000 in
 /-- The inverseFourierDensity is integrable for PD+continuous+L¹ functions.
 Proof: ρ ≥ 0 (from Fejér argument) and the Gaussian regularization shows ∫ ρ = 1. -/
 private theorem integrable_inverseFourierDensity (ψ : ℝ → ℂ) (hψc : Continuous ψ)
@@ -954,195 +1149,7 @@ private theorem integrable_inverseFourierDensity (ψ : ℝ → ℂ) (hψc : Cont
       -- ≤ √(2πσ²) ∫_u ‖ψ(u)‖ exp(-σ²u²/2)
       -- So the bound = (1/(2π)) * √(2πσ²) * ∫ ‖ψ‖ exp(...)
       -- = √σ²/√(2π) * ∫ ‖ψ‖ exp(-σ²u²/2).
-      -- The Fubini+Gaussian FT identity:
-      have fubini_identity :
-          ∫ x : ℝ, (∫ u : ℝ, ψ u * exp (-(↑x * ↑u * I))).re *
-            Real.exp (-(x ^ 2 / (2 * σ2))) =
-          Real.sqrt (2 * Real.pi * σ2) *
-            (∫ u : ℝ, ψ u * ↑(Real.exp (-(σ2 * u ^ 2 / 2)))).re := by
-        -- Step 1: Re(z) * r = Re(z * ↑r)
-        have hstep1 : ∀ x : ℝ,
-            (∫ u : ℝ, ψ u * exp (-(↑x * ↑u * I))).re *
-              Real.exp (-(x ^ 2 / (2 * σ2))) =
-            ((∫ u : ℝ, ψ u * exp (-(↑x * ↑u * I))) *
-              ↑(Real.exp (-(x ^ 2 / (2 * σ2))))).re := by
-          intro x
-          simp only [Complex.mul_re, Complex.ofReal_re, Complex.ofReal_im, mul_zero, sub_zero]
-        simp_rw [hstep1]
-        -- Step 2: ∫_x Re(f(x)) = Re(∫_x f(x)) by integral_re
-        -- Need integrability of x ↦ (∫_u ψ exp(-ixu)) * ↑(exp(-x²/(2σ²)))
-        have hψ_int_bdd : ∀ x : ℝ,
-            ‖∫ u : ℝ, ψ u * exp (-(↑x * ↑u * I))‖ ≤ ∫ u, ‖ψ u‖ := by
-          intro x
-          calc ‖∫ u, ψ u * exp (-(↑x * ↑u * I))‖
-              ≤ ∫ u, ‖ψ u * exp (-(↑x * ↑u * I))‖ := norm_integral_le_integral_norm _
-            _ = ∫ u, ‖ψ u‖ := by
-                congr 1; ext u; rw [norm_mul,
-                  show -(↑x * ↑u * I) = ↑(-(x * u)) * I from by push_cast; ring,
-                  norm_exp_ofReal_mul_I, mul_one]
-        have hgauss_int : Integrable (fun x : ℝ =>
-            Real.exp (-(x ^ 2 / (2 * σ2)))) volume := by
-          have h := integrable_exp_neg_mul_sq (show 0 < 1 / (2 * σ2) by positivity)
-          convert h using 1; ext x; congr 1; ring
-        have hf_int : Integrable (fun x : ℝ =>
-            (∫ u : ℝ, ψ u * exp (-(↑x * ↑u * I))) *
-              ↑(Real.exp (-(x ^ 2 / (2 * σ2))))) volume := by
-          -- Bound: ‖f(x)‖ ≤ (∫ ‖ψ‖) * exp(-x²/(2σ²))
-          apply (hgauss_int.const_mul (∫ u, ‖ψ u‖)).mono'
-          · apply AEStronglyMeasurable.mul
-            · -- x ↦ ∫ ψ(u) exp(-ixu) du is continuous (by continuous_of_dominated)
-              -- hence AEStronglyMeasurable
-              have hcont_param : Continuous (fun x : ℝ =>
-                  ∫ u : ℝ, ψ u * exp (-(↑x * ↑u * I))) := by
-                set G : ℝ → ℝ → ℂ := fun x u => ψ u * exp (-(↑x * ↑u * I))
-                exact continuous_of_dominated
-                  (fun (x : ℝ) => (hψc.mul ((((continuous_ofReal.comp continuous_const).mul
-                    continuous_ofReal).mul continuous_const).neg.cexp)).aestronglyMeasurable)
-                  (fun x => ae_of_all _ fun u => by
-                    show ‖G x u‖ ≤ ‖ψ u‖
-                    simp only [G, norm_mul]
-                    rw [show -(↑x * ↑u * I) = ↑(-(x * u)) * I from by push_cast; ring,
-                      norm_exp_ofReal_mul_I, mul_one])
-                  hI.norm
-                  (ae_of_all _ fun u => by
-                    show Continuous fun (y : ℝ) => G y u
-                    simp only [G]
-                    refine Continuous.mul continuous_const (Complex.continuous_exp.comp ?_)
-                    exact ((Complex.continuous_ofReal.mul continuous_const).mul
-                      continuous_const).neg)
-              exact hcont_param.aestronglyMeasurable
-            · exact (Complex.continuous_ofReal.comp (Real.continuous_exp.comp
-                (continuous_neg.comp ((continuous_pow 2).div_const _)))).aestronglyMeasurable
-          · exact ae_of_all _ fun x => by
-              rw [norm_mul, Complex.norm_real, Real.norm_eq_abs,
-                abs_of_nonneg (Real.exp_nonneg _)]
-              exact mul_le_mul_of_nonneg_right (hψ_int_bdd x) (Real.exp_nonneg _)
-        -- ∫ Re(f(x)) = Re(∫ f(x))
-        conv_lhs =>
-          arg 2; ext x
-          rw [show ((∫ u : ℝ, ψ u * exp (-(↑x * ↑u * I))) *
-              ↑(Real.exp (-(x ^ 2 / (2 * σ2))))).re =
-            Complex.re ((∫ u : ℝ, ψ u * exp (-(↑x * ↑u * I))) *
-              ↑(Real.exp (-(x ^ 2 / (2 * σ2))))) from rfl]
-        rw [show (fun x : ℝ => Complex.re ((∫ u : ℝ, ψ u * exp (-(↑x * ↑u * I))) *
-              ↑(Real.exp (-(x ^ 2 / (2 * σ2)))))) =
-          (fun x : ℝ => RCLike.re ((∫ u : ℝ, ψ u * exp (-(↑x * ↑u * I))) *
-              ↑(Real.exp (-(x ^ 2 / (2 * σ2)))))) from rfl,
-          integral_re hf_int]
-        -- Prove the complex identity, then take .re
-        suffices hcomplex : (∫ x : ℝ, (∫ u : ℝ, ψ u * exp (-(↑x * ↑u * I))) *
-            ↑(Real.exp (-(x ^ 2 / (2 * σ2))))) =
-          ↑(Real.sqrt (2 * Real.pi * σ2)) *
-            ∫ u : ℝ, ψ u * ↑(Real.exp (-(σ2 * u ^ 2 / 2))) by
-          show (∫ x : ℝ, (∫ u : ℝ, ψ u * exp (-(↑x * ↑u * I))) *
-              ↑(Real.exp (-(x ^ 2 / (2 * σ2))))).re =
-            Real.sqrt (2 * Real.pi * σ2) *
-              (∫ u : ℝ, ψ u * ↑(Real.exp (-(σ2 * u ^ 2 / 2)))).re
-          rw [hcomplex]
-          simp only [mul_re, ofReal_re, ofReal_im, zero_mul, sub_zero]
-        -- Pull ↑exp inside the inner integral
-        have hpull : ∀ x : ℝ,
-            (∫ u : ℝ, ψ u * exp (-(↑x * ↑u * I))) * ↑(Real.exp (-(x ^ 2 / (2 * σ2)))) =
-            ∫ u : ℝ, ψ u * exp (-(↑x * ↑u * I)) * ↑(Real.exp (-(x ^ 2 / (2 * σ2)))) := by
-          intro x; exact (integral_mul_const _ _).symm
-        simp_rw [hpull]
-        -- Product integrability for Fubini
-        have hcont_prod : Continuous (fun p : ℝ × ℝ =>
-            ψ p.2 * exp (-(↑p.1 * ↑p.2 * I)) *
-              ↑(Real.exp (-(p.1 ^ 2 / (2 * σ2))))) :=
-          ((hψc.comp continuous_snd).mul
-            (Complex.continuous_exp.comp
-              (((continuous_ofReal.comp continuous_fst).mul
-                (continuous_ofReal.comp continuous_snd)).mul
-                continuous_const).neg)).mul
-            (Complex.continuous_ofReal.comp (Real.continuous_exp.comp
-              (continuous_neg.comp ((continuous_pow 2 |>.comp continuous_fst).div_const _))))
-        have hprod_int : Integrable (fun p : ℝ × ℝ =>
-            ψ p.2 * exp (-(↑p.1 * ↑p.2 * I)) *
-              ↑(Real.exp (-(p.1 ^ 2 / (2 * σ2))))) (volume.prod volume) := by
-          rw [integrable_prod_iff hcont_prod.aestronglyMeasurable]
-          refine ⟨?_, ?_⟩
-          · exact ae_of_all _ fun x => by
-              show Integrable (fun u => ψ u * exp (-(↑x * ↑u * I)) *
-                ↑(Real.exp (-(x ^ 2 / (2 * σ2))))) volume
-              apply Integrable.mono' (hI.norm.mul_const (Real.exp (-(x ^ 2 / (2 * σ2)))))
-              · exact (hcont_prod.comp
-                  (continuous_const.prodMk continuous_id)).aestronglyMeasurable
-              · exact ae_of_all _ fun u => by
-                  rw [norm_mul, norm_mul, Complex.norm_real, Real.norm_eq_abs,
-                    abs_of_nonneg (Real.exp_nonneg _),
-                    show -(↑x * ↑u * I) = ↑(-(x * u)) * I from by push_cast; ring,
-                    norm_exp_ofReal_mul_I, mul_one]
-          · have hnorm_eq : (fun x => ∫ u, ‖(fun p : ℝ × ℝ => ψ p.2 *
-                exp (-(↑p.1 * ↑p.2 * I)) *
-                  ↑(Real.exp (-(p.1 ^ 2 / (2 * σ2))))) (x, u)‖) =
-                fun x => (∫ u, ‖ψ u‖) * Real.exp (-(x ^ 2 / (2 * σ2))) := by
-              ext x
-              show ∫ u, ‖ψ u * exp (-(↑x * ↑u * I)) *
-                ↑(Real.exp (-(x ^ 2 / (2 * σ2))))‖ =
-                (∫ u, ‖ψ u‖) * Real.exp (-(x ^ 2 / (2 * σ2)))
-              simp_rw [norm_mul, Complex.norm_real, Real.norm_eq_abs,
-                abs_of_nonneg (Real.exp_nonneg _)]
-              rw [← integral_mul_const]
-              congr 1; ext u
-              rw [show -(↑x * ↑u * I) = ↑(-(x * u)) * I from by push_cast; ring,
-                norm_exp_ofReal_mul_I, mul_one]
-            rw [hnorm_eq]
-            exact hgauss_int.const_mul _
-        -- Apply Fubini
-        rw [integral_integral_swap hprod_int]
-        -- Evaluate the inner x-integral for each u
-        have hinner_eq : ∀ u : ℝ,
-            (∫ x : ℝ, ψ u * exp (-(↑x * ↑u * I)) *
-              ↑(Real.exp (-(x ^ 2 / (2 * σ2))))) =
-            ψ u * (↑(Real.sqrt (2 * Real.pi * σ2)) *
-              ↑(Real.exp (-(σ2 * u ^ 2 / 2)))) := by
-          intro u
-          have hassoc : ∀ x : ℝ, ψ u * exp (-(↑x * ↑u * I)) *
-              ↑(Real.exp (-(x ^ 2 / (2 * σ2)))) =
-            ψ u * (exp (-(↑x * ↑u * I)) *
-              ↑(Real.exp (-(x ^ 2 / (2 * σ2))))) := fun x => by ring
-          simp_rw [hassoc]
-          rw [show (∫ x : ℝ, ψ u * (exp (-(↑x * ↑u * I)) *
-              ↑(Real.exp (-(x ^ 2 / (2 * σ2)))))) =
-            ψ u * ∫ x : ℝ, exp (-(↑x * ↑u * I)) *
-              ↑(Real.exp (-(x ^ 2 / (2 * σ2))))
-            from integral_const_mul _ _]
-          congr 1
-          -- Evaluate via fourierIntegral_gaussian
-          have hrw : ∀ x : ℝ,
-              exp (-(↑x * ↑u * I)) * ↑(Real.exp (-(x ^ 2 / (2 * σ2)))) =
-              cexp (I * (-↑u) * ↑x) *
-                cexp (-(↑(1 / (2 * σ2)) : ℂ) * (↑x) ^ 2) := by
-            intro x
-            congr 1
-            · congr 1; ring
-            · rw [Complex.ofReal_exp]; congr 1; push_cast; ring
-          simp_rw [hrw]
-          have hb_re : (0 : ℝ) < (↑(1 / (2 * σ2)) : ℂ).re := by
-            simp [Complex.ofReal_re]; positivity
-          rw [fourierIntegral_gaussian hb_re (-↑u)]
-          have h1 : (↑(1 / (2 * σ2)) : ℂ) = 1 / (2 * ↑σ2) := by push_cast; ring
-          rw [h1]
-          have h2piσ_nn : (0 : ℝ) ≤ 2 * Real.pi * σ2 := by positivity
-          have hbase : (↑Real.pi : ℂ) / (1 / (2 * ↑σ2)) = ↑(2 * Real.pi * σ2) := by
-            push_cast; field_simp
-          rw [hbase, show (1 / 2 : ℂ) = ↑(1 / 2 : ℝ) from by push_cast; ring,
-            ← ofReal_cpow h2piσ_nn,
-            show (2 * Real.pi * σ2) ^ (1 / 2 : ℝ) = Real.sqrt (2 * Real.pi * σ2) from
-              (Real.sqrt_eq_rpow _).symm]
-          congr 1
-          rw [Complex.ofReal_exp]; congr 1
-          push_cast
-          have hσ2_ne : (↑σ2 : ℂ) ≠ 0 := ofReal_ne_zero.mpr (ne_of_gt hσ2_pos)
-          field_simp; ring
-        -- Rewrite inner integrals and finish
-        simp_rw [hinner_eq]
-        simp_rw [show ∀ u : ℝ, ψ u * (↑(Real.sqrt (2 * Real.pi * σ2)) *
-            ↑(Real.exp (-(σ2 * u ^ 2 / 2)))) =
-          ↑(Real.sqrt (2 * Real.pi * σ2)) * (ψ u * ↑(Real.exp (-(σ2 * u ^ 2 / 2))))
-          from fun u => by ring]
-        exact integral_const_mul _ _
+      have fubini_identity := fubini_gaussianFourier_identity ψ hψc hI σ2 hσ2_pos
       -- Unfold ρ and pull out 1/(2π)
       have hpi_pos : (0 : ℝ) < 2 * Real.pi := by positivity
       -- LHS = (1/(2π)) * ∫ Re(∫ ψ exp(-ixu)) * exp(-x²/(2σ²))
