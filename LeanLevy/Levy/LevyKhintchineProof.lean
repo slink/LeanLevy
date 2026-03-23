@@ -1000,8 +1000,8 @@ private theorem exp_pd_kernel
     · -- (t/N) · (PD sum) ≥ 0
       have hcoeff : (0 : ℂ) ≤ ↑t / ↑N := by
         rw [Complex.nonneg_iff]; constructor
-        · simp [Complex.div_ofReal_re]; exact div_nonneg ht (le_of_lt hN_pos)
-        · simp [Complex.div_ofReal_im]
+        · simp; exact div_nonneg ht (le_of_lt hN_pos)
+        · simp
       exact mul_nonneg hcoeff (hM d)
   -- Step 2: K_N = (1 + tM/N)^N is PD
   have hpow_pd : ∀ᶠ N : ℕ in Filter.atTop,
@@ -1035,7 +1035,7 @@ private theorem exp_pd_kernel
   exact ge_of_tendsto hsum_lim (by filter_upwards [hpow_pd] with N hN; exact hN c)
 
 theorem schoenberg_exp_of_cnd
-    {ψ : ℝ → ℂ} (hψ_cont : Continuous ψ) (hψ_zero : ψ 0 = 0)
+    {ψ : ℝ → ℂ} (_hψ_cont : Continuous ψ) (hψ_zero : ψ 0 = 0)
     (hψ_cnd : IsConditionallyNegativeDefinite ψ)
     (hψ_herm : ∀ ξ, ψ (-ξ) = starRingEnd ℂ (ψ ξ))
     (t : ℝ) (ht : 0 < t) :
@@ -1060,7 +1060,7 @@ theorem schoenberg_exp_of_cnd
   rw [show starRingEnd ℂ (exp (↑t * starRingEnd ℂ (ψ (x i)))) =
       exp (↑t * ψ (x i)) from by
     rw [← Complex.exp_conj]; congr 1
-    simp [starRingEnd_self_apply, Complex.conj_ofReal]]
+    simp [Complex.conj_ofReal]]
   -- Now: conj(c i) * exp(t*ψ(x i)) * (c j * exp(t*conj(ψ(x j)))) * exp(t*M_ij)
   --    = conj(c i) * c j * exp(t*ψ(x i - x j))
   rw [show starRingEnd ℂ (c i) * exp (↑t * ψ (x i)) *
