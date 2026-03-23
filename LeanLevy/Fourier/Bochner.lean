@@ -302,6 +302,218 @@ private theorem tent_integral_eq_fubini (g : ℝ → ℂ) (hg_cont : Continuous 
   field_simp [hN.ne']
 
 set_option maxHeartbeats 800000 in
+/-- 2D Riemann sum convergence: for a uniformly continuous function F on [0,N]²,
+the sum h² * ∑ᵢ ∑ⱼ F(ih, jh) converges to ∫∫ F as h → 0. -/
+private theorem tendsto_riemannSum_of_uniformContinuousOn
+    (F : ℝ → ℝ → ℝ) (N : ℝ) (hN : 0 < N)
+    (hF_cts : Continuous F.uncurry)
+    (hF_ucont : UniformContinuousOn F.uncurry
+        (Set.Icc 0 N ×ˢ Set.Icc 0 N)) :
+    Tendsto (fun m : ℕ => (N / ((m : ℝ) + 1)) ^ 2 *
+      ∑ i : Fin (m + 1), ∑ j : Fin (m + 1),
+        F ((i : ℝ) * (N / ((m : ℝ) + 1))) ((j : ℝ) * (N / ((m : ℝ) + 1))))
+      atTop (𝓝 (∫ s in Set.Icc 0 N, ∫ t in Set.Icc 0 N, F s t)) := by
+  rw [Metric.tendsto_atTop]
+  intro ε hε
+  rw [Metric.uniformContinuousOn_iff] at hF_ucont
+  obtain ⟨δ, hδ_pos, hδ⟩ := hF_ucont (ε / 2 / N ^ 2) (by positivity)
+  have hδ' : 0 < δ / Real.sqrt 2 := by positivity
+  refine ⟨⌈N / (δ / Real.sqrt 2)⌉₊, fun m hm => ?_⟩
+  set h := N / ((m : ℝ) + 1) with hh_def
+  have hh_pos : (0 : ℝ) < h := div_pos hN (by positivity)
+  have hh_small : h < δ / Real.sqrt 2 := by
+    have hM_le : (⌈N / (δ / Real.sqrt 2)⌉₊ : ℝ) ≤ (m : ℝ) := by exact_mod_cast hm
+    have hM_pos : (0 : ℝ) < ⌈N / (δ / Real.sqrt 2)⌉₊ := by
+      exact_mod_cast Nat.ceil_pos.mpr (by positivity)
+    calc h = N / ((m : ℝ) + 1) := hh_def
+        _ < N / (⌈N / (δ / Real.sqrt 2)⌉₊ : ℝ) := by
+            apply div_lt_div_of_pos_left hN (by exact_mod_cast hM_pos)
+            linarith
+        _ ≤ N / (N / (δ / Real.sqrt 2)) := by
+            apply div_le_div_of_nonneg_left hN.le (by positivity)
+            exact_mod_cast Nat.le_ceil _
+        _ = δ / Real.sqrt 2 := by field_simp [hN.ne']
+  -- Split ∫∫ F into (m+1)² boxes
+  have hbox_split : ∫ s in Set.Icc 0 N, ∫ t in Set.Icc 0 N, F s t =
+      ∑ i : Fin (m + 1), ∑ j : Fin (m + 1),
+        ∫ s in Set.Icc ((i : ℝ) * h) (((i : ℝ) + 1) * h),
+        ∫ t in Set.Icc ((j : ℝ) * h) (((j : ℝ) + 1) * h), F s t := by
+    have hN_eq : N = (m + 1 : ℝ) * h := by push_cast [hh_def]; field_simp
+    -- Continuity of s ↦ ∫_t F s t (needed for outer split integrability)
+    have hφ_cont : Continuous (fun s => ∫ t in Set.Icc 0 N, F s t) :=
+      continuous_parametric_integral_of_continuous hF_cts isCompact_Icc
+    -- Helper: split ∫ in Icc 0 N into m+1 sub-intervals
+    have h_Icc_split : ∀ (φ : ℝ → ℝ), ContinuousOn φ (Set.Icc 0 N) →
+        ∫ u in Set.Icc 0 N, φ u =
+        ∑ i : Fin (m + 1), ∫ u in Set.Icc ((i : ℝ) * h) (((i : ℝ) + 1) * h), φ u := by
+      intro φ hφ
+      have h_a_def : ∀ k : ℕ, (k : ℝ) * h = (fun k : ℕ => (k : ℝ) * h) k := fun k => rfl
+      rw [show (0 : ℝ) = (↑(0 : ℕ)) * h from by simp, hN_eq,
+          show (↑m + (1 : ℝ)) * h = (↑(m + 1 : ℕ) : ℝ) * h from by push_cast; ring,
+          integral_Icc_eq_integral_Ioc,
+          ← intervalIntegral.integral_of_le (by push_cast; nlinarith [hh_pos])]
+      rw [← intervalIntegral.sum_integral_adjacent_intervals_Ico
+        (a := fun k : ℕ => (k : ℝ) * h) (Nat.zero_le _)
+        (fun k hk =>
+          (hφ.mono (Set.Icc_subset_Icc (by push_cast; positivity)
+            (by rw [hN_eq]; apply mul_le_mul_of_nonneg_right _ hh_pos.le
+                have : k + 1 ≤ m + 1 := hk.2
+                exact_mod_cast this))).intervalIntegrable_of_Icc
+            (by push_cast; linarith [hh_pos, hk.1]))]
+      rw [Nat.Ico_zero_eq_range, ← Fin.sum_univ_eq_sum_range]
+      congr 1; ext i; push_cast
+      rw [intervalIntegral.integral_of_le (by nlinarith [hh_pos]),
+          ← integral_Icc_eq_integral_Ioc]
+    -- Step 1: split outer integral
+    rw [h_Icc_split _ hφ_cont.continuousOn]
+    -- Step 2: for each i, split inner integral and pull ∑ outside
+    congr 1; ext i
+    rw [show ∫ s in Set.Icc ((i : ℝ) * h) (((i : ℝ) + 1) * h),
+            ∫ t in Set.Icc 0 N, F s t =
+        ∫ s in Set.Icc ((i : ℝ) * h) (((i : ℝ) + 1) * h),
+          ∑ j : Fin (m + 1), ∫ t in Set.Icc ((j : ℝ) * h) (((j : ℝ) + 1) * h),
+          F s t from by
+      apply setIntegral_congr_fun measurableSet_Icc
+      intro s _
+      exact h_Icc_split (fun t => F s t)
+        (hF_cts.comp (continuous_const.prodMk continuous_id)).continuousOn]
+    rw [integral_finset_sum (Finset.univ : Finset (Fin (m + 1))) (fun (j : Fin (m + 1)) _ =>
+      (continuous_parametric_integral_of_continuous hF_cts
+        (isCompact_Icc (a := (j : ℝ) * h) (b := ((j : ℝ) + 1) * h))).continuousOn.integrableOn_Icc)]
+  -- Bound the error
+  rw [Real.dist_eq, hbox_split]
+  calc |((N / ((m : ℝ) + 1)) ^ 2 * ∑ i : Fin (m + 1), ∑ j : Fin (m + 1),
+          F ((i : ℝ) * h) ((j : ℝ) * h)) -
+        ∑ i : Fin (m + 1), ∑ j : Fin (m + 1),
+          ∫ s in Set.Icc (↑i * h) ((↑i + 1) * h),
+          ∫ t in Set.Icc (↑j * h) ((↑j + 1) * h), F s t|
+      = |∑ i : Fin (m + 1), ∑ j : Fin (m + 1),
+          (h ^ 2 * F ((i : ℝ) * h) ((j : ℝ) * h) -
+           ∫ s in Set.Icc (↑i * h) ((↑i + 1) * h),
+           ∫ t in Set.Icc (↑j * h) ((↑j + 1) * h), F s t)| := by
+        congr 1
+        simp_rw [← hh_def, Finset.mul_sum, ← Finset.sum_sub_distrib]
+    _ ≤ ∑ i : Fin (m + 1), ∑ j : Fin (m + 1),
+          |h ^ 2 * F ((i : ℝ) * h) ((j : ℝ) * h) -
+           ∫ s in Set.Icc (↑i * h) ((↑i + 1) * h),
+           ∫ t in Set.Icc (↑j * h) ((↑j + 1) * h), F s t| :=
+        (Finset.abs_sum_le_sum_abs _ _).trans (Finset.sum_le_sum fun i _ => Finset.abs_sum_le_sum_abs _ _)
+    _ ≤ ∑ i : Fin (m + 1), ∑ _j : Fin (m + 1), h ^ 2 * (ε / 2 / N ^ 2) := by
+        apply Finset.sum_le_sum; intro i _
+        apply Finset.sum_le_sum; intro j _
+        have hile : (i : ℝ) * h ≤ ((i : ℝ) + 1) * h := by nlinarith [hh_pos]
+        have hjle : (j : ℝ) * h ≤ ((j : ℝ) + 1) * h := by nlinarith [hh_pos]
+        have hN_eq' : N = (↑m + 1) * h := by rw [hh_def]; field_simp
+        have hi_bound : ((i : ℝ) + 1) * h ≤ N := by
+          rw [hN_eq']; apply mul_le_mul_of_nonneg_right _ hh_pos.le
+          have := i.2; exact_mod_cast this
+        have hj_bound : ((j : ℝ) + 1) * h ≤ N := by
+          rw [hN_eq']; apply mul_le_mul_of_nonneg_right _ hh_pos.le
+          have := j.2; exact_mod_cast this
+        have hi_nn : (0 : ℝ) ≤ (i : ℝ) * h := mul_nonneg (Nat.cast_nonneg _) hh_pos.le
+        have hj_nn : (0 : ℝ) ≤ (j : ℝ) * h := mul_nonneg (Nat.cast_nonneg _) hh_pos.le
+        have hint_const_j : IntegrableOn (fun _ => F ((i : ℝ) * h) ((j : ℝ) * h))
+            (Set.Icc ((j : ℝ) * h) (((j : ℝ) + 1) * h)) :=
+          integrableOn_const (hs := isCompact_Icc.measure_lt_top.ne)
+        have hint_F_inner : ∀ s : ℝ, IntegrableOn (fun t => F s t)
+            (Set.Icc ((j : ℝ) * h) (((j : ℝ) + 1) * h)) := fun s =>
+          (hF_cts.comp (continuous_const.prodMk continuous_id)).continuousOn.integrableOn_Icc
+        have hint_const_i : IntegrableOn
+            (fun s => ∫ t in Set.Icc ((j : ℝ) * h) (((j : ℝ) + 1) * h),
+              F ((i : ℝ) * h) ((j : ℝ) * h))
+            (Set.Icc ((i : ℝ) * h) (((i : ℝ) + 1) * h)) :=
+          integrableOn_const (hs := isCompact_Icc.measure_lt_top.ne)
+        have hint_F_outer : IntegrableOn
+            (fun s => ∫ t in Set.Icc ((j : ℝ) * h) (((j : ℝ) + 1) * h), F s t)
+            (Set.Icc ((i : ℝ) * h) (((i : ℝ) + 1) * h)) :=
+          (continuous_parametric_integral_of_continuous hF_cts
+            (isCompact_Icc (a := (j : ℝ) * h) (b := ((j : ℝ) + 1) * h))).continuousOn.integrableOn_Icc
+        -- Write h²*F_const - ∫∫F = ∫∫(F_const - F s t) via linearity
+        have heq : h ^ 2 * F ((i : ℝ) * h) ((j : ℝ) * h) -
+            ∫ s in Set.Icc ((i : ℝ) * h) (((i : ℝ) + 1) * h),
+            ∫ t in Set.Icc ((j : ℝ) * h) (((j : ℝ) + 1) * h), F s t =
+            ∫ s in Set.Icc ((i : ℝ) * h) (((i : ℝ) + 1) * h),
+            ∫ t in Set.Icc ((j : ℝ) * h) (((j : ℝ) + 1) * h),
+            (F ((i : ℝ) * h) ((j : ℝ) * h) - F s t) := by
+          rw [show h ^ 2 * F ((i : ℝ) * h) ((j : ℝ) * h) =
+              ∫ s in Set.Icc ((i : ℝ) * h) (((i : ℝ) + 1) * h),
+              ∫ t in Set.Icc ((j : ℝ) * h) (((j : ℝ) + 1) * h),
+              F ((i : ℝ) * h) ((j : ℝ) * h) from by
+            simp only [setIntegral_const, smul_eq_mul,
+              Real.volume_real_Icc_of_le hile, Real.volume_real_Icc_of_le hjle]
+            ring]
+          rw [← integral_sub hint_const_i hint_F_outer]
+          congr 1; ext s
+          rw [← integral_sub hint_const_j (hint_F_inner s)]
+        rw [heq]
+        -- Bound |∫∫(F_const - F s t)| ≤ ∫∫ |F_const - F s t| ≤ ∫∫(ε/2/N²) = h²*(ε/2/N²)
+        have hint_diff_outer : IntegrableOn
+            (fun s => ∫ t in Set.Icc ((j : ℝ) * h) (((j : ℝ) + 1) * h),
+              (F ((i : ℝ) * h) ((j : ℝ) * h) - F s t))
+            (Set.Icc ((i : ℝ) * h) (((i : ℝ) + 1) * h)) := by
+          have := hint_const_i.sub hint_F_outer
+          simp only [integral_sub hint_const_j (hint_F_inner _)] at this ⊢
+          exact this
+        calc |∫ s in Set.Icc ((i : ℝ) * h) (((i : ℝ) + 1) * h),
+                ∫ t in Set.Icc ((j : ℝ) * h) (((j : ℝ) + 1) * h),
+                (F ((i : ℝ) * h) ((j : ℝ) * h) - F s t)|
+            ≤ ∫ s in Set.Icc ((i : ℝ) * h) (((i : ℝ) + 1) * h),
+              ‖∫ t in Set.Icc ((j : ℝ) * h) (((j : ℝ) + 1) * h),
+                (F ((i : ℝ) * h) ((j : ℝ) * h) - F s t)‖ :=
+                by rw [← Real.norm_eq_abs]; exact norm_integral_le_integral_norm _
+          _ ≤ ∫ s in Set.Icc ((i : ℝ) * h) (((i : ℝ) + 1) * h),
+              ∫ t in Set.Icc ((j : ℝ) * h) (((j : ℝ) + 1) * h),
+              ε / 2 / N ^ 2 := by
+              apply setIntegral_mono_on hint_diff_outer.norm
+                (integrableOn_const (hs := isCompact_Icc.measure_lt_top.ne))
+                measurableSet_Icc
+              intro s hs
+              apply le_trans (norm_integral_le_integral_norm _)
+              apply setIntegral_mono_on (hint_const_j.sub (hint_F_inner s)).norm
+                (integrableOn_const (hs := isCompact_Icc.measure_lt_top.ne))
+                measurableSet_Icc
+              intro t ht
+              simp only [Pi.sub_apply, Real.norm_eq_abs]
+              rw [show |F ((i : ℝ) * h) ((j : ℝ) * h) - F s t| =
+                  dist (uncurry F ((i : ℝ) * h, (j : ℝ) * h))
+                       (uncurry F (s, t)) from by
+                simp [uncurry, Real.dist_eq]]
+              apply le_of_lt
+              apply hδ
+              · exact ⟨⟨hi_nn, by linarith [hi_bound]⟩,
+                      ⟨hj_nn, by linarith [hj_bound]⟩⟩
+              · exact ⟨⟨hi_nn.trans hs.1, hs.2.trans (by linarith [hi_bound])⟩,
+                      ⟨hj_nn.trans ht.1, ht.2.trans (by linarith [hj_bound])⟩⟩
+              · rw [Prod.dist_eq]
+                have hsqrt2_pos : (0 : ℝ) < Real.sqrt 2 := Real.sqrt_pos.mpr (by norm_num)
+                have hsqrt2_ge_one : (1 : ℝ) ≤ Real.sqrt 2 := by
+                  rw [← Real.sqrt_one]; exact Real.sqrt_le_sqrt (by norm_num)
+                calc max (dist ((i : ℝ) * h) s) (dist ((j : ℝ) * h) t)
+                    ≤ Real.sqrt 2 * h := by
+                      apply max_le
+                      · rw [Real.dist_eq, abs_le]
+                        exact ⟨by nlinarith [hs.2, hsqrt2_ge_one],
+                               by nlinarith [hs.1, hsqrt2_pos]⟩
+                      · rw [Real.dist_eq, abs_le]
+                        exact ⟨by nlinarith [ht.2, hsqrt2_ge_one],
+                               by nlinarith [ht.1, hsqrt2_pos]⟩
+                  _ < δ := by
+                      have : Real.sqrt 2 * h < Real.sqrt 2 * (δ / Real.sqrt 2) :=
+                        mul_lt_mul_of_pos_left hh_small hsqrt2_pos
+                      rwa [mul_div_cancel₀ _ hsqrt2_pos.ne'] at this
+          _ = h ^ 2 * (ε / 2 / N ^ 2) := by
+              simp only [setIntegral_const, smul_eq_mul,
+                Real.volume_real_Icc_of_le hile, Real.volume_real_Icc_of_le hjle]
+              ring
+    _ = ε / 2 := by
+        simp only [Finset.sum_const, Finset.card_fin, nsmul_eq_mul]
+        have hm1_pos : (0 : ℝ) < ↑m + 1 := by positivity
+        rw [hh_def]
+        push_cast
+        field_simp [hm1_pos.ne']
+    _ < ε := by linarith
+
+set_option maxHeartbeats 800000 in
 private theorem fejerApproximant_nonneg (ψ : ℝ → ℂ) (hψc : Continuous ψ)
     (hpd : IsPositiveDefinite ψ) (N : ℝ) (hN : 0 < N) (x : ℝ) : 0 ≤ fejerApproximant ψ N x := by
   -- Direct proof via PD Riemann sums, bypassing the double integral.
@@ -380,205 +592,7 @@ private theorem fejerApproximant_nonneg (ψ : ℝ → ℂ) (hψc : Continuous ψ
           funext (fun m => by rw [hR_form]; ring)
         rw [hR_eq]
         exact (tendsto_const_nhds (x := 1 / N)).mul hS
-      rw [Metric.tendsto_atTop]
-      intro ε hε
-      rw [Metric.uniformContinuousOn_iff] at hF_ucont
-      obtain ⟨δ, hδ_pos, hδ⟩ := hF_ucont (ε / 2 / N ^ 2) (by positivity)
-      have hδ' : 0 < δ / Real.sqrt 2 := by positivity
-      refine ⟨⌈N / (δ / Real.sqrt 2)⌉₊, fun m hm => ?_⟩
-      set h := N / ((m : ℝ) + 1) with hh_def
-      have hh_pos : (0 : ℝ) < h := div_pos hN (by positivity)
-      have hh_small : h < δ / Real.sqrt 2 := by
-        have hM_le : (⌈N / (δ / Real.sqrt 2)⌉₊ : ℝ) ≤ (m : ℝ) := by exact_mod_cast hm
-        have hM_pos : (0 : ℝ) < ⌈N / (δ / Real.sqrt 2)⌉₊ := by
-          exact_mod_cast Nat.ceil_pos.mpr (by positivity)
-        calc h = N / ((m : ℝ) + 1) := hh_def
-            _ < N / (⌈N / (δ / Real.sqrt 2)⌉₊ : ℝ) := by
-                apply div_lt_div_of_pos_left hN (by exact_mod_cast hM_pos)
-                linarith
-            _ ≤ N / (N / (δ / Real.sqrt 2)) := by
-                apply div_le_div_of_nonneg_left hN.le (by positivity)
-                exact_mod_cast Nat.le_ceil _
-            _ = δ / Real.sqrt 2 := by field_simp [hN.ne']
-      -- Split ∫∫ F into (m+1)² boxes
-      have hbox_split : ∫ s in Set.Icc 0 N, ∫ t in Set.Icc 0 N, F s t =
-          ∑ i : Fin (m + 1), ∑ j : Fin (m + 1),
-            ∫ s in Set.Icc ((i : ℝ) * h) (((i : ℝ) + 1) * h),
-            ∫ t in Set.Icc ((j : ℝ) * h) (((j : ℝ) + 1) * h), F s t := by
-        have hN_eq : N = (m + 1 : ℝ) * h := by push_cast [hh_def]; field_simp
-        -- Continuity of s ↦ ∫_t F s t (needed for outer split integrability)
-        have hφ_cont : Continuous (fun s => ∫ t in Set.Icc 0 N, F s t) :=
-          continuous_parametric_integral_of_continuous hF_cts isCompact_Icc
-        -- Helper: split ∫ in Icc 0 N into m+1 sub-intervals
-        have h_Icc_split : ∀ (φ : ℝ → ℝ), ContinuousOn φ (Set.Icc 0 N) →
-            ∫ u in Set.Icc 0 N, φ u =
-            ∑ i : Fin (m + 1), ∫ u in Set.Icc ((i : ℝ) * h) (((i : ℝ) + 1) * h), φ u := by
-          intro φ hφ
-          have h_a_def : ∀ k : ℕ, (k : ℝ) * h = (fun k : ℕ => (k : ℝ) * h) k := fun k => rfl
-          rw [show (0 : ℝ) = (↑(0 : ℕ)) * h from by simp, hN_eq,
-              show (↑m + (1 : ℝ)) * h = (↑(m + 1 : ℕ) : ℝ) * h from by push_cast; ring,
-              integral_Icc_eq_integral_Ioc,
-              ← intervalIntegral.integral_of_le (by push_cast; nlinarith [hh_pos])]
-          rw [← intervalIntegral.sum_integral_adjacent_intervals_Ico
-            (a := fun k : ℕ => (k : ℝ) * h) (Nat.zero_le _)
-            (fun k hk =>
-              (hφ.mono (Set.Icc_subset_Icc (by push_cast; positivity)
-                (by rw [hN_eq]; apply mul_le_mul_of_nonneg_right _ hh_pos.le
-                    have : k + 1 ≤ m + 1 := hk.2
-                    exact_mod_cast this))).intervalIntegrable_of_Icc
-                (by push_cast; linarith [hh_pos, hk.1]))]
-          rw [Nat.Ico_zero_eq_range, ← Fin.sum_univ_eq_sum_range]
-          congr 1; ext i; push_cast
-          rw [intervalIntegral.integral_of_le (by nlinarith [hh_pos]),
-              ← integral_Icc_eq_integral_Ioc]
-        -- Step 1: split outer integral
-        rw [h_Icc_split _ hφ_cont.continuousOn]
-        -- Step 2: for each i, split inner integral and pull ∑ outside
-        congr 1; ext i
-        rw [show ∫ s in Set.Icc ((i : ℝ) * h) (((i : ℝ) + 1) * h),
-                ∫ t in Set.Icc 0 N, F s t =
-            ∫ s in Set.Icc ((i : ℝ) * h) (((i : ℝ) + 1) * h),
-              ∑ j : Fin (m + 1), ∫ t in Set.Icc ((j : ℝ) * h) (((j : ℝ) + 1) * h),
-              F s t from by
-          apply setIntegral_congr_fun measurableSet_Icc
-          intro s _
-          exact h_Icc_split (fun t => F s t)
-            (hF_cts.comp (continuous_const.prodMk continuous_id)).continuousOn]
-        rw [integral_finset_sum (Finset.univ : Finset (Fin (m + 1))) (fun (j : Fin (m + 1)) _ =>
-          (continuous_parametric_integral_of_continuous hF_cts
-            (isCompact_Icc (a := (j : ℝ) * h) (b := ((j : ℝ) + 1) * h))).continuousOn.integrableOn_Icc)]
-      -- Bound the error
-      rw [Real.dist_eq, hbox_split]
-      calc |((N / ((m : ℝ) + 1)) ^ 2 * ∑ i : Fin (m + 1), ∑ j : Fin (m + 1),
-              F ((i : ℝ) * h) ((j : ℝ) * h)) -
-            ∑ i : Fin (m + 1), ∑ j : Fin (m + 1),
-              ∫ s in Set.Icc (↑i * h) ((↑i + 1) * h),
-              ∫ t in Set.Icc (↑j * h) ((↑j + 1) * h), F s t|
-          = |∑ i : Fin (m + 1), ∑ j : Fin (m + 1),
-              (h ^ 2 * F ((i : ℝ) * h) ((j : ℝ) * h) -
-               ∫ s in Set.Icc (↑i * h) ((↑i + 1) * h),
-               ∫ t in Set.Icc (↑j * h) ((↑j + 1) * h), F s t)| := by
-            congr 1
-            simp_rw [← hh_def, Finset.mul_sum, ← Finset.sum_sub_distrib]
-        _ ≤ ∑ i : Fin (m + 1), ∑ j : Fin (m + 1),
-              |h ^ 2 * F ((i : ℝ) * h) ((j : ℝ) * h) -
-               ∫ s in Set.Icc (↑i * h) ((↑i + 1) * h),
-               ∫ t in Set.Icc (↑j * h) ((↑j + 1) * h), F s t| :=
-            (Finset.abs_sum_le_sum_abs _ _).trans (Finset.sum_le_sum fun i _ => Finset.abs_sum_le_sum_abs _ _)
-        _ ≤ ∑ i : Fin (m + 1), ∑ _j : Fin (m + 1), h ^ 2 * (ε / 2 / N ^ 2) := by
-            apply Finset.sum_le_sum; intro i _
-            apply Finset.sum_le_sum; intro j _
-            have hile : (i : ℝ) * h ≤ ((i : ℝ) + 1) * h := by nlinarith [hh_pos]
-            have hjle : (j : ℝ) * h ≤ ((j : ℝ) + 1) * h := by nlinarith [hh_pos]
-            have hN_eq' : N = (↑m + 1) * h := by rw [hh_def]; field_simp
-            have hi_bound : ((i : ℝ) + 1) * h ≤ N := by
-              rw [hN_eq']; apply mul_le_mul_of_nonneg_right _ hh_pos.le
-              have := i.2; exact_mod_cast this
-            have hj_bound : ((j : ℝ) + 1) * h ≤ N := by
-              rw [hN_eq']; apply mul_le_mul_of_nonneg_right _ hh_pos.le
-              have := j.2; exact_mod_cast this
-            have hi_nn : (0 : ℝ) ≤ (i : ℝ) * h := mul_nonneg (Nat.cast_nonneg _) hh_pos.le
-            have hj_nn : (0 : ℝ) ≤ (j : ℝ) * h := mul_nonneg (Nat.cast_nonneg _) hh_pos.le
-            have hint_const_j : IntegrableOn (fun _ => F ((i : ℝ) * h) ((j : ℝ) * h))
-                (Set.Icc ((j : ℝ) * h) (((j : ℝ) + 1) * h)) :=
-              integrableOn_const (hs := isCompact_Icc.measure_lt_top.ne)
-            have hint_F_inner : ∀ s : ℝ, IntegrableOn (fun t => F s t)
-                (Set.Icc ((j : ℝ) * h) (((j : ℝ) + 1) * h)) := fun s =>
-              (hF_cts.comp (continuous_const.prodMk continuous_id)).continuousOn.integrableOn_Icc
-            have hint_const_i : IntegrableOn
-                (fun s => ∫ t in Set.Icc ((j : ℝ) * h) (((j : ℝ) + 1) * h),
-                  F ((i : ℝ) * h) ((j : ℝ) * h))
-                (Set.Icc ((i : ℝ) * h) (((i : ℝ) + 1) * h)) :=
-              integrableOn_const (hs := isCompact_Icc.measure_lt_top.ne)
-            have hint_F_outer : IntegrableOn
-                (fun s => ∫ t in Set.Icc ((j : ℝ) * h) (((j : ℝ) + 1) * h), F s t)
-                (Set.Icc ((i : ℝ) * h) (((i : ℝ) + 1) * h)) :=
-              (continuous_parametric_integral_of_continuous hF_cts
-                (isCompact_Icc (a := (j : ℝ) * h) (b := ((j : ℝ) + 1) * h))).continuousOn.integrableOn_Icc
-            -- Write h²*F_const - ∫∫F = ∫∫(F_const - F s t) via linearity
-            have heq : h ^ 2 * F ((i : ℝ) * h) ((j : ℝ) * h) -
-                ∫ s in Set.Icc ((i : ℝ) * h) (((i : ℝ) + 1) * h),
-                ∫ t in Set.Icc ((j : ℝ) * h) (((j : ℝ) + 1) * h), F s t =
-                ∫ s in Set.Icc ((i : ℝ) * h) (((i : ℝ) + 1) * h),
-                ∫ t in Set.Icc ((j : ℝ) * h) (((j : ℝ) + 1) * h),
-                (F ((i : ℝ) * h) ((j : ℝ) * h) - F s t) := by
-              rw [show h ^ 2 * F ((i : ℝ) * h) ((j : ℝ) * h) =
-                  ∫ s in Set.Icc ((i : ℝ) * h) (((i : ℝ) + 1) * h),
-                  ∫ t in Set.Icc ((j : ℝ) * h) (((j : ℝ) + 1) * h),
-                  F ((i : ℝ) * h) ((j : ℝ) * h) from by
-                simp only [setIntegral_const, smul_eq_mul,
-                  Real.volume_real_Icc_of_le hile, Real.volume_real_Icc_of_le hjle]
-                ring]
-              rw [← integral_sub hint_const_i hint_F_outer]
-              congr 1; ext s
-              rw [← integral_sub hint_const_j (hint_F_inner s)]
-            rw [heq]
-            -- Bound |∫∫(F_const - F s t)| ≤ ∫∫ |F_const - F s t| ≤ ∫∫(ε/2/N²) = h²*(ε/2/N²)
-            have hint_diff_outer : IntegrableOn
-                (fun s => ∫ t in Set.Icc ((j : ℝ) * h) (((j : ℝ) + 1) * h),
-                  (F ((i : ℝ) * h) ((j : ℝ) * h) - F s t))
-                (Set.Icc ((i : ℝ) * h) (((i : ℝ) + 1) * h)) := by
-              have := hint_const_i.sub hint_F_outer
-              simp only [integral_sub hint_const_j (hint_F_inner _)] at this ⊢
-              exact this
-            calc |∫ s in Set.Icc ((i : ℝ) * h) (((i : ℝ) + 1) * h),
-                    ∫ t in Set.Icc ((j : ℝ) * h) (((j : ℝ) + 1) * h),
-                    (F ((i : ℝ) * h) ((j : ℝ) * h) - F s t)|
-                ≤ ∫ s in Set.Icc ((i : ℝ) * h) (((i : ℝ) + 1) * h),
-                  ‖∫ t in Set.Icc ((j : ℝ) * h) (((j : ℝ) + 1) * h),
-                    (F ((i : ℝ) * h) ((j : ℝ) * h) - F s t)‖ :=
-                    by rw [← Real.norm_eq_abs]; exact norm_integral_le_integral_norm _
-              _ ≤ ∫ s in Set.Icc ((i : ℝ) * h) (((i : ℝ) + 1) * h),
-                  ∫ t in Set.Icc ((j : ℝ) * h) (((j : ℝ) + 1) * h),
-                  ε / 2 / N ^ 2 := by
-                  apply setIntegral_mono_on hint_diff_outer.norm
-                    (integrableOn_const (hs := isCompact_Icc.measure_lt_top.ne))
-                    measurableSet_Icc
-                  intro s hs
-                  apply le_trans (norm_integral_le_integral_norm _)
-                  apply setIntegral_mono_on (hint_const_j.sub (hint_F_inner s)).norm
-                    (integrableOn_const (hs := isCompact_Icc.measure_lt_top.ne))
-                    measurableSet_Icc
-                  intro t ht
-                  simp only [Pi.sub_apply, Real.norm_eq_abs]
-                  rw [show |F ((i : ℝ) * h) ((j : ℝ) * h) - F s t| =
-                      dist (uncurry F ((i : ℝ) * h, (j : ℝ) * h))
-                           (uncurry F (s, t)) from by
-                    simp [uncurry, Real.dist_eq]]
-                  apply le_of_lt
-                  apply hδ
-                  · exact ⟨⟨hi_nn, by linarith [hi_bound]⟩,
-                          ⟨hj_nn, by linarith [hj_bound]⟩⟩
-                  · exact ⟨⟨hi_nn.trans hs.1, hs.2.trans (by linarith [hi_bound])⟩,
-                          ⟨hj_nn.trans ht.1, ht.2.trans (by linarith [hj_bound])⟩⟩
-                  · rw [Prod.dist_eq]
-                    have hsqrt2_pos : (0 : ℝ) < Real.sqrt 2 := Real.sqrt_pos.mpr (by norm_num)
-                    have hsqrt2_ge_one : (1 : ℝ) ≤ Real.sqrt 2 := by
-                      rw [← Real.sqrt_one]; exact Real.sqrt_le_sqrt (by norm_num)
-                    calc max (dist ((i : ℝ) * h) s) (dist ((j : ℝ) * h) t)
-                        ≤ Real.sqrt 2 * h := by
-                          apply max_le
-                          · rw [Real.dist_eq, abs_le]
-                            exact ⟨by nlinarith [hs.2, hsqrt2_ge_one],
-                                   by nlinarith [hs.1, hsqrt2_pos]⟩
-                          · rw [Real.dist_eq, abs_le]
-                            exact ⟨by nlinarith [ht.2, hsqrt2_ge_one],
-                                   by nlinarith [ht.1, hsqrt2_pos]⟩
-                      _ < δ := by
-                          have : Real.sqrt 2 * h < Real.sqrt 2 * (δ / Real.sqrt 2) :=
-                            mul_lt_mul_of_pos_left hh_small hsqrt2_pos
-                          rwa [mul_div_cancel₀ _ hsqrt2_pos.ne'] at this
-              _ = h ^ 2 * (ε / 2 / N ^ 2) := by
-                  simp only [setIntegral_const, smul_eq_mul,
-                    Real.volume_real_Icc_of_le hile, Real.volume_real_Icc_of_le hjle]
-                  ring
-        _ = ε / 2 := by
-            simp only [Finset.sum_const, Finset.card_fin, nsmul_eq_mul]
-            have hm1_pos : (0 : ℝ) < ↑m + 1 := by positivity
-            rw [hh_def]
-            push_cast
-            field_simp [hm1_pos.ne']
-        _ < ε := by linarith
+      exact tendsto_riemannSum_of_uniformContinuousOn F N hN hF_cts hF_ucont
     -- Step D: Conclude by ge_of_tendsto
     exact ge_of_tendsto hR_tendsto (Eventually.of_forall hR_nn)
 
