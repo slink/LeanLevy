@@ -118,6 +118,190 @@ private theorem riemannSum_nonneg_of_pd (g : ℝ → ℂ) (hg_pd : IsPositiveDef
     exact (Complex.nonneg_iff.mp h).1
 
 set_option maxHeartbeats 800000 in
+/-- The Fejér tent integral equals `(1/N) * ∫_0^N ∫_0^N Re(g(s-t)) ds dt` via
+Fubini and the change of variables `u = s - t`. -/
+private theorem tent_integral_eq_fubini (g : ℝ → ℂ) (hg_cont : Continuous g)
+    (N : ℝ) (hN : 0 < N) :
+    (∫ u in Set.Icc (-N) N,
+      g u * (1 - ↑(|u| / N))).re =
+    (1 / N) * ∫ s in Set.Icc 0 N, ∫ t in Set.Icc 0 N, (g (s - t)).re := by
+  -- Step 1: LHS = ∫ in Icc(-N,N), (g u).re * (1-|u|/N)
+  have hf_int : Integrable (fun u => g u * (1 - ↑(|u| / N : ℝ) : ℂ))
+      (volume.restrict (Set.Icc (-N) N)) :=
+    (hg_cont.mul (continuous_const.sub
+      (continuous_ofReal.comp
+        ((continuous_abs.comp continuous_id).div_const N)))).continuousOn.integrableOn_Icc
+  have hLHS : (∫ u in Set.Icc (-N) N,
+      g u * (1 - ↑(|u| / N))).re =
+      ∫ u in Set.Icc (-N) N, (g u).re * (1 - |u| / N) := by
+    calc (∫ u in Set.Icc (-N) N,
+            g u * (1 - ↑(|u| / N))).re
+        = ∫ u in Set.Icc (-N) N,
+            (g u * (1 - ↑(|u| / N))).re :=
+            (integral_re hf_int).symm
+      _ = ∫ u in Set.Icc (-N) N, (g u).re * (1 - |u| / N) := by
+            congr 1; ext u
+            have : (1 : ℂ) - ↑(|u| / N) = ↑((1 : ℝ) - |u| / N) := by push_cast; ring
+            rw [this, re_mul_ofReal]
+  rw [hLHS]
+  -- Step 2: ∫∫ F = ∫_{-N}^N (g u).re * (N-|u|) (Fubini + change of variables)
+  set F : ℝ → ℝ → ℝ := fun s t => (g (s - t)).re with hF_def
+  have hF_cts : Continuous F.uncurry :=
+    (Complex.continuous_re.comp hg_cont).comp (continuous_fst.sub continuous_snd)
+  have hfub : ∫ s in Set.Icc 0 N, ∫ t in Set.Icc 0 N, F s t =
+      ∫ u in Set.Icc (-N) N, (g u).re * (N - |u|) := by
+    -- Build product integrability
+    have hint : Integrable F.uncurry
+        ((volume.restrict (Set.Icc 0 N)).prod (volume.restrict (Set.Icc 0 N))) := by
+      rw [Measure.prod_restrict]
+      exact hF_cts.continuousOn.integrableOn_compact (isCompact_Icc.prod isCompact_Icc)
+    -- Fubini swap: ∫_s ∫_t F = ∫_t ∫_s F
+    have hswap : ∫ s in Set.Icc 0 N, ∫ t in Set.Icc 0 N, F s t =
+        ∫ t in Set.Icc 0 N, ∫ s in Set.Icc 0 N, F s t :=
+      integral_integral_swap hint
+    rw [hswap]
+    -- Inner integral: ∫_s F(s,t) = ∫_{-t}^{N-t} (g u).re via s → u=s-t
+    have hinner2 : ∀ t ∈ Set.Icc (0:ℝ) N, ∫ s in Set.Icc 0 N, F s t =
+        ∫ u in (-t)..(N - t), (g u).re := by
+      intro t _
+      simp only [F]
+      rw [integral_Icc_eq_integral_Ioc, ← intervalIntegral.integral_of_le hN.le,
+          intervalIntegral.integral_comp_sub_right (fun u => (g u).re) t]
+      congr 1; ring
+    rw [setIntegral_congr_fun measurableSet_Icc hinner2]
+    -- Extend inner interval integral to Icc(-N,N) with indicator, then Fubini
+    have hlhs_ext : ∫ t in Set.Icc 0 N, ∫ u in (-t)..(N - t), (g u).re =
+        ∫ t in (0 : ℝ)..N, ∫ u in Set.Icc (-N) N,
+          (g u).re * Set.indicator (Set.Icc (-t) (N - t)) 1 u := by
+      rw [integral_Icc_eq_integral_Ioc, ← intervalIntegral.integral_of_le hN.le]
+      apply intervalIntegral.integral_congr
+      intro t ht
+      rw [Set.uIcc_of_le hN.le] at ht
+      have hsubset : Set.Icc (-t) (N - t) ⊆ Set.Icc (-N) N :=
+        fun u ⟨h1, h2⟩ => ⟨by linarith [ht.2], by linarith [ht.1]⟩
+      -- Convert interval integral to set integral then extend
+      show ∫ u in (-t)..(N - t), (g u).re =
+        ∫ u in Set.Icc (-N) N, (g u).re * Set.indicator (Set.Icc (-t) (N - t)) 1 u
+      rw [intervalIntegral.integral_of_le (show -t ≤ N - t by linarith [ht.1]),
+          ← integral_Icc_eq_integral_Ioc]
+      conv_rhs =>
+        arg 2; ext u
+        rw [show (g u).re * Set.indicator (Set.Icc (-t) (N - t)) 1 u =
+            Set.indicator (Set.Icc (-t) (N - t)) (fun u => (g u).re) u from by
+          simp [Set.indicator_apply]]
+      rw [setIntegral_indicator measurableSet_Icc, Set.inter_eq_right.mpr hsubset]
+    rw [hlhs_ext]
+    -- Fubini swap for the extended integral
+    have hmeas_ind : Measurable (fun p : ℝ × ℝ =>
+        (g p.2).re * Set.indicator (Set.Icc (-p.1) (N - p.1)) 1 p.2) :=
+      ((Complex.continuous_re.comp hg_cont).measurable.comp measurable_snd).mul
+        (Measurable.indicator measurable_const
+          ((measurableSet_le (measurable_neg.comp measurable_fst) measurable_snd).inter
+           (measurableSet_le measurable_snd (measurable_const.sub measurable_fst))))
+    -- Integrability: bound by |g u| which is integrable on Icc(-N,N)
+    have h_re_int : Integrable (fun u => (g u).re)
+        (volume.restrict (Set.Icc (-N) N)) :=
+      (Complex.continuous_re.comp hg_cont).continuousOn.integrableOn_Icc
+    haveI : IsFiniteMeasure (volume.restrict (Set.uIoc 0 N)) :=
+      ⟨by simp [Real.volume_uIoc, abs_of_nonneg hN.le]⟩
+    have hint_prod : Integrable
+        (uncurry fun t u => (g u).re * Set.indicator (Set.Icc (-t) (N - t)) 1 u)
+        ((volume.restrict (Set.uIoc 0 N)).prod
+         (volume.restrict (Set.Icc (-N) N))) :=
+      (h_re_int.comp_snd (volume.restrict (Set.uIoc 0 N))).mono
+        hmeas_ind.aestronglyMeasurable (ae_of_all _ fun ⟨t, u⟩ => by
+          simp only [uncurry]
+          calc ‖(g u).re * Set.indicator (Set.Icc (-t) (N - t)) 1 u‖
+              ≤ ‖(g u).re‖ * ‖Set.indicator (Set.Icc (-t) (N - t)) (1 : ℝ → ℝ) u‖ :=
+                norm_mul_le _ _
+            _ ≤ ‖(g u).re‖ * 1 := by
+                apply mul_le_mul_of_nonneg_left _ (norm_nonneg _)
+                simp [Set.indicator_apply]; split_ifs <;> simp
+            _ = ‖(g u).re‖ := mul_one _)
+    rw [intervalIntegral_integral_swap hint_prod]
+    -- Compute inner integral ∫ t in 0..N, Re(g u) * indicator(t ∈ Icc(-t,N-t))
+    apply setIntegral_congr_fun measurableSet_Icc
+    intro u hu
+    dsimp only
+    have huN_bound : |u| ≤ N := abs_le.mpr ⟨by linarith [hu.1], hu.2⟩
+    -- indicator swap: u ∈ Icc(-t,N-t) ↔ t ∈ Icc(-u,N-u)
+    have hcond_swap : ∀ t : ℝ,
+        Set.indicator (Set.Icc (-t) (N - t)) (1 : ℝ → ℝ) u =
+        Set.indicator (Set.Icc (-u) (N - u)) 1 t := fun t => by
+      simp only [Set.indicator_apply, Set.mem_Icc]
+      exact ite_congr
+        (propext ⟨fun ⟨h1, h2⟩ => ⟨by linarith, by linarith⟩,
+                 fun ⟨h1, h2⟩ => ⟨by linarith, by linarith⟩⟩)
+        (fun _ => rfl) (fun _ => rfl)
+    rw [show ∫ t in (0 : ℝ)..N,
+            (g u).re * Set.indicator (Set.Icc (-t) (N - t)) 1 u =
+        (g u).re * ∫ t in (0 : ℝ)..N,
+            Set.indicator (Set.Icc (-t) (N - t)) (1 : ℝ → ℝ) u from
+      intervalIntegral.integral_const_mul _ _]
+    congr 1
+    simp_rw [hcond_swap]
+    -- Compute ∫ t in 0..N, 1_{Icc(-u,N-u)} t = N - |u|
+    rcases le_or_gt u 0 with hu0 | hu0
+    · -- u ≤ 0: interval is [-u, N] ∩ [0,N] = [-u, N], length = N+u = N-|u|
+      have hint1 : IntervalIntegrable (Set.indicator (Set.Icc (-u) (N - u)) (1 : ℝ → ℝ))
+          volume 0 (-u) :=
+        (integrable_indicator_iff measurableSet_Icc |>.mpr (integrableOn_const isCompact_Icc.measure_lt_top.ne)).intervalIntegrable
+      have hint2 : IntervalIntegrable (Set.indicator (Set.Icc (-u) (N - u)) (1 : ℝ → ℝ))
+          volume (-u) N :=
+        (integrable_indicator_iff measurableSet_Icc |>.mpr (integrableOn_const isCompact_Icc.measure_lt_top.ne)).intervalIntegrable
+      rw [← intervalIntegral.integral_add_adjacent_intervals hint1 hint2]
+      rw [show ∫ t in (0 : ℝ)..(-u),
+              Set.indicator (Set.Icc (-u) (N - u)) (1 : ℝ → ℝ) t = 0 from
+          intervalIntegral_eq_zero_of_forall_eq_zero fun t ht => by
+            rw [Set.uIoo_of_le (by linarith [hu0])] at ht
+            simp [Set.mem_Icc,
+                  show ¬(-u ≤ t) from by linarith [ht.2]]]
+      have hnu_le_N : -u ≤ N := by
+        rw [abs_of_nonpos hu0] at huN_bound; linarith
+      rw [show ∫ t in (-u)..N,
+              Set.indicator (Set.Icc (-u) (N - u)) (1 : ℝ → ℝ) t =
+          ∫ t in (-u)..N, (1 : ℝ) from
+          intervalIntegral.integral_congr fun t ht => by
+            rw [Set.uIcc_of_le hnu_le_N] at ht
+            simp [Set.indicator_apply, Set.mem_Icc, ht.1,
+                  show t ≤ N - u from by linarith [hu0, ht.2]]]
+      have hNu_nn : (0 : ℝ) ≤ N - (-u) := by linarith [hnu_le_N]
+      simp [intervalIntegral.integral_const, abs_of_nonpos hu0,
+            Real.norm_of_nonneg hNu_nn]
+    · -- u > 0: interval is [-u, N-u] ∩ [0,N] = [0, N-u], length = N-u = N-|u|
+      have huN : u ≤ N := by
+        rw [abs_of_pos hu0] at huN_bound; exact huN_bound
+      have hint1 : IntervalIntegrable (Set.indicator (Set.Icc (-u) (N - u)) (1 : ℝ → ℝ))
+          volume 0 (N - u) :=
+        (integrable_indicator_iff measurableSet_Icc |>.mpr (integrableOn_const isCompact_Icc.measure_lt_top.ne)).intervalIntegrable
+      have hint2 : IntervalIntegrable (Set.indicator (Set.Icc (-u) (N - u)) (1 : ℝ → ℝ))
+          volume (N - u) N :=
+        (integrable_indicator_iff measurableSet_Icc |>.mpr (integrableOn_const isCompact_Icc.measure_lt_top.ne)).intervalIntegrable
+      rw [← intervalIntegral.integral_add_adjacent_intervals hint1 hint2]
+      rw [show ∫ t in (0 : ℝ)..(N - u),
+              Set.indicator (Set.Icc (-u) (N - u)) (1 : ℝ → ℝ) t =
+          ∫ t in (0 : ℝ)..(N - u), (1 : ℝ) from
+          intervalIntegral.integral_congr fun t ht => by
+            rw [Set.uIcc_of_le (by linarith [huN])] at ht
+            simp [Set.indicator_apply, Set.mem_Icc,
+                  show -u ≤ t from by linarith [ht.1, hu0.le], ht.2]]
+      rw [show ∫ t in (N - u)..N,
+              Set.indicator (Set.Icc (-u) (N - u)) (1 : ℝ → ℝ) t = 0 from
+          intervalIntegral_eq_zero_of_forall_eq_zero fun t ht => by
+            rw [Set.uIoo_of_le (by linarith [huN])] at ht
+            simp [Set.mem_Icc, show ¬(t ≤ N - u) from by
+              linarith [ht.1]]]
+      have hNu_nn : (0 : ℝ) ≤ N - u := by linarith [huN]
+      simp [intervalIntegral.integral_const, abs_of_pos hu0]
+  -- Step 3: Combine LHS with hfub
+  rw [hfub, ← integral_const_mul]
+  apply setIntegral_congr_fun measurableSet_Icc
+  intro u hu
+  dsimp only
+  have huN_abs : |u| ≤ N := abs_le.mpr ⟨by linarith [hu.1], hu.2⟩
+  field_simp [hN.ne']
+
+set_option maxHeartbeats 800000 in
 private theorem fejerApproximant_nonneg (ψ : ℝ → ℂ) (hψc : Continuous ψ)
     (hpd : IsPositiveDefinite ψ) (N : ℝ) (hN : 0 < N) (x : ℝ) : 0 ≤ fejerApproximant ψ N x := by
   -- Direct proof via PD Riemann sums, bypassing the double integral.
@@ -182,179 +366,8 @@ private theorem fejerApproximant_nonneg (ψ : ℝ → ℂ) (hψc : Continuous ψ
       -- target = (1/N) * ∫_0^N ∫_0^N F (via Fubini + tent identity)
       have htarget_eq : (∫ u in Set.Icc (-N) N,
           ψ u * exp (-(↑x * ↑u * I)) * (1 - ↑(|u| / N))).re =
-          (1 / N) * ∫ s in Set.Icc 0 N, ∫ t in Set.Icc 0 N, F s t := by
-        -- Step 1: LHS = ∫ in Icc(-N,N), (g u).re * (1-|u|/N)
-        have hf_int : Integrable (fun u => ψ u * exp (-(↑x * ↑u * I)) * (1 - ↑(|u| / N : ℝ) : ℂ))
-            (volume.restrict (Set.Icc (-N) N)) :=
-          (hg_cont.mul (continuous_const.sub
-            (continuous_ofReal.comp
-              ((continuous_abs.comp continuous_id).div_const N)))).continuousOn.integrableOn_Icc
-        have hLHS : (∫ u in Set.Icc (-N) N,
-            ψ u * exp (-(↑x * ↑u * I)) * (1 - ↑(|u| / N))).re =
-            ∫ u in Set.Icc (-N) N, (g u).re * (1 - |u| / N) := by
-          calc (∫ u in Set.Icc (-N) N,
-                  ψ u * exp (-(↑x * ↑u * I)) * (1 - ↑(|u| / N))).re
-              = ∫ u in Set.Icc (-N) N,
-                  (ψ u * exp (-(↑x * ↑u * I)) * (1 - ↑(|u| / N))).re :=
-                  (integral_re hf_int).symm
-            _ = ∫ u in Set.Icc (-N) N, (g u).re * (1 - |u| / N) := by
-                  congr 1; ext u
-                  have : (1 : ℂ) - ↑(|u| / N) = ↑((1 : ℝ) - |u| / N) := by push_cast; ring
-                  rw [this, re_mul_ofReal]
-        rw [hLHS]
-        -- Step 2: ∫∫ F = ∫_{-N}^N (g u).re * (N-|u|) (Fubini + change of variables)
-        have hfub : ∫ s in Set.Icc 0 N, ∫ t in Set.Icc 0 N, F s t =
-            ∫ u in Set.Icc (-N) N, (g u).re * (N - |u|) := by
-          -- Build product integrability
-          have hint : Integrable F.uncurry
-              ((volume.restrict (Set.Icc 0 N)).prod (volume.restrict (Set.Icc 0 N))) := by
-            rw [Measure.prod_restrict]
-            exact hF_cts.continuousOn.integrableOn_compact (isCompact_Icc.prod isCompact_Icc)
-          -- Fubini swap: ∫_s ∫_t F = ∫_t ∫_s F
-          have hswap : ∫ s in Set.Icc 0 N, ∫ t in Set.Icc 0 N, F s t =
-              ∫ t in Set.Icc 0 N, ∫ s in Set.Icc 0 N, F s t :=
-            integral_integral_swap hint
-          rw [hswap]
-          -- Inner integral: ∫_s F(s,t) = ∫_{-t}^{N-t} (g u).re via s → u=s-t
-          have hinner2 : ∀ t ∈ Set.Icc (0:ℝ) N, ∫ s in Set.Icc 0 N, F s t =
-              ∫ u in (-t)..(N - t), (g u).re := by
-            intro t _
-            simp only [F]
-            rw [integral_Icc_eq_integral_Ioc, ← intervalIntegral.integral_of_le hN.le,
-                intervalIntegral.integral_comp_sub_right (fun u => (g u).re) t]
-            congr 1; ring
-          rw [setIntegral_congr_fun measurableSet_Icc hinner2]
-          -- Extend inner interval integral to Icc(-N,N) with indicator, then Fubini
-          have hlhs_ext : ∫ t in Set.Icc 0 N, ∫ u in (-t)..(N - t), (g u).re =
-              ∫ t in (0 : ℝ)..N, ∫ u in Set.Icc (-N) N,
-                (g u).re * Set.indicator (Set.Icc (-t) (N - t)) 1 u := by
-            rw [integral_Icc_eq_integral_Ioc, ← intervalIntegral.integral_of_le hN.le]
-            apply intervalIntegral.integral_congr
-            intro t ht
-            rw [Set.uIcc_of_le hN.le] at ht
-            have hsubset : Set.Icc (-t) (N - t) ⊆ Set.Icc (-N) N :=
-              fun u ⟨h1, h2⟩ => ⟨by linarith [ht.2], by linarith [ht.1]⟩
-            -- Convert interval integral to set integral then extend
-            show ∫ u in (-t)..(N - t), (g u).re =
-              ∫ u in Set.Icc (-N) N, (g u).re * Set.indicator (Set.Icc (-t) (N - t)) 1 u
-            rw [intervalIntegral.integral_of_le (show -t ≤ N - t by linarith [ht.1]),
-                ← integral_Icc_eq_integral_Ioc]
-            conv_rhs =>
-              arg 2; ext u
-              rw [show (g u).re * Set.indicator (Set.Icc (-t) (N - t)) 1 u =
-                  Set.indicator (Set.Icc (-t) (N - t)) (fun u => (g u).re) u from by
-                simp [Set.indicator_apply]]
-            rw [setIntegral_indicator measurableSet_Icc, Set.inter_eq_right.mpr hsubset]
-          rw [hlhs_ext]
-          -- Fubini swap for the extended integral
-          have hmeas_ind : Measurable (fun p : ℝ × ℝ =>
-              (g p.2).re * Set.indicator (Set.Icc (-p.1) (N - p.1)) 1 p.2) :=
-            ((Complex.continuous_re.comp hg_cont).measurable.comp measurable_snd).mul
-              (Measurable.indicator measurable_const
-                ((measurableSet_le (measurable_neg.comp measurable_fst) measurable_snd).inter
-                 (measurableSet_le measurable_snd (measurable_const.sub measurable_fst))))
-          -- Integrability: bound by |g u| which is integrable on Icc(-N,N)
-          have h_re_int : Integrable (fun u => (g u).re)
-              (volume.restrict (Set.Icc (-N) N)) :=
-            (Complex.continuous_re.comp hg_cont).continuousOn.integrableOn_Icc
-          haveI : IsFiniteMeasure (volume.restrict (Set.uIoc 0 N)) :=
-            ⟨by simp [Real.volume_uIoc, abs_of_nonneg hN.le]⟩
-          have hint_prod : Integrable
-              (uncurry fun t u => (g u).re * Set.indicator (Set.Icc (-t) (N - t)) 1 u)
-              ((volume.restrict (Set.uIoc 0 N)).prod
-               (volume.restrict (Set.Icc (-N) N))) :=
-            (h_re_int.comp_snd (volume.restrict (Set.uIoc 0 N))).mono
-              hmeas_ind.aestronglyMeasurable (ae_of_all _ fun ⟨t, u⟩ => by
-                simp only [uncurry]
-                calc ‖(g u).re * Set.indicator (Set.Icc (-t) (N - t)) 1 u‖
-                    ≤ ‖(g u).re‖ * ‖Set.indicator (Set.Icc (-t) (N - t)) (1 : ℝ → ℝ) u‖ :=
-                      norm_mul_le _ _
-                  _ ≤ ‖(g u).re‖ * 1 := by
-                      apply mul_le_mul_of_nonneg_left _ (norm_nonneg _)
-                      simp [Set.indicator_apply]; split_ifs <;> simp
-                  _ = ‖(g u).re‖ := mul_one _)
-          rw [intervalIntegral_integral_swap hint_prod]
-          -- Compute inner integral ∫ t in 0..N, Re(g u) * indicator(t ∈ Icc(-t,N-t))
-          apply setIntegral_congr_fun measurableSet_Icc
-          intro u hu
-          dsimp only
-          have huN_bound : |u| ≤ N := abs_le.mpr ⟨by linarith [hu.1], hu.2⟩
-          -- indicator swap: u ∈ Icc(-t,N-t) ↔ t ∈ Icc(-u,N-u)
-          have hcond_swap : ∀ t : ℝ,
-              Set.indicator (Set.Icc (-t) (N - t)) (1 : ℝ → ℝ) u =
-              Set.indicator (Set.Icc (-u) (N - u)) 1 t := fun t => by
-            simp only [Set.indicator_apply, Set.mem_Icc]
-            exact ite_congr
-              (propext ⟨fun ⟨h1, h2⟩ => ⟨by linarith, by linarith⟩,
-                       fun ⟨h1, h2⟩ => ⟨by linarith, by linarith⟩⟩)
-              (fun _ => rfl) (fun _ => rfl)
-          rw [show ∫ t in (0 : ℝ)..N,
-                  (g u).re * Set.indicator (Set.Icc (-t) (N - t)) 1 u =
-              (g u).re * ∫ t in (0 : ℝ)..N,
-                  Set.indicator (Set.Icc (-t) (N - t)) (1 : ℝ → ℝ) u from
-            intervalIntegral.integral_const_mul _ _]
-          congr 1
-          simp_rw [hcond_swap]
-          -- Compute ∫ t in 0..N, 1_{Icc(-u,N-u)} t = N - |u|
-          rcases le_or_gt u 0 with hu0 | hu0
-          · -- u ≤ 0: interval is [-u, N] ∩ [0,N] = [-u, N], length = N+u = N-|u|
-            have hint1 : IntervalIntegrable (Set.indicator (Set.Icc (-u) (N - u)) (1 : ℝ → ℝ))
-                volume 0 (-u) :=
-              (integrable_indicator_iff measurableSet_Icc |>.mpr (integrableOn_const isCompact_Icc.measure_lt_top.ne)).intervalIntegrable
-            have hint2 : IntervalIntegrable (Set.indicator (Set.Icc (-u) (N - u)) (1 : ℝ → ℝ))
-                volume (-u) N :=
-              (integrable_indicator_iff measurableSet_Icc |>.mpr (integrableOn_const isCompact_Icc.measure_lt_top.ne)).intervalIntegrable
-            rw [← intervalIntegral.integral_add_adjacent_intervals hint1 hint2]
-            rw [show ∫ t in (0 : ℝ)..(-u),
-                    Set.indicator (Set.Icc (-u) (N - u)) (1 : ℝ → ℝ) t = 0 from
-                intervalIntegral_eq_zero_of_forall_eq_zero fun t ht => by
-                  rw [Set.uIoo_of_le (by linarith [hu0])] at ht
-                  simp [Set.mem_Icc,
-                        show ¬(-u ≤ t) from by linarith [ht.2]]]
-            have hnu_le_N : -u ≤ N := by
-              rw [abs_of_nonpos hu0] at huN_bound; linarith
-            rw [show ∫ t in (-u)..N,
-                    Set.indicator (Set.Icc (-u) (N - u)) (1 : ℝ → ℝ) t =
-                ∫ t in (-u)..N, (1 : ℝ) from
-                intervalIntegral.integral_congr fun t ht => by
-                  rw [Set.uIcc_of_le hnu_le_N] at ht
-                  simp [Set.indicator_apply, Set.mem_Icc, ht.1,
-                        show t ≤ N - u from by linarith [hu0, ht.2]]]
-            have hNu_nn : (0 : ℝ) ≤ N - (-u) := by linarith [hnu_le_N]
-            simp [intervalIntegral.integral_const, abs_of_nonpos hu0,
-                  Real.norm_of_nonneg hNu_nn]
-          · -- u > 0: interval is [-u, N-u] ∩ [0,N] = [0, N-u], length = N-u = N-|u|
-            have huN : u ≤ N := by
-              rw [abs_of_pos hu0] at huN_bound; exact huN_bound
-            have hint1 : IntervalIntegrable (Set.indicator (Set.Icc (-u) (N - u)) (1 : ℝ → ℝ))
-                volume 0 (N - u) :=
-              (integrable_indicator_iff measurableSet_Icc |>.mpr (integrableOn_const isCompact_Icc.measure_lt_top.ne)).intervalIntegrable
-            have hint2 : IntervalIntegrable (Set.indicator (Set.Icc (-u) (N - u)) (1 : ℝ → ℝ))
-                volume (N - u) N :=
-              (integrable_indicator_iff measurableSet_Icc |>.mpr (integrableOn_const isCompact_Icc.measure_lt_top.ne)).intervalIntegrable
-            rw [← intervalIntegral.integral_add_adjacent_intervals hint1 hint2]
-            rw [show ∫ t in (0 : ℝ)..(N - u),
-                    Set.indicator (Set.Icc (-u) (N - u)) (1 : ℝ → ℝ) t =
-                ∫ t in (0 : ℝ)..(N - u), (1 : ℝ) from
-                intervalIntegral.integral_congr fun t ht => by
-                  rw [Set.uIcc_of_le (by linarith [huN])] at ht
-                  simp [Set.indicator_apply, Set.mem_Icc,
-                        show -u ≤ t from by linarith [ht.1, hu0.le], ht.2]]
-            rw [show ∫ t in (N - u)..N,
-                    Set.indicator (Set.Icc (-u) (N - u)) (1 : ℝ → ℝ) t = 0 from
-                intervalIntegral_eq_zero_of_forall_eq_zero fun t ht => by
-                  rw [Set.uIoo_of_le (by linarith [huN])] at ht
-                  simp [Set.mem_Icc, show ¬(t ≤ N - u) from by
-                    linarith [ht.1]]]
-            have hNu_nn : (0 : ℝ) ≤ N - u := by linarith [huN]
-            simp [intervalIntegral.integral_const, abs_of_pos hu0]
-        -- Step 3: Combine LHS with hfub
-        rw [hfub, ← integral_const_mul]
-        apply setIntegral_congr_fun measurableSet_Icc
-        intro u hu
-        dsimp only
-        have huN_abs : |u| ≤ N := abs_le.mpr ⟨by linarith [hu.1], hu.2⟩
-        field_simp [hN.ne']
+          (1 / N) * ∫ s in Set.Icc 0 N, ∫ t in Set.Icc 0 N, F s t :=
+        tent_integral_eq_fubini g hg_cont N hN
       rw [htarget_eq]
       -- Step C3: 2D Riemann sum convergence via ε-δ with uniform continuity
       suffices hS : Tendsto (fun m : ℕ => (N / ((m : ℝ) + 1)) ^ 2 *
