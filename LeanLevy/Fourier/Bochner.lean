@@ -1024,6 +1024,166 @@ private theorem fubini_gaussianFourier_identity (ψ : ℝ → ℂ) (hψc : Conti
     exact integral_const_mul _ _
 
 set_option maxHeartbeats 800000 in
+/-- Each Gaussian-smoothed lintegral satisfies `∫⁻ ρ(x) exp(-x²/(2σ²)) ≤ 1`.
+Uses the Fubini identity, `‖ψ‖ ≤ 1`, and `∫ exp(-σ²u²/2) = √(2π/σ²)`. -/
+private theorem gaussianSmoothed_lintegral_le_one (ψ : ℝ → ℂ) (hψc : Continuous ψ)
+    (hpd : IsPositiveDefinite ψ) (h0 : ψ 0 = 1)
+    (hI : Integrable ψ volume) (σ2 : ℝ) (hσ2 : 0 < σ2)
+    (hρ_nn : ∀ x, 0 ≤ inverseFourierDensity ψ x) :
+    ∫⁻ x, ENNReal.ofReal (inverseFourierDensity ψ x *
+      Real.exp (-(x ^ 2 / (2 * σ2)))) ∂volume ≤ 1 := by
+  have hρ_cont := continuous_inverseFourierDensity ψ hψc hI
+  have hgn_nn : ∀ x, 0 ≤ inverseFourierDensity ψ x *
+      Real.exp (-(x ^ 2 / (2 * σ2))) :=
+    fun x => mul_nonneg (hρ_nn x) (Real.exp_nonneg _)
+  -- ρ is bounded
+  have hρ_bdd : ∃ C, ∀ x, inverseFourierDensity ψ x ≤ C := by
+    use (1 / (2 * Real.pi)) * ∫ u, ‖ψ u‖
+    intro x
+    unfold inverseFourierDensity
+    apply mul_le_mul_of_nonneg_left _ (div_nonneg one_pos.le
+      (mul_pos (by norm_num : (0:ℝ) < 2) Real.pi_pos).le)
+    calc (∫ u, ψ u * exp (-(↑x * ↑u * I))).re
+        ≤ |(∫ u, ψ u * exp (-(↑x * ↑u * I))).re| := le_abs_self _
+      _ ≤ ‖∫ u, ψ u * exp (-(↑x * ↑u * I))‖ := abs_re_le_norm _
+      _ ≤ ∫ u, ‖ψ u * exp (-(↑x * ↑u * I))‖ := norm_integral_le_integral_norm _
+      _ = ∫ u, ‖ψ u‖ := by
+          congr 1; ext u; rw [norm_mul,
+            show -(↑x * ↑u * I) = ↑(-(x * u)) * I from by push_cast; ring,
+            norm_exp_ofReal_mul_I, mul_one]
+  -- The product is integrable (bounded × Gaussian)
+  have hgn_integrable : Integrable (fun x => inverseFourierDensity ψ x *
+      Real.exp (-(x ^ 2 / (2 * σ2)))) volume := by
+    -- Gaussian is integrable
+    have hgauss_cont : Continuous (fun x : ℝ =>
+        Real.exp (-(x ^ 2 / (2 * σ2)))) :=
+      Real.continuous_exp.comp (continuous_neg.comp
+        ((continuous_pow 2).div_const _))
+    have hgauss_int : Integrable (fun x : ℝ =>
+        Real.exp (-(x ^ 2 / (2 * σ2)))) volume := by
+      have h := integrable_exp_neg_mul_sq (show 0 < 1 / (2 * σ2) by positivity)
+      convert h using 1; ext x; congr 1; ring
+    -- ρ is bounded, so ρ * Gaussian is integrable
+    obtain ⟨C, hC⟩ := hρ_bdd
+    exact hgauss_int.bdd_mul hρ_cont.aestronglyMeasurable
+      (ae_of_all _ fun x => by rw [Real.norm_eq_abs, abs_of_nonneg (hρ_nn x)]; exact hC x)
+  -- Convert ∫⁻ to ∫
+  rw [← ofReal_integral_eq_lintegral_ofReal hgn_integrable (ae_of_all _ hgn_nn)]
+  rw [ENNReal.ofReal_le_one]
+  -- Goal: ∫ ρ(x) * exp(-x²/(2σ²)) dx ≤ 1
+  -- We unfold ρ and bound using |ψ| ≤ 1 and norm_integral_le_integral_norm.
+  -- The bound ρ(x) ≤ (1/(2π)) * ∫ ‖ψ(u)‖ du is too loose (grows with σ).
+  -- Instead, we use a Fubini argument to swap the x and u integrals.
+  -- ∫_x ρ(x) exp(-x²/(2σ²)) dx = (σ/√(2π)) Re ∫_u ψ(u) exp(-σ²u²/2) du
+  -- ≤ (σ/√(2π)) ∫ exp(-σ²u²/2) du = 1.
+  -- The Fubini swap + Gaussian FT evaluation is proved via fourierIntegral_gaussian.
+  have hψ_norm_le : ∀ u, ‖ψ u‖ ≤ 1 := hpd.norm_le_one h0
+  -- ∫ ρ(x) exp(-x²/(2σ²)) dx = (σ/√(2π)) Re ∫ ψ(u) exp(-σ²u²/2) du
+  have gaussian_fubini_bound :
+      ∫ x, inverseFourierDensity ψ x * Real.exp (-(x ^ 2 / (2 * σ2))) ≤
+      Real.sqrt σ2 / Real.sqrt (2 * Real.pi) *
+      ∫ u, ‖ψ u‖ * Real.exp (-(σ2 * u ^ 2 / 2)) := by
+    -- By Fubini + fourierIntegral_gaussian:
+    -- ∫_x (∫_u ψ(u) exp(-ixu)).re * exp(-x²/(2σ²))
+    -- = √(2πσ²) Re ∫_u ψ(u) exp(-σ²u²/2)
+    -- ≤ √(2πσ²) ∫_u ‖ψ(u)‖ exp(-σ²u²/2)
+    -- So the bound = (1/(2π)) * √(2πσ²) * ∫ ‖ψ‖ exp(...)
+    -- = √σ²/√(2π) * ∫ ‖ψ‖ exp(-σ²u²/2).
+    have fubini_identity := fubini_gaussianFourier_identity ψ hψc hI σ2 hσ2
+    -- Unfold ρ and pull out 1/(2π)
+    have hpi_pos : (0 : ℝ) < 2 * Real.pi := by positivity
+    -- LHS = (1/(2π)) * ∫ Re(∫ ψ exp(-ixu)) * exp(-x²/(2σ²))
+    have hLHS_eq : ∫ x, inverseFourierDensity ψ x *
+        Real.exp (-(x ^ 2 / (2 * σ2))) =
+      1 / (2 * Real.pi) * (∫ x : ℝ, (∫ u : ℝ, ψ u * exp (-(↑x * ↑u * I))).re *
+        Real.exp (-(x ^ 2 / (2 * σ2)))) := by
+      simp_rw [inverseFourierDensity, mul_assoc]
+      rw [integral_const_mul]
+    rw [hLHS_eq, fubini_identity]
+    -- Goal: (1/(2π)) * (√(2πσ²) * Re(∫ ψ exp(-σ²u²/2)))
+    --     ≤ √σ²/√(2π) * ∫ ‖ψ‖ exp(-σ²u²/2)
+    have hRe_le : (∫ u : ℝ, ψ u * ↑(Real.exp (-(σ2 * u ^ 2 / 2)))).re ≤
+        ∫ u : ℝ, ‖ψ u‖ * Real.exp (-(σ2 * u ^ 2 / 2)) := by
+      calc (∫ u : ℝ, ψ u * ↑(Real.exp (-(σ2 * u ^ 2 / 2)))).re
+          ≤ ‖∫ u : ℝ, ψ u * ↑(Real.exp (-(σ2 * u ^ 2 / 2)))‖ :=
+            le_trans (le_abs_self _) (abs_re_le_norm _)
+        _ ≤ ∫ u : ℝ, ‖ψ u * ↑(Real.exp (-(σ2 * u ^ 2 / 2)))‖ :=
+            norm_integral_le_integral_norm _
+        _ = ∫ u : ℝ, ‖ψ u‖ * Real.exp (-(σ2 * u ^ 2 / 2)) := by
+            congr 1; ext u
+            rw [norm_mul, Complex.norm_real, Real.norm_eq_abs,
+              abs_of_nonneg (Real.exp_nonneg _)]
+    -- Simplify the constant: (1/(2π)) * √(2πσ²) = √σ²/√(2π)
+    -- After rw hLHS_eq and fubini_identity, goal is:
+    -- 1/(2π) * (√(2πσ²) * Re(∫ ψ exp(-σ²u²/2))) ≤ √σ²/√(2π) * ∫ ‖ψ‖ exp(-σ²u²/2)
+    -- Bound Re ≤ ‖·‖ ≤ ∫ ‖·‖, simplify constant.
+    set I_re := (∫ u : ℝ, ψ u * ↑(Real.exp (-(σ2 * u ^ 2 / 2)))).re
+    set I_norm := ∫ u : ℝ, ‖ψ u‖ * Real.exp (-(σ2 * u ^ 2 / 2))
+    have hI_norm_nn : 0 ≤ I_norm :=
+      integral_nonneg fun u => mul_nonneg (norm_nonneg _) (Real.exp_nonneg _)
+    have hI_re_le_norm : I_re ≤ I_norm := hRe_le
+    have hsqrt_pos : 0 < Real.sqrt (2 * Real.pi) := Real.sqrt_pos.mpr hpi_pos
+    have hsqrt_nn : 0 ≤ Real.sqrt σ2 := Real.sqrt_nonneg _
+    -- The constant: 1/(2π) * √(2πσ²) = √σ²/√(2π)
+    have hc_eq : 1 / (2 * Real.pi) * Real.sqrt (2 * Real.pi * σ2) =
+        Real.sqrt σ2 / Real.sqrt (2 * Real.pi) := by
+      rw [show (2 * Real.pi * σ2) = (2 * Real.pi) * σ2 from by ring,
+        Real.sqrt_mul (by positivity : 0 ≤ 2 * Real.pi)]
+      -- Goal: 1/(2π) * (√(2π) * √σ2) = √σ2/√(2π)
+      have h := ne_of_gt hsqrt_pos
+      field_simp
+      rw [Real.sq_sqrt (by positivity : 0 ≤ 2 * Real.pi)]
+    -- Goal: 1/(2π) * (√(2πσ²) * I_re) ≤ √σ²/√(2π) * I_norm
+    -- = hc_eq ▸ √σ²/√(2π) * I_re ≤ √σ²/√(2π) * I_norm
+    have h1 : 1 / (2 * Real.pi) * (Real.sqrt (2 * Real.pi * σ2) * I_re)
+      = Real.sqrt σ2 / Real.sqrt (2 * Real.pi) * I_re := by
+      rw [← hc_eq]; ring
+    rw [h1]
+    exact mul_le_mul_of_nonneg_left hI_re_le_norm
+      (div_nonneg hsqrt_nn hsqrt_pos.le)
+  -- Now bound the RHS
+  calc ∫ x, inverseFourierDensity ψ x * Real.exp (-(x ^ 2 / (2 * σ2)))
+      ≤ Real.sqrt σ2 / Real.sqrt (2 * Real.pi) *
+        ∫ u, ‖ψ u‖ * Real.exp (-(σ2 * u ^ 2 / 2)) := gaussian_fubini_bound
+    _ ≤ Real.sqrt σ2 / Real.sqrt (2 * Real.pi) *
+        ∫ u, Real.exp (-(σ2 * u ^ 2 / 2)) := by
+        have hexp_int : Integrable (fun u : ℝ =>
+            Real.exp (-(σ2 * u ^ 2 / 2))) volume := by
+          apply (integrable_exp_neg_mul_sq (by positivity : 0 < σ2 / 2)).mono'
+            (by fun_prop)
+          exact ae_of_all _ fun u => by
+            rw [Real.norm_eq_abs, abs_of_nonneg (Real.exp_nonneg _)]
+            apply Real.exp_le_exp_of_le; linarith [sq_nonneg u]
+        apply mul_le_mul_of_nonneg_left
+        · apply integral_mono_of_nonneg
+          · exact ae_of_all _ fun u => mul_nonneg (norm_nonneg _) (Real.exp_nonneg _)
+          · exact hexp_int
+          · exact ae_of_all _ fun u =>
+              mul_le_of_le_one_left (Real.exp_nonneg _) (hψ_norm_le u)
+        · exact div_nonneg (Real.sqrt_nonneg _) (Real.sqrt_nonneg _)
+    _ = 1 := by
+        -- ∫ exp(-σ²u²/2) du = √(2π/σ²) = √(2π)/√σ², so the product = 1.
+        -- Rewrite the integral using integral_gaussian
+        -- ∫ exp(-σ2 u²/2) du = √(2π/σ2), so √σ2/√(2π) * √(2π/σ2) = 1.
+        have h_int_eq : (∫ u : ℝ, Real.exp (-(σ2 * u ^ 2 / 2))) =
+            Real.sqrt (2 * Real.pi / σ2) := by
+          have h1 := integral_gaussian (σ2 / 2)
+          -- h1 : ∫ x, exp(-(σ2/2) * x²) = √(π/(σ2/2))
+          -- We need: ∫ u, exp(-(σ2 * u²/2)) = √(2π/σ2)
+          -- The integrands are equal: -(σ2/2)*x² = -(σ2*x²/2)
+          -- The RHS: π/(σ2/2) = 2π/σ2
+          calc (∫ u : ℝ, Real.exp (-(σ2 * u ^ 2 / 2)))
+              = ∫ u : ℝ, Real.exp (-(σ2 / 2) * u ^ 2) := by
+                congr 1; ext u; congr 1; ring
+            _ = Real.sqrt (Real.pi / (σ2 / 2)) := h1
+            _ = Real.sqrt (2 * Real.pi / σ2) := by
+                congr 1; field_simp
+        rw [h_int_eq, Real.sqrt_div (by positivity : (0:ℝ) ≤ 2 * Real.pi),
+          div_mul_div_comm, mul_comm (Real.sqrt σ2) (Real.sqrt (2 * Real.pi)),
+          div_self (ne_of_gt (mul_pos (Real.sqrt_pos.mpr
+            (by positivity : 0 < 2 * Real.pi)) (Real.sqrt_pos.mpr hσ2)))]
+
+set_option maxHeartbeats 800000 in
 /-- The inverseFourierDensity is integrable for PD+continuous+L¹ functions.
 Proof: ρ ≥ 0 (from Fejér argument) and the Gaussian regularization shows ∫ ρ = 1. -/
 private theorem integrable_inverseFourierDensity (ψ : ℝ → ℂ) (hψc : Continuous ψ)
@@ -1088,160 +1248,9 @@ private theorem integrable_inverseFourierDensity (ψ : ℝ → ℂ) (hψc : Cont
     intro n
     set σ2 : ℝ := ↑n + 1 with hσ2_def
     have hσ2_pos : 0 < σ2 := by positivity
-    -- The real-valued integrand ρ(x) * exp(-x²/(2σ²)) is non-negative and integrable
-    -- (ρ is bounded, Gaussian is integrable), so ∫⁻ = ENNReal.ofReal(∫).
-    have hgn_nn : ∀ x, 0 ≤ inverseFourierDensity ψ x *
-        Real.exp (-(x ^ 2 / (2 * σ2))) :=
-      fun x => mul_nonneg (hρ_nn x) (Real.exp_nonneg _)
-    -- ρ is bounded
-    have hρ_bdd : ∃ C, ∀ x, inverseFourierDensity ψ x ≤ C := by
-      use (1 / (2 * Real.pi)) * ∫ u, ‖ψ u‖
-      intro x
-      unfold inverseFourierDensity
-      apply mul_le_mul_of_nonneg_left _ (div_nonneg one_pos.le
-        (mul_pos (by norm_num : (0:ℝ) < 2) Real.pi_pos).le)
-      calc (∫ u, ψ u * exp (-(↑x * ↑u * I))).re
-          ≤ |(∫ u, ψ u * exp (-(↑x * ↑u * I))).re| := le_abs_self _
-        _ ≤ ‖∫ u, ψ u * exp (-(↑x * ↑u * I))‖ := abs_re_le_norm _
-        _ ≤ ∫ u, ‖ψ u * exp (-(↑x * ↑u * I))‖ := norm_integral_le_integral_norm _
-        _ = ∫ u, ‖ψ u‖ := by
-            congr 1; ext u; rw [norm_mul,
-              show -(↑x * ↑u * I) = ↑(-(x * u)) * I from by push_cast; ring,
-              norm_exp_ofReal_mul_I, mul_one]
-    -- The product is integrable (bounded × Gaussian)
-    have hgn_integrable : Integrable (fun x => inverseFourierDensity ψ x *
-        Real.exp (-(x ^ 2 / (2 * σ2)))) volume := by
-      -- Gaussian is integrable
-      have hgauss_cont : Continuous (fun x : ℝ =>
-          Real.exp (-(x ^ 2 / (2 * σ2)))) :=
-        Real.continuous_exp.comp (continuous_neg.comp
-          ((continuous_pow 2).div_const _))
-      have hgauss_int : Integrable (fun x : ℝ =>
-          Real.exp (-(x ^ 2 / (2 * σ2)))) volume := by
-        have h := integrable_exp_neg_mul_sq (show 0 < 1 / (2 * σ2) by positivity)
-        convert h using 1; ext x; congr 1; ring
-      -- ρ is bounded, so ρ * Gaussian is integrable
-      obtain ⟨C, hC⟩ := hρ_bdd
-      exact hgauss_int.bdd_mul hρ_cont.aestronglyMeasurable
-        (ae_of_all _ fun x => by rw [Real.norm_eq_abs, abs_of_nonneg (hρ_nn x)]; exact hC x)
-    -- Convert ∫⁻ to ∫
     rw [show gn n = fun x => ENNReal.ofReal (inverseFourierDensity ψ x *
-        Real.exp (-(x ^ 2 / (2 * σ2)))) from by
-      ext x; simp [gn, hσ2_def]]
-    rw [← ofReal_integral_eq_lintegral_ofReal hgn_integrable (ae_of_all _ hgn_nn)]
-    rw [ENNReal.ofReal_le_one]
-    -- Goal: ∫ ρ(x) * exp(-x²/(2σ²)) dx ≤ 1
-    -- We unfold ρ and bound using |ψ| ≤ 1 and norm_integral_le_integral_norm.
-    -- The bound ρ(x) ≤ (1/(2π)) * ∫ ‖ψ(u)‖ du is too loose (grows with σ).
-    -- Instead, we use a Fubini argument to swap the x and u integrals.
-    -- ∫_x ρ(x) exp(-x²/(2σ²)) dx = (σ/√(2π)) Re ∫_u ψ(u) exp(-σ²u²/2) du
-    -- ≤ (σ/√(2π)) ∫ exp(-σ²u²/2) du = 1.
-    -- The Fubini swap + Gaussian FT evaluation is proved via fourierIntegral_gaussian.
-    have hψ_norm_le : ∀ u, ‖ψ u‖ ≤ 1 := hpd.norm_le_one h0
-    -- ∫ ρ(x) exp(-x²/(2σ²)) dx = (σ/√(2π)) Re ∫ ψ(u) exp(-σ²u²/2) du
-    have gaussian_fubini_bound :
-        ∫ x, inverseFourierDensity ψ x * Real.exp (-(x ^ 2 / (2 * σ2))) ≤
-        Real.sqrt σ2 / Real.sqrt (2 * Real.pi) *
-        ∫ u, ‖ψ u‖ * Real.exp (-(σ2 * u ^ 2 / 2)) := by
-      -- By Fubini + fourierIntegral_gaussian:
-      -- ∫_x (∫_u ψ(u) exp(-ixu)).re * exp(-x²/(2σ²))
-      -- = √(2πσ²) Re ∫_u ψ(u) exp(-σ²u²/2)
-      -- ≤ √(2πσ²) ∫_u ‖ψ(u)‖ exp(-σ²u²/2)
-      -- So the bound = (1/(2π)) * √(2πσ²) * ∫ ‖ψ‖ exp(...)
-      -- = √σ²/√(2π) * ∫ ‖ψ‖ exp(-σ²u²/2).
-      have fubini_identity := fubini_gaussianFourier_identity ψ hψc hI σ2 hσ2_pos
-      -- Unfold ρ and pull out 1/(2π)
-      have hpi_pos : (0 : ℝ) < 2 * Real.pi := by positivity
-      -- LHS = (1/(2π)) * ∫ Re(∫ ψ exp(-ixu)) * exp(-x²/(2σ²))
-      have hLHS_eq : ∫ x, inverseFourierDensity ψ x *
-          Real.exp (-(x ^ 2 / (2 * σ2))) =
-        1 / (2 * Real.pi) * (∫ x : ℝ, (∫ u : ℝ, ψ u * exp (-(↑x * ↑u * I))).re *
-          Real.exp (-(x ^ 2 / (2 * σ2)))) := by
-        simp_rw [inverseFourierDensity, mul_assoc]
-        rw [integral_const_mul]
-      rw [hLHS_eq, fubini_identity]
-      -- Goal: (1/(2π)) * (√(2πσ²) * Re(∫ ψ exp(-σ²u²/2)))
-      --     ≤ √σ²/√(2π) * ∫ ‖ψ‖ exp(-σ²u²/2)
-      have hRe_le : (∫ u : ℝ, ψ u * ↑(Real.exp (-(σ2 * u ^ 2 / 2)))).re ≤
-          ∫ u : ℝ, ‖ψ u‖ * Real.exp (-(σ2 * u ^ 2 / 2)) := by
-        calc (∫ u : ℝ, ψ u * ↑(Real.exp (-(σ2 * u ^ 2 / 2)))).re
-            ≤ ‖∫ u : ℝ, ψ u * ↑(Real.exp (-(σ2 * u ^ 2 / 2)))‖ :=
-              le_trans (le_abs_self _) (abs_re_le_norm _)
-          _ ≤ ∫ u : ℝ, ‖ψ u * ↑(Real.exp (-(σ2 * u ^ 2 / 2)))‖ :=
-              norm_integral_le_integral_norm _
-          _ = ∫ u : ℝ, ‖ψ u‖ * Real.exp (-(σ2 * u ^ 2 / 2)) := by
-              congr 1; ext u
-              rw [norm_mul, Complex.norm_real, Real.norm_eq_abs,
-                abs_of_nonneg (Real.exp_nonneg _)]
-      -- Simplify the constant: (1/(2π)) * √(2πσ²) = √σ²/√(2π)
-      -- After rw hLHS_eq and fubini_identity, goal is:
-      -- 1/(2π) * (√(2πσ²) * Re(∫ ψ exp(-σ²u²/2))) ≤ √σ²/√(2π) * ∫ ‖ψ‖ exp(-σ²u²/2)
-      -- Bound Re ≤ ‖·‖ ≤ ∫ ‖·‖, simplify constant.
-      set I_re := (∫ u : ℝ, ψ u * ↑(Real.exp (-(σ2 * u ^ 2 / 2)))).re
-      set I_norm := ∫ u : ℝ, ‖ψ u‖ * Real.exp (-(σ2 * u ^ 2 / 2))
-      have hI_norm_nn : 0 ≤ I_norm :=
-        integral_nonneg fun u => mul_nonneg (norm_nonneg _) (Real.exp_nonneg _)
-      have hI_re_le_norm : I_re ≤ I_norm := hRe_le
-      have hsqrt_pos : 0 < Real.sqrt (2 * Real.pi) := Real.sqrt_pos.mpr hpi_pos
-      have hsqrt_nn : 0 ≤ Real.sqrt σ2 := Real.sqrt_nonneg _
-      -- The constant: 1/(2π) * √(2πσ²) = √σ²/√(2π)
-      have hc_eq : 1 / (2 * Real.pi) * Real.sqrt (2 * Real.pi * σ2) =
-          Real.sqrt σ2 / Real.sqrt (2 * Real.pi) := by
-        rw [show (2 * Real.pi * σ2) = (2 * Real.pi) * σ2 from by ring,
-          Real.sqrt_mul (by positivity : 0 ≤ 2 * Real.pi)]
-        -- Goal: 1/(2π) * (√(2π) * √σ2) = √σ2/√(2π)
-        have h := ne_of_gt hsqrt_pos
-        field_simp
-        rw [Real.sq_sqrt (by positivity : 0 ≤ 2 * Real.pi)]
-      -- Goal: 1/(2π) * (√(2πσ²) * I_re) ≤ √σ²/√(2π) * I_norm
-      -- = hc_eq ▸ √σ²/√(2π) * I_re ≤ √σ²/√(2π) * I_norm
-      have h1 : 1 / (2 * Real.pi) * (Real.sqrt (2 * Real.pi * σ2) * I_re)
-        = Real.sqrt σ2 / Real.sqrt (2 * Real.pi) * I_re := by
-        rw [← hc_eq]; ring
-      rw [h1]
-      exact mul_le_mul_of_nonneg_left hI_re_le_norm
-        (div_nonneg hsqrt_nn hsqrt_pos.le)
-    -- Now bound the RHS
-    calc ∫ x, inverseFourierDensity ψ x * Real.exp (-(x ^ 2 / (2 * σ2)))
-        ≤ Real.sqrt σ2 / Real.sqrt (2 * Real.pi) *
-          ∫ u, ‖ψ u‖ * Real.exp (-(σ2 * u ^ 2 / 2)) := gaussian_fubini_bound
-      _ ≤ Real.sqrt σ2 / Real.sqrt (2 * Real.pi) *
-          ∫ u, Real.exp (-(σ2 * u ^ 2 / 2)) := by
-          have hexp_int : Integrable (fun u : ℝ =>
-              Real.exp (-(σ2 * u ^ 2 / 2))) volume := by
-            apply (integrable_exp_neg_mul_sq (by positivity : 0 < σ2 / 2)).mono'
-              (by fun_prop)
-            exact ae_of_all _ fun u => by
-              rw [Real.norm_eq_abs, abs_of_nonneg (Real.exp_nonneg _)]
-              apply Real.exp_le_exp_of_le; linarith [sq_nonneg u]
-          apply mul_le_mul_of_nonneg_left
-          · apply integral_mono_of_nonneg
-            · exact ae_of_all _ fun u => mul_nonneg (norm_nonneg _) (Real.exp_nonneg _)
-            · exact hexp_int
-            · exact ae_of_all _ fun u =>
-                mul_le_of_le_one_left (Real.exp_nonneg _) (hψ_norm_le u)
-          · exact div_nonneg (Real.sqrt_nonneg _) (Real.sqrt_nonneg _)
-      _ = 1 := by
-          -- ∫ exp(-σ²u²/2) du = √(2π/σ²) = √(2π)/√σ², so the product = 1.
-          -- Rewrite the integral using integral_gaussian
-          -- ∫ exp(-σ2 u²/2) du = √(2π/σ2), so √σ2/√(2π) * √(2π/σ2) = 1.
-          have h_int_eq : (∫ u : ℝ, Real.exp (-(σ2 * u ^ 2 / 2))) =
-              Real.sqrt (2 * Real.pi / σ2) := by
-            have h1 := integral_gaussian (σ2 / 2)
-            -- h1 : ∫ x, exp(-(σ2/2) * x²) = √(π/(σ2/2))
-            -- We need: ∫ u, exp(-(σ2 * u²/2)) = √(2π/σ2)
-            -- The integrands are equal: -(σ2/2)*x² = -(σ2*x²/2)
-            -- The RHS: π/(σ2/2) = 2π/σ2
-            calc (∫ u : ℝ, Real.exp (-(σ2 * u ^ 2 / 2)))
-                = ∫ u : ℝ, Real.exp (-(σ2 / 2) * u ^ 2) := by
-                  congr 1; ext u; congr 1; ring
-              _ = Real.sqrt (Real.pi / (σ2 / 2)) := h1
-              _ = Real.sqrt (2 * Real.pi / σ2) := by
-                  congr 1; field_simp
-          rw [h_int_eq, Real.sqrt_div (by positivity : (0:ℝ) ≤ 2 * Real.pi),
-            div_mul_div_comm, mul_comm (Real.sqrt σ2) (Real.sqrt (2 * Real.pi)),
-            div_self (ne_of_gt (mul_pos (Real.sqrt_pos.mpr
-              (by positivity : 0 < 2 * Real.pi)) (Real.sqrt_pos.mpr hσ2_pos)))]
+        Real.exp (-(x ^ 2 / (2 * σ2)))) from by ext x; simp [gn, hσ2_def]]
+    exact gaussianSmoothed_lintegral_le_one ψ hψc hpd h0 hI σ2 hσ2_pos hρ_nn
   have hbdd : ∫⁻ x, ENNReal.ofReal (inverseFourierDensity ψ x) ∂volume ≤ 1 :=
     le_of_tendsto' hMCT hgn_le_one
   exact ne_top_of_le_ne_top ENNReal.one_ne_top hbdd
