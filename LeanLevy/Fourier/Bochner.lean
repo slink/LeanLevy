@@ -83,6 +83,27 @@ private noncomputable def fejerApproximant (ψ : ℝ → ℂ) (N : ℝ) (x : ℝ
     (∫ u in Set.Icc (-N) N,
       ψ u * exp (-(↑x * ↑u * I)) * (1 - ↑(|u| / N))).re
 
+/-- The product of a PD function `ψ` and `u ↦ exp(-ixu)` is PD. -/
+private theorem isPositiveDefinite_mul_exp (ψ : ℝ → ℂ) (hpd : IsPositiveDefinite ψ) (x : ℝ) :
+    IsPositiveDefinite (fun u => ψ u * exp (-(↑x * ↑u * I))) := by
+  have hexp_pd : IsPositiveDefinite (fun u => exp (-(↑x * ↑u * I))) := by
+    intro n pts c
+    have hsum_eq : ∑ i, ∑ j, starRingEnd ℂ (c i) * c j *
+        exp (-(↑x * ↑(pts i - pts j) * I)) =
+        ↑(Complex.normSq (∑ i, c i * exp (↑x * ↑(pts i) * I))) := by
+      rw [Complex.normSq_eq_conj_mul_self, map_sum, Finset.sum_mul]
+      refine Finset.sum_congr rfl fun i _ => ?_
+      rw [Finset.mul_sum]
+      refine Finset.sum_congr rfl fun j _ => ?_
+      simp only [map_mul, ← exp_conj, conj_ofReal, conj_I, mul_neg]
+      rw [show -(↑x * ↑(pts i - pts j) * I) =
+          -(↑x * ↑(pts i) * I) + ↑x * ↑(pts j) * I from by push_cast; ring,
+        exp_add]
+      ring
+    rw [hsum_eq]
+    exact_mod_cast Complex.normSq_nonneg _
+  exact hpd.mul hexp_pd
+
 set_option maxHeartbeats 800000 in
 private theorem fejerApproximant_nonneg (ψ : ℝ → ℂ) (hψc : Continuous ψ)
     (hpd : IsPositiveDefinite ψ) (N : ℝ) (hN : 0 < N) (x : ℝ) : 0 ≤ fejerApproximant ψ N x := by
@@ -99,24 +120,7 @@ private theorem fejerApproximant_nonneg (ψ : ℝ → ℂ) (hψc : Continuous ψ
   · -- Need: (∫ u in Icc(-N,N), g(u)(1-|u|/N)).re ≥ 0
     set g : ℝ → ℂ := fun u => ψ u * exp (-(↑x * ↑u * I)) with hg_def
     -- g is PD (product of ψ and exp(-ix·) which is PD)
-    have hg_pd : IsPositiveDefinite g := by
-      have hexp_pd : IsPositiveDefinite (fun u => exp (-(↑x * ↑u * I))) := by
-        intro n pts c
-        have hsum_eq : ∑ i, ∑ j, starRingEnd ℂ (c i) * c j *
-            exp (-(↑x * ↑(pts i - pts j) * I)) =
-            ↑(Complex.normSq (∑ i, c i * exp (↑x * ↑(pts i) * I))) := by
-          rw [Complex.normSq_eq_conj_mul_self, map_sum, Finset.sum_mul]
-          refine Finset.sum_congr rfl fun i _ => ?_
-          rw [Finset.mul_sum]
-          refine Finset.sum_congr rfl fun j _ => ?_
-          simp only [map_mul, ← exp_conj, conj_ofReal, conj_I, mul_neg]
-          rw [show -(↑x * ↑(pts i - pts j) * I) =
-              -(↑x * ↑(pts i) * I) + ↑x * ↑(pts j) * I from by push_cast; ring,
-            exp_add]
-          ring
-        rw [hsum_eq]
-        exact_mod_cast Complex.normSq_nonneg _
-      exact hpd.mul hexp_pd
+    have hg_pd : IsPositiveDefinite g := isPositiveDefinite_mul_exp ψ hpd x
     -- g is continuous
     have hg_cont : Continuous g :=
       hψc.mul (((continuous_const.mul continuous_ofReal).mul continuous_const).neg.cexp)
