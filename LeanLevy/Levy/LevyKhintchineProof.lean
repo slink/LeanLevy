@@ -1109,6 +1109,25 @@ theorem charFun_mul (s t : {r : ℝ // 0 < r}) (ξ : ℝ) :
   congr 1
   push_cast; ring
 
+/-- The scaled measure `(1/t) · μ_t`. When `charFun(μ_t) = exp(tψ)`, the scaled measure
+    captures the behaviour of `(exp(tψ) − 1)/t → ψ` as `t → 0⁺`. -/
+noncomputable def scaledMeasure (t : {t : ℝ // 0 < t}) : Measure ℝ :=
+  ENNReal.ofReal t.val⁻¹ • (S.measure t : Measure ℝ)
+
+@[simp]
+theorem scaledMeasure_apply (t : {t : ℝ // 0 < t}) (A : Set ℝ) :
+    S.scaledMeasure t A = ENNReal.ofReal t.val⁻¹ * (S.measure t : Measure ℝ) A := by
+  simp [scaledMeasure, Measure.smul_apply]
+
+/-- Integration against the scaled measure: `∫ f d(scaledMeasure t) = t⁻¹ • ∫ f dμ_t`.
+    Here `•` is the scalar action of `ℝ` on the codomain (typically `ℂ`). -/
+theorem integral_scaledMeasure {E : Type*} [NormedAddCommGroup E] [NormedSpace ℝ E]
+    (t : {t : ℝ // 0 < t}) (f : ℝ → E) :
+    ∫ x, f x ∂(S.scaledMeasure t) = t.val⁻¹ • ∫ x, f x ∂(S.measure t : Measure ℝ) := by
+  simp only [scaledMeasure]
+  rw [integral_smul_measure]
+  rw [ENNReal.toReal_ofReal (le_of_lt (inv_pos.mpr t.prop))]
+
 end ConvolutionSemigroup
 
 /-- Build a convolution semigroup from a CND exponent via Schoenberg + Bochner. -/
