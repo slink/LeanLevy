@@ -1130,6 +1130,39 @@ theorem integral_scaledMeasure {E : Type*} [NormedAddCommGroup E] [NormedSpace �
 
 end ConvolutionSemigroup
 
+/-! ## Truncation framework
+
+The Lévy-Khintchine formula splits the integral over a Lévy measure into
+"small jump" and "large jump" contributions at the threshold `|x| = 1`.
+We define the corresponding sets and prove a split lemma. -/
+
+/-- The "small jump" set `{x | |x| < 1}`. -/
+def smallSet : Set ℝ := {x | |x| < 1}
+
+/-- The "large jump" set `{x | ε ≤ |x|}`. -/
+def largeSet (ε : ℝ) : Set ℝ := {x | ε ≤ |x|}
+
+@[simp] lemma mem_smallSet {x : ℝ} : x ∈ smallSet ↔ |x| < 1 := Iff.rfl
+
+@[simp] lemma mem_largeSet {x : ℝ} {ε : ℝ} : x ∈ largeSet ε ↔ ε ≤ |x| := Iff.rfl
+
+lemma measurableSet_smallSet : MeasurableSet smallSet :=
+  (isOpen_Iio.preimage continuous_abs).measurableSet
+
+lemma measurableSet_largeSet (ε : ℝ) : MeasurableSet (largeSet ε) :=
+  (isClosed_Ici.preimage continuous_abs).measurableSet
+
+lemma smallSet_eq_compl_largeSet : smallSet = (largeSet 1)ᶜ := by
+  ext x; simp [smallSet, largeSet, not_le]
+
+/-- Split `∫ (exp(ixξ) − 1) dμ` into small and large jump contributions. -/
+lemma integral_exp_sub_one_split (μ : Measure ℝ) [IsProbabilityMeasure μ] (ξ : ℝ)
+    (hf : Integrable (fun x : ℝ => exp (↑x * ↑ξ * I) - 1) μ) :
+    ∫ x : ℝ, (exp (↑x * ↑ξ * I) - 1) ∂μ =
+      ∫ x : ℝ in smallSet, (exp (↑x * ↑ξ * I) - 1) ∂μ +
+      ∫ x : ℝ in smallSetᶜ, (exp (↑x * ↑ξ * I) - 1) ∂μ :=
+  (integral_add_compl measurableSet_smallSet hf).symm
+
 /-- Build a convolution semigroup from a CND exponent via Schoenberg + Bochner. -/
 noncomputable def convolutionSemigroupOfCND
     {ψ : ℝ → ℂ} (hψ_cont : Continuous ψ) (hψ_zero : ψ 0 = 0)
