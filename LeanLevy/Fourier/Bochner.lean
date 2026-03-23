@@ -104,6 +104,19 @@ private theorem isPositiveDefinite_mul_exp (ψ : ℝ → ℂ) (hpd : IsPositiveD
     exact_mod_cast Complex.normSq_nonneg _
   exact hpd.mul hexp_pd
 
+/-- PD Riemann sums R_m = (h²/N) * Re(∑ᵢ ∑ⱼ g((i-j)h)) are non-negative. -/
+private theorem riemannSum_nonneg_of_pd (g : ℝ → ℂ) (hg_pd : IsPositiveDefinite g)
+    (N : ℝ) (hN : 0 < N) (m : ℕ) :
+    0 ≤ (N / ((m : ℝ) + 1)) ^ 2 / N *
+      (∑ i : Fin (m + 1), ∑ j : Fin (m + 1),
+        g ((i : ℝ) * (N / ((m : ℝ) + 1)) - (j : ℝ) * (N / ((m : ℝ) + 1)))).re := by
+  apply mul_nonneg
+  · exact div_nonneg (sq_nonneg _) hN.le
+  · have h := hg_pd (m + 1)
+      (fun i => (i : ℝ) * (N / ((m : ℝ) + 1))) (fun _ => 1)
+    simp only [map_one, one_mul] at h
+    exact (Complex.nonneg_iff.mp h).1
+
 set_option maxHeartbeats 800000 in
 private theorem fejerApproximant_nonneg (ψ : ℝ → ℂ) (hψc : Continuous ψ)
     (hpd : IsPositiveDefinite ψ) (N : ℝ) (hN : 0 < N) (x : ℝ) : 0 ≤ fejerApproximant ψ N x := by
@@ -132,14 +145,7 @@ private theorem fejerApproximant_nonneg (ψ : ℝ → ℂ) (hψc : Continuous ψ
       (∑ i : Fin (m + 1), ∑ j : Fin (m + 1),
         g ((i : ℝ) * (N / ((m : ℝ) + 1)) - (j : ℝ) * (N / ((m : ℝ) + 1)))).re
     -- Step B: Each R_m ≥ 0 by PD (with cᵢ = 1)
-    have hR_nn : ∀ m : ℕ, 0 ≤ R m := by
-      intro m
-      apply mul_nonneg
-      · exact div_nonneg (sq_nonneg _) hN.le
-      · have h := hg_pd (m + 1)
-          (fun i => (i : ℝ) * (N / ((m : ℝ) + 1))) (fun _ => 1)
-        simp only [map_one, one_mul] at h
-        exact (Complex.nonneg_iff.mp h).1
+    have hR_nn : ∀ m : ℕ, 0 ≤ R m := fun m => riemannSum_nonneg_of_pd g hg_pd N hN m
     -- Step C: R_m converges to (∫ g(u)(1-|u|/N)).re as m → ∞
     -- This is Riemann sum convergence for the continuous function
     -- u ↦ g(u)(1-|u|/N) on the compact interval [-N,N].
