@@ -1095,6 +1095,30 @@ structure ConvolutionSemigroup where
     MeasureTheory.ProbabilityMeasure.characteristicFun (measure t) ξ =
       exp ((↑t.val : ℂ) * exponent ξ)
 
+/-- First-order expansion: `(exp(tz) − 1)/t → z` as `t → 0`.
+This is the derivative of `t ↦ exp(tz)` at `t = 0`, extracted as a slope limit. -/
+lemma exp_first_order (z : ℂ) :
+    Tendsto (fun t : ℝ => (exp ((↑t : ℂ) * z) - 1) / (↑t : ℂ))
+      (𝓝[≠] (0 : ℝ)) (𝓝 z) := by
+  -- The derivative of `t ↦ cexp(tz)` at `t = 0` is `z`.
+  have hg : HasDerivAt (fun t : ℝ => cexp ((↑t : ℂ) * z)) z 0 := by
+    -- Compose: cexp ∘ (t ↦ ↑t * z), derivative at 0 is cexp(0 * z) * z = z.
+    have hf : HasDerivAt (fun t : ℝ => (↑t : ℂ) * z) (1 * z) 0 :=
+      (Complex.ofRealCLM.hasDerivAt (x := (0 : ℝ))).mul_const z
+    have hexp := hf.cexp
+    simp only [ofReal_zero, zero_mul, exp_zero, one_mul, one_mul] at hexp
+    exact hexp
+  -- Step 3: extract the slope limit `(f(0+t) - f(0))/t → f'(0)`.
+  have hslope := hg.tendsto_slope_zero
+  -- Step 4: the slope is exactly `(cexp(↑t * z) - 1) / ↑t` after simplification.
+  simp only [zero_add, ofReal_zero, zero_mul, exp_zero] at hslope
+  exact hslope.congr (fun t => by
+    show t⁻¹ • (cexp ((↑t : ℂ) * z) - 1) = (cexp ((↑t : ℂ) * z) - 1) / (↑t : ℂ)
+    rw [RCLike.real_smul_eq_coe_mul (K := ℂ)]
+    push_cast
+    rw [inv_mul_eq_div]
+    norm_cast)
+
 namespace ConvolutionSemigroup
 
 variable (S : ConvolutionSemigroup)
@@ -1127,6 +1151,23 @@ theorem integral_scaledMeasure {E : Type*} [NormedAddCommGroup E] [NormedSpace �
   simp only [scaledMeasure]
   rw [integral_smul_measure]
   rw [ENNReal.toReal_ofReal (le_of_lt (inv_pos.mpr t.prop))]
+
+/-- Scaled characteristic function limit: `(charFun(μ_t)(ξ) − 1)/t → ψ(ξ)` as `t → 0⁺`.
+Since `charFun(μ_t)(ξ) = exp(tψ(ξ))`, this follows from `exp_first_order`. -/
+theorem charFun_scaled_limit (ξ : ℝ) :
+    Tendsto (fun t : {t : ℝ // 0 < t} =>
+      (MeasureTheory.ProbabilityMeasure.characteristicFun (S.measure t) ξ - 1) / (↑t.val : ℂ))
+      (comap Subtype.val (𝓝[>] (0 : ℝ))) (𝓝 (S.exponent ξ)) := by
+  -- Rewrite charFun using the semigroup identity.
+  suffices Tendsto (fun t : {t : ℝ // 0 < t} =>
+      (exp ((↑t.val : ℂ) * S.exponent ξ) - 1) / (↑t.val : ℂ))
+      (comap Subtype.val (𝓝[>] (0 : ℝ))) (𝓝 (S.exponent ξ)) by
+    refine this.congr (fun t => ?_)
+    rw [S.charFun_eq t ξ]
+  -- The target is `(exp_first_order ψ(ξ)) ∘ Subtype.val`.
+  exact (exp_first_order (S.exponent ξ)).comp
+    ((tendsto_comap.mono_right (nhdsGT_le_nhdsNE 0) : Tendsto Subtype.val
+      (comap Subtype.val (𝓝[>] (0 : ℝ))) (𝓝[≠] (0 : ℝ))))
 
 end ConvolutionSemigroup
 
