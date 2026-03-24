@@ -1602,6 +1602,21 @@ lemma drift_term (ξ : ℝ)
   rw [show (↑b : ℂ) * ↑ξ * I = ↑b * (↑ξ * I) from by ring]
   exact Filter.Tendsto.mul_const ((↑ξ : ℂ) * I) hb.ofReal
 
+/-- Main assembly: combine all phases to decompose the characteristic exponent `ψ`
+into drift, diffusion, and jump components. The proof assembles Phase 1–6 lemmas
+(charFun_scaled_limit, large_jump_limit, small_jump_expansion, drift_limit, etc.)
+to identify the Lévy-Khintchine triple `(b, σ², ν)`.
+
+This is the core sorry: once it is closed, `levyKhintchine_of_cnd` follows immediately. -/
+theorem psi_decomposition :
+    ∃ (b : ℝ) (σ_sq : ℝ≥0) (ν : Measure ℝ),
+      IsLevyMeasure ν ∧
+      ∀ ξ : ℝ,
+        S.exponent ξ = ↑b * ↑ξ * I
+          - ↑(σ_sq : ℝ) * ↑ξ ^ 2 / 2
+          + ∫ x, levyCompensatedIntegrand ξ x ∂ν := by
+  sorry
+
 end ConvolutionSemigroup
 
 /-- Build a convolution semigroup from a CND exponent via Schoenberg + Bochner. -/
@@ -1633,7 +1648,7 @@ has the Lévy-Khintchine integral representation.
 3. The family `{μ_t}` forms a convolution semigroup (see `convolutionSemigroupOfCND`).
 4. Differentiating at `t = 0` extracts the Lévy-Khintchine triple `(b, σ², ν)`.
 
-Steps 1–3 are complete. Step 4 (measure differentiation) is research-level and remains sorry'd. -/
+Steps 1–3 are complete. Step 4 delegates to `ConvolutionSemigroup.psi_decomposition`. -/
 theorem levyKhintchine_of_cnd
     {ψ : ℝ → ℂ} (hψ_cont : Continuous ψ) (hψ_zero : ψ 0 = 0)
     (hψ_cnd : IsConditionallyNegativeDefinite ψ)
@@ -1644,14 +1659,9 @@ theorem levyKhintchine_of_cnd
         + ∫ x, levyCompensatedIntegrand ξ x ∂T.levyMeasure := by
   -- Steps 1–2: Build the convolution semigroup via Schoenberg + Bochner
   set S := convolutionSemigroupOfCND hψ_cont hψ_zero hψ_cnd hψ_herm
-  -- Step 3: The semigroup satisfies charFun(μ_t)(ξ) = exp(tψ(ξ))
-  have _hcharfun : ∀ (t : {t : ℝ // 0 < t}) (ξ : ℝ),
-      MeasureTheory.ProbabilityMeasure.characteristicFun (S.measure t) ξ =
-        exp ((↑t.val : ℂ) * ψ ξ) := S.charFun_eq
-  -- Step 4: Extract the triple by differentiating the convolution semigroup at t=0.
-  -- This requires: vague limit of (μ_t - δ_0)/t as t↓0, identification of the
-  -- limit as ν + σ²δ₀ + b·δ₀', and verification of the Lévy measure conditions.
-  sorry
+  -- Step 3–4: Extract the triple via psi_decomposition
+  obtain ⟨b, σ_sq, ν, hν_levy, hψ_eq⟩ := S.psi_decomposition
+  exact ⟨⟨b, σ_sq, ν, hν_levy⟩, hψ_eq⟩
 
 /-! ## Assembly: Lévy-Khintchine representation -/
 
