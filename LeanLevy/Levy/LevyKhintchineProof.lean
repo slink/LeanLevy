@@ -1434,6 +1434,82 @@ theorem levyMeasure_restrict_isFiniteMeasure (ε : ℝ) (hε : 0 < ε) :
   rw [Measure.restrict_apply_univ]
   exact levyMeasure_large_finite S ε hε
 
+/-! ### Phase 4 — Fourier identification on large jumps
+
+The large-jump contribution to the Lévy-Khintchine decomposition.
+
+**4.1 — Large jump limit (along subsequence):**
+The scaled integral `(1/t) ∫_{|x|≥ε} (e^{ixξ} − 1) dμ_t` converges along a
+subsequence to `∫_{|x|≥ε} (e^{ixξ} − 1) dν`, where `ν` is the Lévy measure.
+This uses weak convergence from `exists_measure_limit_large`.
+
+**4.2 — Remove truncation ε → 0:**
+As `ε → 0`, the integral over `{|x| ≥ ε}` approaches the integral over
+`ℝ \ {0}`, since the Lévy measure has no mass at the origin. -/
+
+/-- The scaled integral on `{|x| ≥ ε}` converges along a subsequence to the Lévy measure integral.
+
+Uses weak convergence from the extraction lemma (`exists_measure_limit_large`). The function
+`x ↦ exp(ixξ) − 1` is bounded and continuous on `{|x| ≥ ε}`, so weak convergence of the
+scaled restricted measures implies convergence of integrals. -/
+theorem large_jump_limit (ξ : ℝ) (ε : ℝ) (hε : 0 < ε)
+    {t_seq : ℕ → {t : ℝ // 0 < t}} (ht : Tendsto (fun n => (t_seq n).val) atTop (𝓝 0))
+    {ν_ε : Measure ℝ} (_hν_fin : IsFiniteMeasure ν_ε)
+    (_hν_supp : ν_ε (largeSet ε)ᶜ = 0)
+    (_hconv : ∀ (f : BoundedContinuousFunction ℝ ℝ), (∀ x, |x| < ε → f x = 0) →
+      Tendsto (fun n => ∫ x, f x ∂(S.scaledRestrictedMeasure (t_seq n) ε))
+        atTop (𝓝 (∫ x, f x ∂ν_ε))) :
+    Tendsto (fun n =>
+      ((t_seq n).val⁻¹ : ℂ) *
+      ∫ x in largeSet ε, (exp (↑x * ↑ξ * I) - 1) ∂(S.measure (t_seq n) : Measure ℝ))
+    atTop
+    (𝓝 (∫ x in largeSet ε, (exp (↑x * ↑ξ * I) - 1) ∂(levyMeasure S))) := by
+  -- Strategy:
+  -- 1. Rewrite using `integral_scaledMeasure` + `Measure.restrict` to express
+  --    `t⁻¹ * ∫_{|x|≥ε} f dμ_t` as `∫ f d(scaledRestrictedMeasure t ε)`.
+  -- 2. Split Re/Im and apply the weak convergence hypothesis `_hconv` to
+  --    the bounded continuous real/imaginary parts.
+  -- 3. Combine to get complex convergence.
+  -- 4. Relate `∫ f dν_ε` to `∫_{|x|≥ε} f d(levyMeasure S)` using `_hν_supp`
+  --    and consistency of the extracted measures with the Lévy measure.
+  sorry
+
+/-- The large jump integral converges as `ε → 0` to the full integral on `ℝ \ {0}`.
+
+Since the Lévy measure satisfies `ν {0} = 0` and `∫ min(1,x²) dν < ∞`,
+the restriction to `{|x| ≥ ε}` monotonically exhausts the full measure as `ε ↘ 0`.
+The integrand `exp(ixξ) − 1` satisfies `‖exp(ixξ) − 1‖ ≤ 2` on `{|x| ≥ 1}` and is
+bounded by `|xξ|` on `{|x| < 1}`, both integrable against the Lévy measure. -/
+theorem large_jump_exhaustion (ξ : ℝ) :
+    Tendsto (fun n : ℕ =>
+      ∫ x in largeSet (1 / (↑n + 1 : ℝ)),
+        (exp (↑x * ↑ξ * I) - 1) ∂(levyMeasure S))
+    atTop
+    (𝓝 (∫ x in {x : ℝ | x ≠ 0}, (exp (↑x * ↑ξ * I) - 1) ∂(levyMeasure S))) := by
+  -- Strategy:
+  -- 1. The sets `largeSet (1/(n+1))` increase to `ℝ \ {0}` as `n → ∞`.
+  -- 2. The integrand `exp(ixξ) − 1` is integrable against the Lévy measure
+  --    on `ℝ \ {0}` (follows from `integrable_levyCompensatedIntegrand` and the
+  --    fact that the compensated and uncompensated integrands agree on `{|x| ≥ 1}`).
+  -- 3. Apply dominated convergence with dominating function `|exp(ixξ) - 1|`,
+  --    or use `tendsto_integral_of_monotone_set` (integral over increasing sets).
+  sorry
+
+/-- On `{|x| ≥ 1}`, the compensated integrand equals `exp(ixξ) − 1` (indicator vanishes). -/
+theorem levyCompensatedIntegrand_eq_on_large {ξ x : ℝ} (hx : 1 ≤ |x|) :
+    levyCompensatedIntegrand ξ x = exp (↑x * ↑ξ * I) - 1 := by
+  simp [levyCompensatedIntegrand, show ¬(|x| < 1) from not_lt.mpr hx]
+
+/-- The integral of `exp(ixξ) − 1` over `{|x| ≥ 1}` equals the integral of the
+compensated integrand over `{|x| ≥ 1}`. This bridges the large-jump Fourier
+identification with the compensated integral form used in the final LK formula. -/
+theorem integral_large_eq_compensated (ξ : ℝ) :
+    ∫ x in largeSet 1, (exp (↑x * ↑ξ * I) - 1) ∂(levyMeasure S) =
+    ∫ x in largeSet 1, levyCompensatedIntegrand ξ x ∂(levyMeasure S) := by
+  apply setIntegral_congr_fun (measurableSet_largeSet 1)
+  intro x hx
+  exact (levyCompensatedIntegrand_eq_on_large (mem_largeSet.mp hx)).symm
+
 /-! ### Phase 5 — Small jump analysis (second moment + quadratic expansion)
 
 The key estimates for the "small jump" part `{|x| < 1}` of the Lévy-Khintchine formula.
