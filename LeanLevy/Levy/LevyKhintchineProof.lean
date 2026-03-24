@@ -1204,6 +1204,238 @@ lemma integral_exp_sub_one_split (μ : Measure ℝ) [IsProbabilityMeasure μ] (�
       ∫ x : ℝ in smallSetᶜ, (exp (↑x * ↑ξ * I) - 1) ∂μ :=
   (integral_add_compl measurableSet_smallSet hf).symm
 
+/-! ## Phase 3: Compactness on large jumps + Lévy measure construction
+
+This section develops the compactness machinery for extracting the Lévy measure
+from the convolution semigroup `{μ_t}_{t>0}`.
+
+**Overview:**
+1. The scaled measures `(1/t)·μ_t` restricted to `{|x| ≥ ε}` have uniformly bounded mass.
+2. By Prokhorov's theorem, a subsequential weak limit `ν_ε` exists.
+3. For `ε₁ ≤ ε₂`, the measures are consistent: `ν_{ε₂}` is a restriction of `ν_{ε₁}`.
+4. The Lévy measure is constructed as the monotone limit `ν = sup_ε ν_ε`.
+-/
+
+namespace ConvolutionSemigroup
+
+variable (S : ConvolutionSemigroup)
+
+/-! ### 3.1 — Uniform boundedness of scaled measures on large sets -/
+
+/-- The real part of `1 - exp(z)` for small `|z|` is well-approximated by `-Re(z)`.
+    Auxiliary bound for the uniform mass estimate. -/
+private lemma re_one_sub_exp_bound (z : ℂ) (hz : ‖z‖ ≤ 1) :
+    |(1 - exp z).re| ≤ ‖z‖ + ‖z‖ ^ 2 := by
+  -- Use exp_bound with n=1: ‖exp z - 1‖ ≤ ‖z‖ * (2 * 1⁻¹)
+  have h1 := Complex.exp_bound hz (n := 1) (by omega)
+  simp only [Finset.sum_range_one, pow_zero, Nat.factorial, Nat.cast_one, div_one] at h1
+  -- h1 : ‖exp z - 1‖ ≤ ‖z‖ ^ 1 * (↑2 * (↑1 * ↑1)⁻¹) = ‖z‖ * 2
+  -- We need: |(1 - exp z).re| ≤ ‖z‖ + ‖z‖²
+  -- Since ‖z‖ ≤ 1, we have ‖z‖ · 2 ≤ ‖z‖ + ‖z‖ · 1 ≤ ‖z‖ + ‖z‖ · ‖z‖ only if ‖z‖ ≥ 1
+  -- Instead: |(1-exp z).re| ≤ ‖1 - exp z‖ ≤ ‖z‖ * 2 and ‖z‖ + ‖z‖² ≥ ‖z‖
+  -- But ‖z‖ * 2 > ‖z‖ + ‖z‖² when ‖z‖ < 1, so this n=1 bound is too weak.
+  -- Use n=2 instead to get the tighter bound.
+  have h2 := Complex.exp_bound hz (n := 2) (by omega)
+  -- After simplification, h2 gives ‖exp z - (1 + z)‖ ≤ ‖z‖² * (3/4)
+  -- Then ‖exp z - 1‖ ≤ ‖exp z - (1+z)‖ + ‖z‖ ≤ (3/4)·‖z‖² + ‖z‖ ≤ ‖z‖² + ‖z‖
+  calc |(1 - exp z).re|
+      ≤ ‖1 - exp z‖ := Complex.abs_re_le_norm _
+    _ = ‖exp z - 1‖ := norm_sub_rev _ _
+    _ ≤ ‖exp z - (1 + z)‖ + ‖z‖ := by
+        calc ‖exp z - 1‖ = ‖(exp z - (1 + z)) + z‖ := by ring_nf
+          _ ≤ ‖exp z - (1 + z)‖ + ‖z‖ := norm_add_le _ _
+    _ ≤ ‖z‖ + ‖z‖ ^ 2 := by
+        -- From h2, after simp the sum is 1 + z (first two terms of Taylor)
+        simp only [Finset.sum_range_succ, Finset.sum_range_zero, zero_add, pow_zero,
+          Nat.factorial, Nat.cast_one, div_one, pow_succ, one_mul] at h2
+        -- h2 : ‖cexp z - (1 + z / ↑(1*1))‖ ≤ ‖z‖*‖z‖*(3*(2*2)⁻¹) = ‖z‖²·3/4
+        -- Simplify: z / ↑(1*1) = z and the coefficient
+        simp only [Nat.succ_eq_add_one] at h2
+        norm_num at h2
+        -- h2 : ‖cexp z - (1 + z)‖ ≤ ‖z‖ * ‖z‖ * (3/4)
+        -- Goal: ‖cexp z - (1 + z)‖ + ‖z‖ ≤ ‖z‖ + ‖z‖ ^ 2
+        -- i.e. ‖cexp z - (1 + z)‖ ≤ ‖z‖ ^ 2
+        -- From h2: ‖...‖ ≤ ‖z‖² * 3/4 ≤ ‖z‖²
+        nlinarith [norm_nonneg z, sq_nonneg ‖z‖]
+
+/-- On `{|x| ≥ ε}`, we have `∫ (1 - cos(xξ)) dμ ≥ c·μ({|x| ≥ ε})` for a suitable `ξ`.
+    This is the analytical core of the uniform bound argument. -/
+private lemma one_sub_cos_integral_lower_bound
+    {μ : Measure ℝ} [IsFiniteMeasure μ] (ε : ℝ) (_hε : 0 < ε) :
+    ∃ (ξ : ℝ) (c : ℝ), 0 < c ∧
+      c * (μ (largeSet ε)).toReal ≤
+        ∫ x in largeSet ε, (1 - Real.cos (x * ξ)) ∂μ := by
+  sorry
+
+/-- **Uniform boundedness of scaled measures on large sets.** The family
+    `{(1/t)·μ_t|_{|x|≥ε}}` has uniformly bounded mass as `t → 0⁺`.
+
+    **Key idea:** From `charFun(μ_t)(ξ) = exp(tψ(ξ))`:
+    - `Re(1 - charFun(μ_t)(ξ)) = ∫ (1 - cos(xξ)) dμ_t ≥ 0`
+    - On `{|x| ≥ ε}`, choosing `ξ ≈ π/ε` gives `1 - cos(xξ) ≥ c > 0`
+    - Therefore `μ_t({|x| ≥ ε}) ≤ (1/c)·Re(1 - exp(tψ(ξ)))`
+    - Divide by `t`: `(1/t)·μ_t({|x| ≥ ε}) → Re(-ψ(ξ))/c` -/
+theorem scaledMeasure_large_bounded (ε : ℝ) (hε : 0 < ε) :
+    ∃ C : ℝ≥0, ∃ δ : ℝ, 0 < δ ∧ ∀ (t : {t : ℝ // 0 < t}),
+      t.val < δ →
+      S.scaledMeasure t (largeSet ε) ≤ ↑C := by
+  sorry
+
+/-! ### 3.2 — Sequential extraction (Helly-lite) -/
+
+/-- Scaled restricted measure: `(1/t)·μ_t` restricted to `{|x| ≥ ε}`, viewed as a
+    finite measure. -/
+noncomputable def scaledRestrictedMeasure (t : {t : ℝ // 0 < t}) (ε : ℝ) :
+    Measure ℝ :=
+  (S.scaledMeasure t).restrict (largeSet ε)
+
+/-- The scaled restricted measure is finite for `ε > 0` and small enough `t`. -/
+lemma isFiniteMeasure_scaledRestrictedMeasure (ε : ℝ) (hε : 0 < ε) :
+    ∃ δ : ℝ, 0 < δ ∧ ∀ (t : {t : ℝ // 0 < t}),
+      t.val < δ → IsFiniteMeasure (S.scaledRestrictedMeasure t ε) := by
+  obtain ⟨C, δ, hδ, hC⟩ := S.scaledMeasure_large_bounded ε hε
+  exact ⟨δ, hδ, fun t ht => by
+    constructor
+    have := hC t ht
+    calc (S.scaledRestrictedMeasure t ε) Set.univ
+        = S.scaledMeasure t (largeSet ε) := by
+          simp [scaledRestrictedMeasure]
+      _ ≤ ↑C := this
+      _ < ⊤ := ENNReal.coe_lt_top⟩
+
+/-- **Sequential extraction.** From the bounded family of scaled restricted measures,
+    extract a weak limit along a subsequence `t_n → 0`.
+
+    **Strategy:** Normalize to probability measures, apply Prokhorov's theorem for
+    sequential compactness, then unnormalize. The proof is sorry'd as it requires
+    substantial measure-theoretic machinery (Prokhorov + normalization). -/
+theorem exists_measure_limit_large (ε : ℝ) (hε : 0 < ε) :
+    ∃ (ν_ε : Measure ℝ) (t_seq : ℕ → {t : ℝ // 0 < t}),
+      Tendsto (fun n => (t_seq n).val) atTop (𝓝 0) ∧
+      IsFiniteMeasure ν_ε ∧
+      ν_ε {0} = 0 ∧
+      ν_ε (largeSet ε)ᶜ = 0 ∧
+      (∀ (f : BoundedContinuousFunction ℝ ℝ), (∀ x, |x| < ε → f x = 0) →
+        Tendsto (fun n => ∫ x, f x ∂(S.scaledRestrictedMeasure (t_seq n) ε))
+          atTop (𝓝 (∫ x, f x ∂ν_ε))) := by
+  sorry
+
+/-! ### 3.3 — Consistency of extracted measures -/
+
+/-- **Monotonicity of large sets.** For `ε₁ ≤ ε₂`, `largeSet ε₂ ⊆ largeSet ε₁`. -/
+lemma largeSet_antitone {ε₁ ε₂ : ℝ} (h : ε₁ ≤ ε₂) :
+    largeSet ε₂ ⊆ largeSet ε₁ := by
+  intro x hx
+  simp only [mem_largeSet] at hx ⊢
+  linarith
+
+/-- For `0 < ε₁ ≤ ε₂`, the restriction of the scaled measure to `{|x| ≥ ε₂}` is
+    obtained by further restricting the `{|x| ≥ ε₁}`-restricted measure. -/
+lemma scaledRestrictedMeasure_restrict (t : {t : ℝ // 0 < t})
+    {ε₁ ε₂ : ℝ} (_hε₁ : 0 < ε₁) (h : ε₁ ≤ ε₂) :
+    (S.scaledRestrictedMeasure t ε₁).restrict (largeSet ε₂) =
+    S.scaledRestrictedMeasure t ε₂ := by
+  simp only [scaledRestrictedMeasure]
+  rw [Measure.restrict_restrict (measurableSet_largeSet ε₂)]
+  congr 1
+  ext x
+  simp only [Set.mem_inter_iff, mem_largeSet]
+  constructor
+  · intro ⟨h1, _⟩; exact h1
+  · intro h1; exact ⟨h1, le_trans h h1⟩
+
+/-- **Consistency of extracted measures.** For `0 < ε₁ ≤ ε₂`, the measure `ν_{ε₂}`
+    is the restriction of `ν_{ε₁}` to `{|x| ≥ ε₂}`.
+
+    This ensures the family `{ν_ε}` is consistent and can be glued into a single
+    Lévy measure. The proof requires passing limits through restrictions, which
+    is a standard but technically involved measure theory argument. -/
+theorem consistent_large_measures {ε₁ ε₂ : ℝ} (_hε₁ : 0 < ε₁) (_h : ε₁ ≤ ε₂)
+    {ν₁ ν₂ : Measure ℝ}
+    {t_seq₁ t_seq₂ : ℕ → {t : ℝ // 0 < t}}
+    (_ht₁ : Tendsto (fun n => (t_seq₁ n).val) atTop (𝓝 0))
+    (_ht₂ : Tendsto (fun n => (t_seq₂ n).val) atTop (𝓝 0))
+    (_hν₁ : IsFiniteMeasure ν₁)
+    (_hν₂ : IsFiniteMeasure ν₂)
+    (_hν₁_supp : ν₁ (largeSet ε₁)ᶜ = 0)
+    (_hν₂_supp : ν₂ (largeSet ε₂)ᶜ = 0)
+    -- Weak convergence conditions for ν₁, ν₂
+    (_hconv₁ : ∀ (f : BoundedContinuousFunction ℝ ℝ), (∀ x, |x| < ε₁ → f x = 0) →
+      Tendsto (fun n => ∫ x, f x ∂(S.scaledRestrictedMeasure (t_seq₁ n) ε₁))
+        atTop (𝓝 (∫ x, f x ∂ν₁)))
+    (_hconv₂ : ∀ (f : BoundedContinuousFunction ℝ ℝ), (∀ x, |x| < ε₂ → f x = 0) →
+      Tendsto (fun n => ∫ x, f x ∂(S.scaledRestrictedMeasure (t_seq₂ n) ε₂))
+        atTop (𝓝 (∫ x, f x ∂ν₂))) :
+    ν₁.restrict (largeSet ε₂) = ν₂ := by
+  sorry
+
+/-! ### 3.4 — Lévy measure construction -/
+
+/-- The Lévy measure associated to a convolution semigroup, constructed as the
+    monotone limit (supremum) of the extracted measures `ν_ε` as `ε → 0`.
+
+    For each `ε > 0`, we extract a finite measure `ν_ε` supported on `{|x| ≥ ε}`
+    as a weak limit of `(1/t)·μ_t|_{|x|≥ε}`. The consistency property (3.3) ensures
+    these fit together, and we define `ν` as the supremum over `ε > 0`.
+
+    **Implementation note:** We use `iSup` over `n ≥ 1` of the measures `ν_{1/n}`
+    applied to measurable sets. Since the measures are consistent and increasing
+    as `n → ∞` (i.e., `ε = 1/n ↓ 0`), this defines a σ-additive measure. -/
+noncomputable def levyMeasureAux : Measure ℝ :=
+  ⨆ (n : ℕ) (_ : 0 < n),
+    (S.exists_measure_limit_large (1 / ↑n) (by positivity : (0 : ℝ) < 1 / ↑n)).choose
+
+/-- The Lévy measure auxiliary has zero mass at the origin. -/
+theorem levyMeasureAux_zero : levyMeasureAux S {0} = 0 := by
+  sorry
+
+/-- The Lévy measure auxiliary restricts correctly to large sets.
+    For each `ε > 0`, the restriction of `ν` to `{|x| ≥ ε}` is a finite measure. -/
+theorem levyMeasureAux_restrict_large (ε : ℝ) (_hε : 0 < ε) :
+    IsFiniteMeasure ((levyMeasureAux S).restrict (largeSet ε)) := by
+  sorry
+
+/-- The Lévy measure satisfies the integrability condition `∫ min(1, x²) dν < ∞`.
+    This follows from the uniform bound on scaled measures and the second moment
+    control on small jumps.
+
+    **Note:** This requires the small-jump analysis (Phase 5) for the full proof.
+    For now it is sorry'd and will be completed when the small-jump second moment
+    estimate is available. -/
+theorem levyMeasureAux_lintegral_min_one_sq :
+    ∫⁻ x, ENNReal.ofReal (min 1 (x ^ 2)) ∂(levyMeasureAux S) < ⊤ := by
+  sorry
+
+/-- The auxiliary Lévy measure is indeed a Lévy measure. -/
+theorem levyMeasureAux_isLevyMeasure : IsLevyMeasure (levyMeasureAux S) :=
+  ⟨levyMeasureAux_zero S, levyMeasureAux_lintegral_min_one_sq S⟩
+
+/-- **Lévy measure of a convolution semigroup.** Packages the auxiliary construction
+    with its proof that it satisfies the Lévy measure conditions. -/
+noncomputable def levyMeasure : Measure ℝ := levyMeasureAux S
+
+/-- The Lévy measure is a Lévy measure. -/
+theorem levyMeasure_isLevyMeasure : IsLevyMeasure (levyMeasure S) :=
+  levyMeasureAux_isLevyMeasure S
+
+/-- The Lévy measure has zero mass at the origin. -/
+theorem levyMeasure_zero : levyMeasure S {0} = 0 :=
+  levyMeasureAux_zero S
+
+/-- The Lévy measure has finite mass on `{|x| ≥ ε}` for any `ε > 0`. -/
+theorem levyMeasure_large_finite (ε : ℝ) (hε : 0 < ε) :
+    levyMeasure S (largeSet ε) < ⊤ :=
+  (levyMeasure_isLevyMeasure S).measure_setOf_abs_ge_lt_top hε
+
+/-- The Lévy measure restricted to `{|x| ≥ ε}` is a finite measure. -/
+theorem levyMeasure_restrict_isFiniteMeasure (ε : ℝ) (hε : 0 < ε) :
+    IsFiniteMeasure ((levyMeasure S).restrict (largeSet ε)) := by
+  constructor
+  rw [Measure.restrict_apply_univ]
+  exact levyMeasure_large_finite S ε hε
+
+end ConvolutionSemigroup
+
 /-- Build a convolution semigroup from a CND exponent via Schoenberg + Bochner. -/
 noncomputable def convolutionSemigroupOfCND
     {ψ : ℝ → ℂ} (hψ_cont : Continuous ψ) (hψ_zero : ψ 0 = 0)
