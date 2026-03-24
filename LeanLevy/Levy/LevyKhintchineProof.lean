@@ -13,6 +13,7 @@ import LeanLevy.Fourier.Bochner
 import Mathlib.Analysis.Complex.CoveringMap
 import Mathlib.Topology.Homotopy.Lifting
 import Mathlib.Analysis.Convex.Contractible
+import Mathlib.NumberTheory.Real.Irrational
 
 /-!
 # Lévy-Khintchine Proof Components
@@ -1258,28 +1259,124 @@ private lemma re_one_sub_exp_bound (z : ℂ) (hz : ‖z‖ ≤ 1) :
         -- From h2: ‖...‖ ≤ ‖z‖² * 3/4 ≤ ‖z‖²
         nlinarith [norm_nonneg z, sq_nonneg ‖z‖]
 
+/-- If `cos x = 1` and `cos(x√2) = 1`, then `x = 0`. Uses irrationality of `√2`. -/
+private lemma eq_zero_of_cos_eq_one_and_cos_sqrt_two_eq_one {x : ℝ}
+    (h1 : Real.cos x = 1) (h2 : Real.cos (x * Real.sqrt 2) = 1) : x = 0 := by
+  rw [Real.cos_eq_one_iff] at h1 h2
+  obtain ⟨k, hk⟩ := h1
+  obtain ⟨m, hm⟩ := h2
+  by_cases hk0 : k = 0
+  · simp [hk0] at hk; linarith
+  · exfalso
+    have h2pi_ne : (2 : ℝ) * Real.pi ≠ 0 := by positivity
+    have hksqrt : (k : ℝ) * Real.sqrt 2 = m := by
+      have : (↑m : ℝ) * (2 * Real.pi) = ↑k * Real.sqrt 2 * (2 * Real.pi) := by
+        rw [hm, ← hk]; ring
+      exact (mul_right_cancel₀ h2pi_ne this).symm
+    have hk_ne : (k : ℝ) ≠ 0 := Int.cast_ne_zero.mpr hk0
+    exact irrational_sqrt_two ⟨(m : ℚ) / k, by
+      push_cast; rw [div_eq_iff hk_ne]; linarith [hksqrt]⟩
+
+/-- The integral of `1 - cos(xξ)` is non-negative. -/
+private lemma one_sub_cos_nonneg (ξ : ℝ) (x : ℝ) : 0 ≤ 1 - Real.cos (x * ξ) :=
+  sub_nonneg.mpr (Real.cos_le_one _)
+
+/-- `fun x => 1 - cos(x * ξ)` is integrable against a finite measure restricted to any set. -/
+private lemma integrableOn_one_sub_cos {μ : Measure ℝ} [IsFiniteMeasure μ] (ξ : ℝ) (s : Set ℝ) :
+    IntegrableOn (fun x => 1 - Real.cos (x * ξ)) s μ :=
+  Integrable.of_bound
+    ((continuous_const.sub
+      (Real.continuous_cos.comp (continuous_id'.mul continuous_const))).aestronglyMeasurable)
+    2 (ae_of_all _ fun x => by
+      rw [Real.norm_eq_abs, abs_of_nonneg (one_sub_cos_nonneg ξ x)]
+      linarith [Real.neg_one_le_cos (x * ξ)])
+
 /-- On `{|x| ≥ ε}`, we have `∫ (1 - cos(xξ)) dμ ≥ c·μ({|x| ≥ ε})` for a suitable `ξ`.
     This is the analytical core of the uniform bound argument. -/
 private lemma one_sub_cos_integral_lower_bound
-    {μ : Measure ℝ} [IsFiniteMeasure μ] (ε : ℝ) (_hε : 0 < ε) :
+    {μ : Measure ℝ} [IsFiniteMeasure μ] (ε : ℝ) (hε : 0 < ε) :
     ∃ (ξ : ℝ) (c : ℝ), 0 < c ∧
       c * (μ (largeSet ε)).toReal ≤
         ∫ x in largeSet ε, (1 - Real.cos (x * ξ)) ∂μ := by
+  by_cases hmass : μ (largeSet ε) = 0
+  · -- Mass 0: trivially satisfied with any ξ, c
+    refine ⟨1, 1, one_pos, ?_⟩
+    rw [hmass, ENNReal.toReal_zero, mul_zero]
+    exact setIntegral_nonneg (measurableSet_largeSet ε) (fun x _ => one_sub_cos_nonneg 1 x)
+  · -- Mass > 0: find ξ with positive integral
+    have hpos_mass : 0 < (μ (largeSet ε)).toReal :=
+      ENNReal.toReal_pos hmass (measure_lt_top μ _).ne
+    -- Claim: ∃ ξ with ∫_{largeSet ε} (1 - cos(xξ)) dμ > 0
+    suffices h : ∃ ξ, 0 < ∫ x in largeSet ε, (1 - Real.cos (x * ξ)) ∂μ by
+      obtain ⟨ξ, hξ⟩ := h
+      exact ⟨ξ, _ / _, div_pos hξ hpos_mass,
+        (div_mul_cancel₀ _ (ne_of_gt hpos_mass)).le⟩
+    -- By contradiction: if all integrals ≤ 0, they're all = 0
+    by_contra hall; push_neg at hall
+    -- Each integral ≥ 0 (1-cos ≥ 0), so hall gives = 0 for all ξ
+    have hall_eq : ∀ ξ, ∫ x in largeSet ε, (1 - Real.cos (x * ξ)) ∂μ = 0 := fun ξ =>
+      le_antisymm (hall ξ)
+        (setIntegral_nonneg (measurableSet_largeSet ε) (fun x _ => one_sub_cos_nonneg ξ x))
+    -- From integral = 0 with non-negative integrand: cos(xξ) = 1 μ-a.e. on largeSet ε
+    have hae : ∀ ξ, ∀ᵐ x ∂(μ.restrict (largeSet ε)), Real.cos (x * ξ) = 1 := by
+      intro ξ
+      have h0 := (integral_eq_zero_iff_of_nonneg (fun x => one_sub_cos_nonneg ξ x)
+        (integrableOn_one_sub_cos ξ _)).mp (hall_eq ξ)
+      filter_upwards [h0] with x hx
+      have : 1 - Real.cos (x * ξ) = 0 := hx
+      linarith
+    -- Specialize to ξ=1, ξ=√2 and combine: x = 0 μ-a.e. on largeSet ε
+    have hae_zero : ∀ᵐ x ∂(μ.restrict (largeSet ε)), x = 0 := by
+      filter_upwards [hae 1, hae (Real.sqrt 2)] with x h1 h2
+      have h1' : Real.cos x = 1 := by rwa [mul_one] at h1
+      exact eq_zero_of_cos_eq_one_and_cos_sqrt_two_eq_one h1' h2
+    -- But 0 ∉ largeSet ε (since ε > 0), so μ(largeSet ε) = 0, contradiction
+    apply hmass
+    have hres : ∀ᵐ x ∂(μ.restrict (largeSet ε)), x ∈ largeSet ε :=
+      ae_restrict_mem (measurableSet_largeSet ε)
+    have : ∀ᵐ x ∂(μ.restrict (largeSet ε)), False := by
+      filter_upwards [hres, hae_zero] with x hx hx0
+      exact absurd (hx0 ▸ hx) (by simp [mem_largeSet, abs_zero, not_le, hε])
+    simp only [ae_iff, not_false_eq_true, Set.setOf_true, Measure.restrict_apply_univ] at this
+    exact this
+
+/-- **Real-valued scaled mass bound.** The quantity `t⁻¹ · μ_t({|x| ≥ ε})` is
+    uniformly bounded over all `t > 0`.
+
+    **Proof sketch (sorry'd — requires Fubini + charFun integral identity):**
+    1. For `|x| ≥ ε`: `∫₀^{2/ε} (1-cos(xξ)) dξ = 2/ε - sin(2x/ε)/x ≥ 1/ε`.
+    2. By Fubini: `ε⁻¹ · μ({|x| ≥ ε}) ≤ ∫₀^{2/ε} (1 - Re(charFun μ ξ)) dξ`.
+    3. Using `charFun(μ_t)(ξ) = exp(tψ(ξ))` and the bound
+       `t⁻¹(1-Re(exp(tψ))) ≤ 2‖ψ‖` (from `‖exp z - 1‖ ≤ 2‖z‖` for `‖z‖ ≤ 1`
+       and `1-Re(exp(tψ)) ≤ 2` with `t⁻¹ ≤ ‖ψ‖` otherwise):
+       `t⁻¹ · μ_t({|x| ≥ ε}) ≤ 4 · sup_{ξ ∈ [0,2/ε]} ‖ψ(ξ)‖`. -/
+private lemma scaled_mass_bound_real (ε : ℝ) (hε : 0 < ε) :
+    ∃ C : ℝ≥0, ∀ (t : {t : ℝ // 0 < t}),
+      t.val⁻¹ * ((S.measure t : Measure ℝ) (largeSet ε)).toReal ≤ ↑C := by
   sorry
 
 /-- **Uniform boundedness of scaled measures on large sets.** The family
     `{(1/t)·μ_t|_{|x|≥ε}}` has uniformly bounded mass as `t → 0⁺`.
 
-    **Key idea:** From `charFun(μ_t)(ξ) = exp(tψ(ξ))`:
-    - `Re(1 - charFun(μ_t)(ξ)) = ∫ (1 - cos(xξ)) dμ_t ≥ 0`
-    - On `{|x| ≥ ε}`, choosing `ξ ≈ π/ε` gives `1 - cos(xξ) ≥ c > 0`
-    - Therefore `μ_t({|x| ≥ ε}) ≤ (1/c)·Re(1 - exp(tψ(ξ)))`
-    - Divide by `t`: `(1/t)·μ_t({|x| ≥ ε}) → Re(-ψ(ξ))/c` -/
+    Proved from `scaled_mass_bound_real` by converting from `ℝ` to `ℝ≥0∞`. -/
 theorem scaledMeasure_large_bounded (ε : ℝ) (hε : 0 < ε) :
     ∃ C : ℝ≥0, ∃ δ : ℝ, 0 < δ ∧ ∀ (t : {t : ℝ // 0 < t}),
       t.val < δ →
       S.scaledMeasure t (largeSet ε) ≤ ↑C := by
-  sorry
+  obtain ⟨C, hC⟩ := S.scaled_mass_bound_real ε hε
+  refine ⟨C, 1, one_pos, fun t _ht => ?_⟩
+  rw [S.scaledMeasure_apply]
+  have hfin : (S.measure t : Measure ℝ) (largeSet ε) ≠ ⊤ := measure_ne_top _ _
+  have ht_inv_nn : (0 : ℝ) ≤ t.val⁻¹ := le_of_lt (inv_pos.mpr t.prop)
+  calc ENNReal.ofReal t.val⁻¹ * (S.measure t : Measure ℝ) (largeSet ε)
+      = ENNReal.ofReal t.val⁻¹ *
+          ENNReal.ofReal ((S.measure t : Measure ℝ) (largeSet ε)).toReal := by
+        rw [ENNReal.ofReal_toReal hfin]
+    _ = ENNReal.ofReal (t.val⁻¹ *
+          ((S.measure t : Measure ℝ) (largeSet ε)).toReal) := by
+        rw [← ENNReal.ofReal_mul ht_inv_nn]
+    _ ≤ ENNReal.ofReal ↑C := ENNReal.ofReal_le_ofReal (hC t)
+    _ = ↑C := ENNReal.ofReal_coe_nnreal
 
 /-! ### 3.2 — Sequential extraction (Helly-lite) -/
 
@@ -1387,7 +1484,29 @@ noncomputable def levyMeasureAux : Measure ℝ :=
 
 /-- The Lévy measure auxiliary has zero mass at the origin. -/
 theorem levyMeasureAux_zero : levyMeasureAux S {0} = 0 := by
-  sorry
+  apply le_antisymm _ (zero_le _)
+  -- Strategy: bound the iSup by Measure.sum, then show sum has zero mass at {0}
+  set f : ℕ → Measure ℝ := fun n => ⨆ (_ : 0 < n),
+    (S.exists_measure_limit_large (1 / ↑n)
+      (by positivity : (0 : ℝ) < 1 / ↑n)).choose with hf_def
+  -- levyMeasureAux S = ⨆ n, f n
+  have hdef : levyMeasureAux S = ⨆ n, f n := rfl
+  rw [hdef]
+  -- Step 1: ⨆ n, f n ≤ Measure.sum f (each component ≤ sum)
+  have h_le : (⨆ n, f n) ≤ Measure.sum f := iSup_le (Measure.le_sum f)
+  -- Step 2: Measure.sum f {0} = 0 (since each f n {0} = 0)
+  have h_sum_zero : Measure.sum f {0} = 0 := by
+    rw [Measure.sum_apply_eq_zero' (measurableSet_singleton 0)]
+    intro n
+    by_cases hn : 0 < n
+    · -- f n = ν_n, and ν_n {0} = 0
+      simp only [hf_def, iSup_pos hn]
+      exact (S.exists_measure_limit_large (1 / ↑n)
+        (by positivity)).choose_spec.choose_spec.2.2.1
+    · -- f 0 = ⊥ = 0, so (⊥ : Measure ℝ) {0} = 0
+      simp only [hf_def, iSup_neg hn]
+      rfl
+  exact le_trans (Measure.le_iff.mp h_le _ (measurableSet_singleton 0)) (le_of_eq h_sum_zero)
 
 /-- The Lévy measure auxiliary restricts correctly to large sets.
     For each `ε > 0`, the restriction of `ν` to `{|x| ≥ ε}` is a finite measure. -/
@@ -1474,26 +1593,58 @@ theorem large_jump_limit (ξ : ℝ) (ε : ℝ) (hε : 0 < ε)
   --    and consistency of the extracted measures with the Lévy measure.
   sorry
 
-/-- The large jump integral converges as `ε → 0` to the full integral on `ℝ \ {0}`.
+/-- The union of `largeSet(1/(n+1))` as `n → ∞` exhausts `ℝ \ {0}`. -/
+private lemma iUnion_largeSet_eq_ne_zero :
+    (⋃ n : ℕ, largeSet (1 / (↑n + 1 : ℝ))) = {x : ℝ | x ≠ 0} := by
+  ext x; simp only [Set.mem_iUnion, mem_largeSet, Set.mem_setOf_eq]
+  constructor
+  · rintro ⟨n, hn⟩ hx
+    simp [hx, abs_zero] at hn
+    linarith [show (0 : ℝ) < 1 / (↑n + 1) from by positivity]
+  · intro hx
+    have hxp : (0 : ℝ) < |x| := abs_pos.mpr hx
+    obtain ⟨n, hn⟩ := exists_nat_gt |x|⁻¹
+    refine ⟨n, ?_⟩
+    have hnp : (0 : ℝ) < ↑n := lt_trans (inv_pos.mpr hxp) hn
+    have h1 : 1 < ↑n * |x| := by
+      calc (1 : ℝ) = |x|⁻¹ * |x| := (inv_mul_cancel₀ hxp.ne').symm
+        _ < ↑n * |x| := by exact mul_lt_mul_of_pos_right hn hxp
+    rw [div_le_iff₀ (show (0 : ℝ) < ↑n + 1 from by linarith)]
+    nlinarith [hxp.le]
+
+/-- The `largeSet` family is monotone (increasing) in `n` when indexed
+    by `n ↦ largeSet(1/(n+1))`. -/
+private lemma largeSet_mono_nat :
+    Monotone (fun n : ℕ => largeSet (1 / (↑n + 1 : ℝ))) := by
+  intro m n hmn
+  apply largeSet_antitone
+  apply div_le_div_of_nonneg_left one_pos.le (by positivity : (0 : ℝ) < ↑m + 1)
+  exact_mod_cast Nat.add_le_add_right hmn 1
+
+/-- The compensated integrand is integrable against the Lévy measure on `{x ≠ 0}`.
+    Follows from `|exp(ixξ)-1-ixξ·1_{|x|<1}| ≤ min(2, (xξ)²/2)` and `∫ min(1,x²) dν < ∞`. -/
+private lemma integrableOn_levyCompensatedIntegrand (ξ : ℝ) :
+    IntegrableOn (levyCompensatedIntegrand ξ) {x : ℝ | x ≠ 0} (levyMeasure S) := by
+  sorry
+
+/-- The compensated integral converges as `ε → 0` to the full integral on `ℝ \ {0}`.
 
 Since the Lévy measure satisfies `ν {0} = 0` and `∫ min(1,x²) dν < ∞`,
-the restriction to `{|x| ≥ ε}` monotonically exhausts the full measure as `ε ↘ 0`.
-The integrand `exp(ixξ) − 1` satisfies `‖exp(ixξ) − 1‖ ≤ 2` on `{|x| ≥ 1}` and is
-bounded by `|xξ|` on `{|x| < 1}`, both integrable against the Lévy measure. -/
+the sets `{|x| ≥ 1/(n+1)}` monotonically exhaust `ℝ \ {0}`.
+The compensated integrand `exp(ixξ) − 1 − ixξ·1_{|x|<1}` is integrable against
+the Lévy measure, so `tendsto_setIntegral_of_monotone` gives convergence. -/
 theorem large_jump_exhaustion (ξ : ℝ) :
     Tendsto (fun n : ℕ =>
       ∫ x in largeSet (1 / (↑n + 1 : ℝ)),
-        (exp (↑x * ↑ξ * I) - 1) ∂(levyMeasure S))
+        levyCompensatedIntegrand ξ x ∂(levyMeasure S))
     atTop
-    (𝓝 (∫ x in {x : ℝ | x ≠ 0}, (exp (↑x * ↑ξ * I) - 1) ∂(levyMeasure S))) := by
-  -- Strategy:
-  -- 1. The sets `largeSet (1/(n+1))` increase to `ℝ \ {0}` as `n → ∞`.
-  -- 2. The integrand `exp(ixξ) − 1` is integrable against the Lévy measure
-  --    on `ℝ \ {0}` (follows from `integrable_levyCompensatedIntegrand` and the
-  --    fact that the compensated and uncompensated integrands agree on `{|x| ≥ 1}`).
-  -- 3. Apply dominated convergence with dominating function `|exp(ixξ) - 1|`,
-  --    or use `tendsto_integral_of_monotone_set` (integral over increasing sets).
-  sorry
+    (𝓝 (∫ x in {x : ℝ | x ≠ 0},
+        levyCompensatedIntegrand ξ x ∂(levyMeasure S))) := by
+  rw [← iUnion_largeSet_eq_ne_zero]
+  exact tendsto_setIntegral_of_monotone
+    (fun n => measurableSet_largeSet _)
+    largeSet_mono_nat
+    (iUnion_largeSet_eq_ne_zero ▸ S.integrableOn_levyCompensatedIntegrand ξ)
 
 /-- On `{|x| ≥ 1}`, the compensated integrand equals `exp(ixξ) − 1` (indicator vanishes). -/
 theorem levyCompensatedIntegrand_eq_on_large {ξ x : ℝ} (hx : 1 ≤ |x|) :
@@ -1518,20 +1669,96 @@ The key estimates for the "small jump" part `{|x| < 1}` of the Lévy-Khintchine 
 ```
 Re(1 - exp(tψ(ξ))) = ∫ (1 - cos(xξ)) dμ_t
 ```
-On `{|x| < 1}` with `ξ = 1`: `1 - cos(x) ≥ x²/4` for `|x| < 1`, so
+On `{|x| < 1}` with `ξ = 1`: `1 - cos(x) ≥ (2/π²) x²` (Jordan's inequality), so
 ```
-(1/4) ∫_{|x|<1} x² dμ_t ≤ ∫(1-cos(x))dμ_t = Re(1-exp(tψ(1)))
+(2/π²) ∫_{|x|<1} x² dμ_t ≤ ∫(1-cos(x))dμ_t = Re(1-exp(tψ(1)))
 ```
-Dividing by `t`: `(1/(4t)) ∫_{|x|<1} x² dμ_t ≤ Re(1-exp(tψ(1)))/t → Re(-ψ(1))`.
+Dividing by `t`: `(2/(π²t)) ∫_{|x|<1} x² dμ_t ≤ Re(-ψ(1)) + o(1)`.
 
 **5.2 — Quadratic expansion:** The integrand `exp(ixξ) - 1 - ixξ` satisfies
 `|exp(iz)-1-iz| ≤ z²/2`, so the scaled integral on `{|x| < 1}` is controlled by
 the second moment, giving convergence of a subsequence. -/
 
-/-- The scaled second moment on the small set is bounded near `t = 0`.
+/-- The integrand `x ↦ exp(i·ξ·x)` is integrable against any finite measure. -/
+private lemma integrable_charFun_integrand {μ : Measure ℝ} [IsFiniteMeasure μ] (ξ : ℝ) :
+    Integrable (fun x : ℝ => exp ((↑(ξ * x) : ℂ) * I)) μ :=
+  Integrable.of_bound
+    ((Complex.continuous_ofReal.comp (continuous_const.mul continuous_id')).mul_const I
+      |>.cexp.aestronglyMeasurable)
+    1 (ae_of_all _ fun x => le_of_eq (Complex.norm_exp_ofReal_mul_I _))
 
-From `Re(1 - exp(tψ(ξ))) = ∫(1 - cos(xξ)) dμ_t` and `1 - cos(xξ) ≥ (xξ)²/4` for
-`|xξ| ≤ π`: choosing `ξ = 1` gives `(1/4t) ∫_{|x|<1} x² dμ_t ≤ Re(-ψ(1)) + o(1)`. -/
+/-- `Re(1 - charFun μ ξ) = ∫ (1 - cos(ξ·x)) dμ` for probability measures.
+Proof: unfold charFun to ∫ exp(iξx), commute Re through the integral via `integral_re`,
+use `Re(exp(iy)) = cos y`, and combine with `∫ 1 dμ = 1`. -/
+private lemma re_one_sub_charFun_eq_integral
+    {μ : Measure ℝ} [IsProbabilityMeasure μ] (ξ : ℝ) :
+    (1 - charFun μ ξ).re = ∫ x, (1 - Real.cos (ξ * x)) ∂μ := by
+  have hint := integrable_charFun_integrand (μ := μ) ξ
+  -- Express 1 - charFun as a single integral of (1 - exp(iξx))
+  have h1 : 1 - charFun μ ξ = ∫ x : ℝ, (1 - exp ((↑(ξ * x) : ℂ) * I)) ∂μ := by
+    have hcf : charFun μ ξ = ∫ x : ℝ, exp ((↑(ξ * x) : ℂ) * I) ∂μ := by
+      rw [charFun_apply_real]; congr 1; ext x; congr 1; push_cast; ring
+    rw [hcf]
+    have h_one : (1 : ℂ) = ∫ _ : ℝ, (1 : ℂ) ∂μ := by simp [integral_const]
+    conv_lhs => rw [h_one]
+    exact (integral_sub (integrable_const (1 : ℂ)) hint).symm
+  -- Take Re and commute through integral
+  rw [h1, show (∫ x : ℝ, (1 - exp ((↑(ξ * x) : ℂ) * I)) ∂μ).re =
+    ∫ x : ℝ, (1 - exp ((↑(ξ * x) : ℂ) * I)).re ∂μ from
+    (integral_re (Integrable.sub (integrable_const 1) hint)).symm]
+  -- Simplify Re(1 - exp(iξx)) = 1 - cos(ξx)
+  congr 1; ext x
+  simp only [sub_re, one_re, Complex.exp_ofReal_mul_I_re]
+
+/-- On `{|x| ≤ π}`, `1 - cos x ≥ (2/π²) · x²`. Wrapper for mathlib's
+`cos_le_one_sub_mul_cos_sq`. -/
+private lemma one_sub_cos_ge_mul_sq {x : ℝ} (hx : |x| ≤ Real.pi) :
+    2 / Real.pi ^ 2 * x ^ 2 ≤ 1 - Real.cos x := by
+  linarith [Real.cos_le_one_sub_mul_cos_sq hx]
+
+/-- The scaled quantity `t⁻¹ · Re(1 - exp(t·z))` converges to `Re(-z)` as `t → 0`.
+This follows from `exp_first_order` composed with the continuous Re projection. -/
+private lemma tendsto_inv_mul_re_one_sub_exp (z : ℂ) :
+    Tendsto (fun t : ℝ => t⁻¹ * (1 - exp (↑t * z)).re) (𝓝[≠] 0) (𝓝 (-z).re) := by
+  -- Step 1: (exp(tz)-1)/t → z, so (1-exp(tz))/t → -z
+  have h2 : Tendsto (fun t : ℝ => (1 - exp ((↑t : ℂ) * z)) / (↑t : ℂ))
+      (𝓝[≠] 0) (𝓝 (-z)) :=
+    (exp_first_order z).neg.congr fun t => by
+      show -((exp ((↑t : ℂ) * z) - 1) / (↑t : ℂ)) = _; ring
+  -- Step 2: Take Re (continuous), get Re((1-exp(tz))/t) → Re(-z)
+  have h3 := (Complex.continuous_re.tendsto _).comp h2
+  -- Step 3: Re(w/↑t) = t⁻¹ · Re(w) for real t
+  exact h3.congr fun t => by
+    simp only [Function.comp_def]
+    by_cases ht : t = 0
+    · simp [ht]
+    · rw [div_eq_mul_inv, ← Complex.ofReal_inv, mul_comm,
+        Complex.re_ofReal_mul]
+
+/-- For each `t > 0`, the scaled second moment is bounded by a multiple of
+`t⁻¹ · Re(1 - exp(tψ(1)))`. Uses the charFun identity and the cos lower bound. -/
+private lemma second_moment_le_scaled_re (t : {t : ℝ // 0 < t}) :
+    2 / Real.pi ^ 2 * (t.val⁻¹ * ∫ x in smallSet, x ^ 2 ∂(S.measure t : Measure ℝ)) ≤
+      t.val⁻¹ * (1 - exp (↑t.val * S.exponent 1)).re := by
+  -- charFun(μ_t)(1) = exp(t·ψ(1))
+  have hcf : charFun (S.measure t : Measure ℝ) 1 = exp (↑t.val * S.exponent 1) := by
+    rw [show charFun (S.measure t : Measure ℝ) 1 =
+      MeasureTheory.ProbabilityMeasure.characteristicFun (S.measure t) 1 from rfl]
+    exact S.charFun_eq t 1
+  -- Re(1 - charFun(μ_t)(1)) = ∫ (1-cos x) dμ_t
+  have hre : (1 - exp (↑t.val * S.exponent 1)).re =
+      ∫ x, (1 - Real.cos (1 * x)) ∂(S.measure t : Measure ℝ) := by
+    rw [← hcf]; exact re_one_sub_charFun_eq_integral 1
+  rw [hre]
+  -- Goal: 2/π² * (t⁻¹ * ∫_smallSet x²) ≤ t⁻¹ * ∫ (1 - cos(1·x))
+  -- Rearrange: t⁻¹ * (2/π² * ∫_smallSet x²) ≤ t⁻¹ * ∫ (1-cos(1·x))
+  rw [show 2 / Real.pi ^ 2 * (t.val⁻¹ * ∫ x in smallSet, x ^ 2 ∂(S.measure t : Measure ℝ)) =
+    t.val⁻¹ * (2 / Real.pi ^ 2 * ∫ x in smallSet, x ^ 2 ∂(S.measure t : Measure ℝ)) from by ring]
+  apply mul_le_mul_of_nonneg_left _ (le_of_lt (inv_pos.mpr t.prop))
+  -- Goal: 2/π² * ∫_smallSet x² ≤ ∫ (1 - cos(1·x))
+  -- ∫ (1-cos x) ≥ ∫_smallSet (1-cos x) ≥ (2/π²) ∫_smallSet x²
+  sorry
+
 theorem scaledMeasure_small_second_moment_bounded :
     ∃ C : ℝ, 0 < C ∧ ∀ᶠ (t : {t : ℝ // 0 < t}) in comap Subtype.val (𝓝[>] 0),
       t.val⁻¹ * ∫ x in smallSet, x ^ 2 ∂(S.measure t : Measure ℝ) ≤ C := by
