@@ -1474,6 +1474,58 @@ theorem small_jump_expansion (ξ : ℝ)
     atTop (𝓝 L) := by
   sorry
 
+/-! ### Phase 6: Drift extraction (first moment limit + drift contribution)
+
+**6.1 — Drift limit:** The scaled first moment on `{|x| < 1}` converges along `t_n → 0`,
+defining the drift `b`. This follows by subtracting the large-jump, quadratic, and remainder
+contributions from the total limit `ψ(ξ)`.
+
+**6.2 — Drift contribution:** The linear term `∫ (x · ξ · I) dμ_t` factors as
+`ξ · I · ∫ x dμ_t`, so after scaling by `1/t` and taking the limit, contributes `b · ξ · I`
+to the decomposition. -/
+
+/-- The scaled first moment on the small set converges along `t_n → 0`, defining the drift `b`.
+This follows from: the total limit `ψ(ξ)` is known (Phase 1), the large-jump contribution
+converges (Phase 3/4), and the quadratic contribution converges (Phase 5), so the remaining
+linear term must also converge by difference. -/
+lemma drift_limit
+    {t_seq : ℕ → {t : ℝ // 0 < t}} (ht : Tendsto (fun n => (t_seq n).val) atTop (𝓝 0)) :
+    ∃ b : ℝ, Tendsto (fun n =>
+      (t_seq n).val⁻¹ * ∫ x in smallSet, x ∂(S.measure (t_seq n) : Measure ℝ))
+    atTop (𝓝 b) := by
+  sorry
+
+/-- The drift term contributes `b * ξ * I` to the decomposition.
+Factor out `ξ * I` from the integral of `x * ξ * I`. -/
+lemma drift_term (ξ : ℝ)
+    {t_seq : ℕ → {t : ℝ // 0 < t}} (_ht : Tendsto (fun n => (t_seq n).val) atTop (𝓝 0))
+    {b : ℝ} (hb : Tendsto (fun n =>
+      (t_seq n).val⁻¹ * ∫ x in smallSet, x ∂(S.measure (t_seq n) : Measure ℝ))
+    atTop (𝓝 b)) :
+    Tendsto (fun n =>
+      ((t_seq n).val⁻¹ : ℂ) *
+      ∫ x in smallSet, (↑x * ↑ξ * I) ∂(S.measure (t_seq n) : Measure ℝ))
+    atTop (𝓝 (↑b * ↑ξ * I)) := by
+  -- Step 1: Rewrite each summand to factor out the constant (↑ξ * I)
+  suffices h : Tendsto (fun n =>
+      ↑((t_seq n).val⁻¹ * ∫ x in smallSet, x ∂(S.measure (t_seq n) : Measure ℝ)) *
+      ((↑ξ : ℂ) * I)) atTop (𝓝 (↑b * ↑ξ * I)) by
+    refine h.congr (fun n => ?_)
+    -- Show the two expressions are equal
+    have : ∫ x in smallSet, ((↑x : ℂ) * ↑ξ * I) ∂(S.measure (t_seq n) : Measure ℝ) =
+        ↑(∫ x in smallSet, x ∂(S.measure (t_seq n) : Measure ℝ)) * (↑ξ * I) := by
+      simp_rw [mul_assoc]
+      have : ∀ x : ℝ, (↑x : ℂ) * ((↑ξ : ℂ) * I) = (↑x : ℂ) • ((↑ξ : ℂ) * I) := by
+        intro x; rw [smul_eq_mul]
+      simp_rw [this]
+      rw [integral_smul_const]
+      congr 1
+      exact integral_ofReal
+    rw [this]; push_cast; ring
+  -- Step 2: ↑(t⁻¹ * ∫) * (↑ξ * I) → ↑b * (↑ξ * I) = ↑b * ↑ξ * I
+  rw [show (↑b : ℂ) * ↑ξ * I = ↑b * (↑ξ * I) from by ring]
+  exact Filter.Tendsto.mul_const ((↑ξ : ℂ) * I) hb.ofReal
+
 end ConvolutionSemigroup
 
 /-- Build a convolution semigroup from a CND exponent via Schoenberg + Bochner. -/
