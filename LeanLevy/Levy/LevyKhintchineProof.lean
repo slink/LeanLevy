@@ -1434,6 +1434,46 @@ theorem levyMeasure_restrict_isFiniteMeasure (ε : ℝ) (hε : 0 < ε) :
   rw [Measure.restrict_apply_univ]
   exact levyMeasure_large_finite S ε hε
 
+/-! ### Phase 5 — Small jump analysis (second moment + quadratic expansion)
+
+The key estimates for the "small jump" part `{|x| < 1}` of the Lévy-Khintchine formula.
+
+**5.1 — Second moment bound:** From `charFun(μ_t)(ξ) = exp(tψ(ξ))`:
+```
+Re(1 - exp(tψ(ξ))) = ∫ (1 - cos(xξ)) dμ_t
+```
+On `{|x| < 1}` with `ξ = 1`: `1 - cos(x) ≥ x²/4` for `|x| < 1`, so
+```
+(1/4) ∫_{|x|<1} x² dμ_t ≤ ∫(1-cos(x))dμ_t = Re(1-exp(tψ(1)))
+```
+Dividing by `t`: `(1/(4t)) ∫_{|x|<1} x² dμ_t ≤ Re(1-exp(tψ(1)))/t → Re(-ψ(1))`.
+
+**5.2 — Quadratic expansion:** The integrand `exp(ixξ) - 1 - ixξ` satisfies
+`|exp(iz)-1-iz| ≤ z²/2`, so the scaled integral on `{|x| < 1}` is controlled by
+the second moment, giving convergence of a subsequence. -/
+
+/-- The scaled second moment on the small set is bounded near `t = 0`.
+
+From `Re(1 - exp(tψ(ξ))) = ∫(1 - cos(xξ)) dμ_t` and `1 - cos(xξ) ≥ (xξ)²/4` for
+`|xξ| ≤ π`: choosing `ξ = 1` gives `(1/4t) ∫_{|x|<1} x² dμ_t ≤ Re(-ψ(1)) + o(1)`. -/
+theorem scaledMeasure_small_second_moment_bounded :
+    ∃ C : ℝ, 0 < C ∧ ∀ᶠ (t : {t : ℝ // 0 < t}) in comap Subtype.val (𝓝[>] 0),
+      t.val⁻¹ * ∫ x in smallSet, x ^ 2 ∂(S.measure t : Measure ℝ) ≤ C := by
+  sorry
+
+/-- The scaled integral of `exp(ixξ) - 1 - ixξ` on the small set, along a sequence
+`t_n → 0`, converges. The integrand satisfies `|exp(iz) - 1 - iz| ≤ z²/2`, so the
+integral is controlled by the second moment bound. -/
+theorem small_jump_expansion (ξ : ℝ)
+    {t_seq : ℕ → {t : ℝ // 0 < t}} (ht : Tendsto (fun n => (t_seq n).val) atTop (𝓝 0)) :
+    ∃ L : ℂ, Tendsto (fun n =>
+      ((t_seq n).val⁻¹ : ℂ) *
+      ∫ x in smallSet,
+        (Complex.exp (↑x * ↑ξ * Complex.I) - 1 - ↑x * ↑ξ * Complex.I)
+        ∂(S.measure (t_seq n) : Measure ℝ))
+    atTop (𝓝 L) := by
+  sorry
+
 end ConvolutionSemigroup
 
 /-- Build a convolution semigroup from a CND exponent via Schoenberg + Bochner. -/
