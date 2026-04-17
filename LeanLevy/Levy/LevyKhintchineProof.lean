@@ -1570,28 +1570,69 @@ As `ε → 0`, the integral over `{|x| ≥ ε}` approaches the integral over
 
 Uses weak convergence from the extraction lemma (`exists_measure_limit_large`). The function
 `x ↦ exp(ixξ) − 1` is bounded and continuous on `{|x| ≥ ε}`, so weak convergence of the
-scaled restricted measures implies convergence of integrals. -/
+scaled restricted measures implies convergence of integrals.
+
+Two extra hypotheses make this provable:
+- `hν_eq`: the extracted measure `ν_ε` equals the restriction of the Lévy measure.
+- `hconv_cx`: the complex Fourier integral against the scaled restricted measure converges. -/
 theorem large_jump_limit (ξ : ℝ) (ε : ℝ) (hε : 0 < ε)
     {t_seq : ℕ → {t : ℝ // 0 < t}} (ht : Tendsto (fun n => (t_seq n).val) atTop (𝓝 0))
     {ν_ε : Measure ℝ} (_hν_fin : IsFiniteMeasure ν_ε)
     (_hν_supp : ν_ε (largeSet ε)ᶜ = 0)
+    (hν_eq : (levyMeasure S).restrict (largeSet ε) = ν_ε)
     (_hconv : ∀ (f : BoundedContinuousFunction ℝ ℝ), (∀ x, |x| < ε → f x = 0) →
       Tendsto (fun n => ∫ x, f x ∂(S.scaledRestrictedMeasure (t_seq n) ε))
-        atTop (𝓝 (∫ x, f x ∂ν_ε))) :
+        atTop (𝓝 (∫ x, f x ∂ν_ε)))
+    (hconv_cx : Tendsto
+      (fun n => ∫ x, (exp (↑x * ↑ξ * I) - 1) ∂(S.scaledRestrictedMeasure (t_seq n) ε))
+      atTop
+      (𝓝 (∫ x, (exp (↑x * ↑ξ * I) - 1) ∂ν_ε))) :
     Tendsto (fun n =>
       ((t_seq n).val⁻¹ : ℂ) *
       ∫ x in largeSet ε, (exp (↑x * ↑ξ * I) - 1) ∂(S.measure (t_seq n) : Measure ℝ))
     atTop
     (𝓝 (∫ x in largeSet ε, (exp (↑x * ↑ξ * I) - 1) ∂(levyMeasure S))) := by
-  -- Strategy:
-  -- 1. Rewrite using `integral_scaledMeasure` + `Measure.restrict` to express
-  --    `t⁻¹ * ∫_{|x|≥ε} f dμ_t` as `∫ f d(scaledRestrictedMeasure t ε)`.
-  -- 2. Split Re/Im and apply the weak convergence hypothesis `_hconv` to
-  --    the bounded continuous real/imaginary parts.
-  -- 3. Combine to get complex convergence.
-  -- 4. Relate `∫ f dν_ε` to `∫_{|x|≥ε} f d(levyMeasure S)` using `_hν_supp`
-  --    and consistency of the extracted measures with the Lévy measure.
-  sorry
+  -- Step 1: Rewrite the limit target using hν_eq.
+  -- ∫ x in largeSet ε, g ∂(levyMeasure S)
+  --   = ∫ x, g ∂((levyMeasure S).restrict (largeSet ε))  [def of setIntegral]
+  --   = ∫ x, g ∂ν_ε                                      [hν_eq]
+  have hrhs : ∫ x in largeSet ε, (exp (↑x * ↑ξ * I) - 1) ∂(levyMeasure S)
+      = ∫ x, (exp (↑x * ↑ξ * I) - 1) ∂ν_ε := by
+    rw [← hν_eq]
+  rw [hrhs]
+  -- Step 2: Rewrite the LHS sequence.
+  -- (t⁻¹ : ℂ) * ∫ x in largeSet ε, g ∂μ_t
+  --   = t⁻¹ • ∫ x in largeSet ε, g ∂μ_t                  [real_smul_eq_coe_mul]
+  --   = ∫ x in largeSet ε, g ∂(scaledMeasure t)           [integral_smul_measure]
+  --   = ∫ x, g ∂(scaledRestrictedMeasure t ε)             [def of scaledRestrictedMeasure]
+  have hlhs : ∀ n,
+      ((t_seq n).val⁻¹ : ℂ) *
+        ∫ x in largeSet ε, (exp (↑x * ↑ξ * I) - 1) ∂(S.measure (t_seq n) : Measure ℝ)
+      = ∫ x, (exp (↑x * ↑ξ * I) - 1) ∂(S.scaledRestrictedMeasure (t_seq n) ε) := fun n => by
+    have ht_pos := (t_seq n).prop
+    -- Unfold scaledRestrictedMeasure and scaledMeasure, then use Measure.restrict_smul
+    have hmsr : S.scaledRestrictedMeasure (t_seq n) ε =
+        ENNReal.ofReal (t_seq n).val⁻¹ •
+          (S.measure (t_seq n) : Measure ℝ).restrict (largeSet ε) := by
+      rw [show S.scaledRestrictedMeasure (t_seq n) ε =
+              (S.scaledMeasure (t_seq n)).restrict (largeSet ε) from rfl,
+          show S.scaledMeasure (t_seq n) =
+              ENNReal.ofReal (t_seq n).val⁻¹ • (S.measure (t_seq n) : Measure ℝ) from rfl]
+      exact Measure.restrict_smul _ _ _
+    -- Rewrite RHS: ∫ g ∂(scaledRestrictedMeasure) = t⁻¹ • ∫ g in largeSet ε ∂(μ_t)
+    rw [hmsr, integral_smul_measure,
+        ENNReal.toReal_ofReal (le_of_lt (inv_pos.mpr ht_pos))]
+    -- Goal: ((t_seq n).val : ℂ)⁻¹ * ∫ g in largeSet ε ∂μ_t
+    --     = (t_seq n).val⁻¹ • ∫ g in largeSet ε ∂μ_t
+    -- Use: r⁻¹ • z = (r⁻¹ : ℂ) * z and (r : ℂ)⁻¹ = (r⁻¹ : ℂ)
+    set z := ∫ x in largeSet ε, (exp (↑x * ↑ξ * I) - 1) ∂(S.measure (t_seq n) : Measure ℝ)
+    set r := (t_seq n).val
+    change (↑r : ℂ)⁻¹ * z = r⁻¹ • z
+    rw [RCLike.real_smul_eq_coe_mul]
+    congr 1
+    exact (Complex.ofReal_inv r).symm
+  simp_rw [hlhs]
+  exact hconv_cx
 
 /-- The union of `largeSet(1/(n+1))` as `n → ∞` exhausts `ℝ \ {0}`. -/
 private lemma iUnion_largeSet_eq_ne_zero :
@@ -1749,20 +1790,75 @@ private lemma second_moment_le_scaled_re (t : {t : ℝ // 0 < t}) :
   have hre : (1 - exp (↑t.val * S.exponent 1)).re =
       ∫ x, (1 - Real.cos (1 * x)) ∂(S.measure t : Measure ℝ) := by
     rw [← hcf]; exact re_one_sub_charFun_eq_integral 1
-  rw [hre]
-  -- Goal: 2/π² * (t⁻¹ * ∫_smallSet x²) ≤ t⁻¹ * ∫ (1 - cos(1·x))
-  -- Rearrange: t⁻¹ * (2/π² * ∫_smallSet x²) ≤ t⁻¹ * ∫ (1-cos(1·x))
+  rw [hre]; simp only [one_mul]
+  -- Goal: 2/π² * (t⁻¹ * ∫_smallSet x²) ≤ t⁻¹ * ∫ (1 - cos x)
   rw [show 2 / Real.pi ^ 2 * (t.val⁻¹ * ∫ x in smallSet, x ^ 2 ∂(S.measure t : Measure ℝ)) =
     t.val⁻¹ * (2 / Real.pi ^ 2 * ∫ x in smallSet, x ^ 2 ∂(S.measure t : Measure ℝ)) from by ring]
   apply mul_le_mul_of_nonneg_left _ (le_of_lt (inv_pos.mpr t.prop))
-  -- Goal: 2/π² * ∫_smallSet x² ≤ ∫ (1 - cos(1·x))
-  -- ∫ (1-cos x) ≥ ∫_smallSet (1-cos x) ≥ (2/π²) ∫_smallSet x²
-  sorry
+  -- Goal: 2/π² * ∫_smallSet x² ≤ ∫ (1 - cos x)
+  have hpi_bound : ∀ x : ℝ, x ∈ smallSet → 2 / Real.pi ^ 2 * x ^ 2 ≤ 1 - Real.cos x := by
+    intro x hx
+    exact one_sub_cos_ge_mul_sq (le_of_lt (lt_of_lt_of_le (mem_smallSet.mp hx)
+      (le_trans (by norm_num : (1 : ℝ) ≤ 2) Real.two_le_pi)))
+  have hint_sq : IntegrableOn (fun x => 2 / Real.pi ^ 2 * x ^ 2) smallSet
+      (S.measure t : Measure ℝ) :=
+    Integrable.of_bound
+      ((continuous_const.mul (continuous_pow 2)).aestronglyMeasurable)
+      (2 / Real.pi ^ 2)
+      (by filter_upwards [ae_restrict_mem measurableSet_smallSet] with x hx
+          have habs : |x| < 1 := mem_smallSet.mp hx
+          have hx_sq : x ^ 2 ≤ 1 := by
+            nlinarith [sq_abs x, mul_le_of_le_one_right (abs_nonneg x) habs.le]
+          rw [Real.norm_eq_abs, abs_of_nonneg (mul_nonneg (by positivity) (sq_nonneg x))]
+          calc 2 / Real.pi ^ 2 * x ^ 2
+              ≤ 2 / Real.pi ^ 2 * 1 := mul_le_mul_of_nonneg_left hx_sq (by positivity)
+            _ = 2 / Real.pi ^ 2 := mul_one _)
+  have hint_cos : IntegrableOn (fun x => 1 - Real.cos x) smallSet
+      (S.measure t : Measure ℝ) :=
+    (Integrable.of_bound
+      ((continuous_const.sub Real.continuous_cos).aestronglyMeasurable)
+      2 (ae_of_all _ fun x => by
+        simp only [Real.norm_eq_abs, abs_of_nonneg (sub_nonneg.mpr (Real.cos_le_one _))]
+        linarith [Real.neg_one_le_cos x])).integrableOn
+  calc 2 / Real.pi ^ 2 * ∫ x in smallSet, x ^ 2 ∂(S.measure t : Measure ℝ)
+      = ∫ x in smallSet, 2 / Real.pi ^ 2 * x ^ 2 ∂(S.measure t : Measure ℝ) :=
+        (integral_const_mul _ _).symm
+    _ ≤ ∫ x in smallSet, (1 - Real.cos x) ∂(S.measure t : Measure ℝ) :=
+        setIntegral_mono_on hint_sq hint_cos measurableSet_smallSet hpi_bound
+    _ ≤ ∫ x, (1 - Real.cos x) ∂(S.measure t : Measure ℝ) :=
+        setIntegral_le_integral
+          (Integrable.of_bound
+            ((continuous_const.sub Real.continuous_cos).aestronglyMeasurable)
+            2 (ae_of_all _ fun x => by
+              simp only [Real.norm_eq_abs, abs_of_nonneg (sub_nonneg.mpr (Real.cos_le_one _))]
+              linarith [Real.neg_one_le_cos x]))
+          (ae_of_all _ fun x => sub_nonneg.mpr (Real.cos_le_one _))
 
 theorem scaledMeasure_small_second_moment_bounded :
-    ∃ C : ℝ, 0 < C ∧ ∀ᶠ (t : {t : ℝ // 0 < t}) in comap Subtype.val (𝓝[>] 0),
+    ∃ C : ℝ, 0 < C ∧ ∀ᶠ (t : {t : ℝ // 0 < t}) in comap Subtype.val (𝓝[>] (0 : ℝ)),
       t.val⁻¹ * ∫ x in smallSet, x ^ 2 ∂(S.measure t : Measure ℝ) ≤ C := by
-  sorry
+  set L := (-(S.exponent 1)).re
+  -- t⁻¹ * Re(1 - exp(tψ(1))) → L as t → 0+
+  have htend : Tendsto (fun (t : ℝ) => t⁻¹ * (1 - exp ((t : ℂ) * S.exponent 1)).re)
+      (𝓝[>] (0 : ℝ)) (𝓝 L) :=
+    (tendsto_inv_mul_re_one_sub_exp (S.exponent 1)).mono_left
+      (nhdsWithin_mono (0 : ℝ) fun _ hx => ne_of_gt hx)
+  -- Eventually ≤ |L| + 1
+  have hevt : ∀ᶠ (r : ℝ) in 𝓝[>] (0 : ℝ),
+      r⁻¹ * (1 - exp ((r : ℂ) * S.exponent 1)).re ≤ |L| + 1 :=
+    (htend.eventually (Iio_mem_nhds (by linarith [le_abs_self L]))).mono
+      fun _ h => le_of_lt h
+  refine ⟨Real.pi ^ 2 / 2 * (|L| + 1), by positivity, ?_⟩
+  exact (hevt.comap Subtype.val).mono fun t ht => by
+    -- ht : t.val⁻¹ * Re(1 - exp(t.val·ψ(1))) ≤ |L| + 1
+    have hle := le_trans (second_moment_le_scaled_re S t) ht
+    -- hle : 2/π² * (t⁻¹ * ∫ x²) ≤ |L| + 1
+    -- Multiply by π²/2 ≥ 0 and cancel
+    have hfactor := mul_le_mul_of_nonneg_left hle
+      (show (0 : ℝ) ≤ Real.pi ^ 2 / 2 from by positivity)
+    rw [← mul_assoc, show Real.pi ^ 2 / 2 * (2 / Real.pi ^ 2) = 1 from by
+      field_simp, one_mul] at hfactor
+    exact hfactor
 
 /-- The scaled integral of `exp(ixξ) - 1 - ixξ` on the small set, along a sequence
 `t_n → 0`, converges. The integrand satisfies `|exp(iz) - 1 - iz| ≤ z²/2`, so the
