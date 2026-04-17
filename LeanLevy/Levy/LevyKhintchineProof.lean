@@ -1221,6 +1221,37 @@ namespace ConvolutionSemigroup
 
 variable (S : ConvolutionSemigroup)
 
+/-- The integrand `x ↦ exp(i·ξ·x)` is integrable against any finite measure. -/
+private lemma integrable_charFun_integrand {μ : Measure ℝ} [IsFiniteMeasure μ] (ξ : ℝ) :
+    Integrable (fun x : ℝ => exp ((↑(ξ * x) : ℂ) * I)) μ :=
+  Integrable.of_bound
+    ((Complex.continuous_ofReal.comp (continuous_const.mul continuous_id')).mul_const I
+      |>.cexp.aestronglyMeasurable)
+    1 (ae_of_all _ fun x => le_of_eq (Complex.norm_exp_ofReal_mul_I _))
+
+/-- `Re(1 - charFun μ ξ) = ∫ (1 - cos(ξ·x)) dμ` for probability measures.
+Proof: unfold charFun to ∫ exp(iξx), commute Re through the integral via `integral_re`,
+use `Re(exp(iy)) = cos y`, and combine with `∫ 1 dμ = 1`. -/
+private lemma re_one_sub_charFun_eq_integral
+    {μ : Measure ℝ} [IsProbabilityMeasure μ] (ξ : ℝ) :
+    (1 - charFun μ ξ).re = ∫ x, (1 - Real.cos (ξ * x)) ∂μ := by
+  have hint := integrable_charFun_integrand (μ := μ) ξ
+  -- Express 1 - charFun as a single integral of (1 - exp(iξx))
+  have h1 : 1 - charFun μ ξ = ∫ x : ℝ, (1 - exp ((↑(ξ * x) : ℂ) * I)) ∂μ := by
+    have hcf : charFun μ ξ = ∫ x : ℝ, exp ((↑(ξ * x) : ℂ) * I) ∂μ := by
+      rw [charFun_apply_real]; congr 1; ext x; congr 1; push_cast; ring
+    rw [hcf]
+    have h_one : (1 : ℂ) = ∫ _ : ℝ, (1 : ℂ) ∂μ := by simp [integral_const]
+    conv_lhs => rw [h_one]
+    exact (integral_sub (integrable_const (1 : ℂ)) hint).symm
+  -- Take Re and commute through integral
+  rw [h1, show (∫ x : ℝ, (1 - exp ((↑(ξ * x) : ℂ) * I)) ∂μ).re =
+    ∫ x : ℝ, (1 - exp ((↑(ξ * x) : ℂ) * I)).re ∂μ from
+    (integral_re (Integrable.sub (integrable_const 1) hint)).symm]
+  -- Simplify Re(1 - exp(iξx)) = 1 - cos(ξx)
+  congr 1; ext x
+  simp only [sub_re, one_re, Complex.exp_ofReal_mul_I_re]
+
 /-! ### 3.1 — Uniform boundedness of scaled measures on large sets -/
 
 /-- The real part of `1 - exp(z)` for small `|z|` is well-approximated by `-Re(z)`.
@@ -1353,7 +1384,194 @@ private lemma one_sub_cos_integral_lower_bound
 private lemma scaled_mass_bound_real (ε : ℝ) (hε : 0 < ε) :
     ∃ C : ℝ≥0, ∀ (t : {t : ℝ // 0 < t}),
       t.val⁻¹ * ((S.measure t : Measure ℝ) (largeSet ε)).toReal ≤ ↑C := by
-  sorry
+  -- The exponent attains a maximum norm M on the compact interval [0, 2/ε].
+  obtain ⟨ξ_max, -, hξ_max⟩ := isCompact_Icc.exists_isMaxOn
+    (⟨0, Set.left_mem_Icc.mpr (by positivity)⟩ : (Set.Icc (0:ℝ) (2/ε)).Nonempty)
+    S.exponent_continuous.norm.continuousOn
+  set M := ‖S.exponent ξ_max‖ with hM_def
+  -- Key uniform bound: t⁻¹ * Re(1-exp(tψ(ξ))) ≤ 2M for ξ ∈ [0,2/ε], t > 0.
+  have hkey : ∀ ξ ∈ Set.Icc (0:ℝ) (2/ε), ∀ (t : {t : ℝ // 0 < t}),
+      t.val⁻¹ * (1 - exp ((t.val : ℂ) * S.exponent ξ)).re ≤ 2 * M := by
+    intro ξ hξ t
+    have hξM : ‖S.exponent ξ‖ ≤ M := hξ_max hξ
+    -- ‖exp(tψ(ξ))‖ ≤ 1 via characteristicFun identity
+    have hexp_le1 : ‖exp ((t.val : ℂ) * S.exponent ξ)‖ ≤ 1 := by
+      have h := (S.measure t).norm_characteristicFun_le_one ξ
+      rwa [S.charFun_eq t ξ] at h
+    -- (1-exp(tψ)).re ≤ 2
+    have hre_le2 : (1 - exp ((t.val : ℂ) * S.exponent ξ)).re ≤ 2 := by
+      have hge : -1 ≤ (exp ((t.val : ℂ) * S.exponent ξ)).re := by
+        have h1 : |(exp ((t.val : ℂ) * S.exponent ξ)).re| ≤ 1 :=
+          (Complex.abs_re_le_norm _).trans hexp_le1
+        linarith [neg_abs_le (exp ((t.val : ℂ) * S.exponent ξ)).re]
+      simp only [sub_re, one_re]; linarith
+    -- Case split on t * ‖ψ(ξ)‖ ≤ 1 vs > 1
+    by_cases h : t.val * ‖S.exponent ξ‖ ≤ 1
+    · -- Small regime: use norm_exp_sub_one_le
+      have htz : ‖(t.val : ℂ) * S.exponent ξ‖ ≤ 1 := by
+        simp only [norm_mul, Complex.norm_real, Real.norm_of_nonneg t.prop.le]; exact h
+      have h_re : (1 - exp ((t.val : ℂ) * S.exponent ξ)).re ≤ 2 * t.val * ‖S.exponent ξ‖ :=
+        calc (1 - exp ((t.val : ℂ) * S.exponent ξ)).re
+            ≤ ‖1 - exp ((t.val : ℂ) * S.exponent ξ)‖ := Complex.re_le_norm _
+          _ = ‖exp ((t.val : ℂ) * S.exponent ξ) - 1‖ := norm_sub_rev _ _
+          _ ≤ 2 * ‖(t.val : ℂ) * S.exponent ξ‖ := Complex.norm_exp_sub_one_le htz
+          _ = 2 * t.val * ‖S.exponent ξ‖ := by
+                simp only [norm_mul, Complex.norm_real, Real.norm_of_nonneg t.prop.le]; ring
+      calc t.val⁻¹ * (1 - exp ((t.val : ℂ) * S.exponent ξ)).re
+          ≤ t.val⁻¹ * (2 * t.val * ‖S.exponent ξ‖) :=
+              mul_le_mul_of_nonneg_left h_re (le_of_lt (inv_pos.mpr t.prop))
+        _ = 2 * ‖S.exponent ξ‖ := by field_simp [ne_of_gt t.prop]
+        _ ≤ 2 * M := by linarith
+    · -- Large regime: t⁻¹ ≤ ‖ψ(ξ)‖, use (1-exp).re ≤ 2
+      push_neg at h
+      have hψ_pos : (0 : ℝ) < ‖S.exponent ξ‖ := by
+        rcases ne_or_eq (S.exponent ξ) 0 with hne | h0
+        · exact norm_pos_iff.mpr hne
+        · simp only [h0, norm_zero] at h; linarith
+      have ht_inv : t.val⁻¹ ≤ ‖S.exponent ξ‖ :=
+        (inv_le_iff_one_le_mul₀' t.prop).mpr (le_of_lt h)
+      calc t.val⁻¹ * (1 - exp ((t.val : ℂ) * S.exponent ξ)).re
+          ≤ t.val⁻¹ * 2 :=
+              mul_le_mul_of_nonneg_left hre_le2 (le_of_lt (inv_pos.mpr t.prop))
+        _ ≤ ‖S.exponent ξ‖ * 2 := by nlinarith
+        _ ≤ M * 2 := by nlinarith
+        _ = 2 * M := by ring
+  -- Use C = 4*M + 1 as the uniform bound
+  refine ⟨⟨4 * M + 1, by positivity⟩, fun t => ?_⟩
+  simp only [NNReal.coe_mk]
+  set μ := (S.measure t : Measure ℝ)
+  haveI : IsProbabilityMeasure μ := inferInstance
+  -- The integrand 1-cos(ξ*x) is nonneg and bounded
+  have h_nn : ∀ (ξ x : ℝ), 0 ≤ 1 - Real.cos (ξ * x) := fun ξ x => one_sub_cos_nonneg x ξ
+  -- Integrability of (ξ, x) ↦ 1-cos(ξx) on [0,2/ε] × ℝ under volume × μ
+  -- The product volume.restrict(uIoc) × μ is finite (μ is a prob measure)
+  haveI hfin_restrict : IsFiniteMeasure (volume.restrict (Set.uIoc (0:ℝ) (2/ε))) := by
+    rw [Set.uIoc_of_le (by positivity : (0:ℝ) ≤ 2/ε)]
+    infer_instance
+  have hfubini_int : Integrable (fun p : ℝ × ℝ => 1 - Real.cos (p.1 * p.2))
+      ((volume.restrict (Set.uIoc 0 (2/ε))).prod μ) :=
+    Integrable.of_bound
+      ((continuous_const.sub (Real.continuous_cos.comp
+        (continuous_fst.mul continuous_snd))).aestronglyMeasurable)
+      2
+      (ae_of_all _ fun p => by
+        simp only [Real.norm_eq_abs, abs_of_nonneg (h_nn p.1 p.2)]
+        linarith [Real.neg_one_le_cos (p.1 * p.2)])
+  -- Fubini: ∫_ξ ∫_x (1-cos) dμ dξ = ∫_x ∫_ξ (1-cos) dξ dμ
+  have hfubini : ∫ ξ in (0:ℝ)..(2/ε), ∫ x, (1 - Real.cos (ξ * x)) ∂μ =
+      ∫ x, (∫ ξ in (0:ℝ)..(2/ε), (1 - Real.cos (ξ * x))) ∂μ :=
+    intervalIntegral_integral_swap hfubini_int
+  -- ∫_ξ ∫_x (1-cos) dμ = ∫_ξ Re(1-exp(tψ)) dξ
+  have hrhs : ∫ ξ in (0:ℝ)..(2/ε), ∫ x, (1 - Real.cos (ξ * x)) ∂μ =
+      ∫ ξ in (0:ℝ)..(2/ε), (1 - exp ((t.val : ℂ) * S.exponent ξ)).re := by
+    congr 1; ext ξ
+    rw [← re_one_sub_charFun_eq_integral ξ]
+    congr 1; congr 1
+    exact S.charFun_eq t ξ
+  -- Integrability of x ↦ ∫_ξ (1-cos) dξ under μ (bounded by 4/ε via |1-cos| ≤ 2)
+  have h_intcont : Continuous (fun x => ∫ ξ in (0:ℝ)..(2/ε), (1 - Real.cos (ξ * x))) :=
+    intervalIntegral.continuous_parametric_intervalIntegral_of_continuous'
+      (f := fun x ξ => 1 - Real.cos (ξ * x))
+      (by fun_prop) 0 (2/ε)
+  have hint_outer : Integrable (fun x => ∫ ξ in (0:ℝ)..(2/ε), (1 - Real.cos (ξ * x))) μ :=
+    Integrable.of_bound
+      h_intcont.aestronglyMeasurable
+      (4/ε)
+      (ae_of_all _ fun x => by
+        rw [Real.norm_eq_abs, abs_of_nonneg
+            (intervalIntegral.integral_nonneg (by positivity) fun ξ _ => h_nn ξ x)]
+        have hfx_int : IntervalIntegrable (fun ξ => 1 - Real.cos (ξ * x)) volume 0 (2/ε) :=
+          (continuous_const.sub (Real.continuous_cos.comp
+            (continuous_id.mul continuous_const))).intervalIntegrable 0 (2/ε)
+        calc ∫ ξ in (0:ℝ)..(2/ε), (1 - Real.cos (ξ * x))
+            ≤ ∫ ξ in (0:ℝ)..(2/ε), (2 : ℝ) :=
+              intervalIntegral.integral_mono_on (by positivity) hfx_int intervalIntegrable_const
+                (fun ξ _ => by linarith [Real.neg_one_le_cos (ξ * x)])
+          _ = 4/ε := by
+              rw [intervalIntegral.integral_const, smul_eq_mul]
+              field_simp; ring)
+  -- Pointwise bound: ∫_0^{2/ε} (1-cos(ξx)) dξ ≥ ε⁻¹ for x ∈ largeSet ε
+  have hpointwise : ∀ x ∈ largeSet ε,
+      ε⁻¹ ≤ ∫ ξ in (0:ℝ)..(2/ε), (1 - Real.cos (ξ * x)) := by
+    intro x hx
+    have hxε : ε ≤ |x| := mem_largeSet.mp hx
+    have hx_ne : x ≠ 0 := by
+      intro h0; simp only [h0, abs_zero] at hxε; linarith
+    -- The integral of cos(ξx) over ξ ∈ [0, 2/ε]: substitute u = ξ*x
+    have hcos_int : IntervalIntegrable (fun ξ => Real.cos (ξ * x)) volume 0 (2/ε) :=
+      (Real.continuous_cos.comp (continuous_id.mul continuous_const)).intervalIntegrable 0 (2/ε)
+    have hmul : ∫ ξ in (0:ℝ)..(2/ε), Real.cos (ξ * x) = Real.sin (2 * x / ε) / x := by
+      rw [intervalIntegral.integral_comp_mul_right (hc := hx_ne)]
+      simp only [zero_mul, smul_eq_mul]
+      -- integral_cos: ∫ in 0..2/ε*x, cos = sin(2/ε*x) - sin(0)
+      rw [integral_cos, Real.sin_zero, sub_zero]
+      rw [show (2 : ℝ) / ε * x = 2 * x / ε from by ring]
+      rw [div_eq_mul_inv (Real.sin _) x, mul_comm]
+    have hcomp : ∫ ξ in (0:ℝ)..(2/ε), (1 - Real.cos (ξ * x)) =
+        2/ε - Real.sin (2 * x / ε) / x := by
+      rw [intervalIntegral.integral_sub intervalIntegrable_const hcos_int,
+        intervalIntegral.integral_const, smul_eq_mul, mul_one, hmul]
+      ring
+    rw [hcomp]
+    have hsin_bd : Real.sin (2 * x / ε) / x ≤ 1/ε := by
+      have habs : |Real.sin (2 * x / ε) / x| ≤ 1/ε := by
+        rw [abs_div, div_le_div_iff₀ (abs_pos.mpr hx_ne) hε]
+        nlinarith [Real.abs_sin_le_one (2 * x / ε)]
+      linarith [le_abs_self (Real.sin (2 * x / ε) / x)]
+    have h1e : (1:ℝ)/ε = ε⁻¹ := one_div ε
+    have h2e : (2:ℝ)/ε = 2 * ε⁻¹ := by rw [div_eq_mul_inv]
+    linarith
+  -- Main bound: ε⁻¹ * μ(largeSet ε) ≤ ∫_x ∫_ξ (1-cos) dξ dμ = ∫_ξ ∫_x (1-cos) dμ dξ
+  have hmass : ε⁻¹ * (μ (largeSet ε)).toReal ≤
+      ∫ ξ in (0:ℝ)..(2/ε), (1 - exp ((t.val : ℂ) * S.exponent ξ)).re := by
+    rw [← hrhs, hfubini]
+    rw [show ε⁻¹ * (μ (largeSet ε)).toReal =
+      ∫ _ in largeSet ε, ε⁻¹ ∂μ by
+        rw [setIntegral_const, smul_eq_mul, Measure.real_def, mul_comm]]
+    exact le_trans
+      (setIntegral_mono_on integrableOn_const hint_outer.integrableOn
+        (measurableSet_largeSet ε) (fun x hx => hpointwise x hx))
+      (setIntegral_le_integral hint_outer (ae_of_all _ (fun x =>
+        intervalIntegral.integral_nonneg (by positivity) fun ξ _ => h_nn ξ x)))
+  -- Multiply by t⁻¹: t⁻¹ * ε⁻¹ * μ(largeSet ε) ≤ ∫_ξ t⁻¹*(1-exp).re dξ
+  have ht_inv_nn : 0 ≤ t.val⁻¹ := le_of_lt (inv_pos.mpr t.prop)
+  have hmass_t : t.val⁻¹ * ε⁻¹ * (μ (largeSet ε)).toReal ≤
+      ∫ ξ in (0:ℝ)..(2/ε), t.val⁻¹ * (1 - exp ((t.val : ℂ) * S.exponent ξ)).re := by
+    have hrearrange : t.val⁻¹ * ε⁻¹ * (μ (largeSet ε)).toReal =
+        t.val⁻¹ * (ε⁻¹ * (μ (largeSet ε)).toReal) := by ring
+    rw [hrearrange]
+    calc t.val⁻¹ * (ε⁻¹ * (μ (largeSet ε)).toReal)
+        ≤ t.val⁻¹ * (∫ ξ in (0:ℝ)..(2/ε), (1 - exp ((↑t.val : ℂ) * S.exponent ξ)).re) :=
+          mul_le_mul_of_nonneg_left hmass ht_inv_nn
+      _ = ∫ ξ in (0:ℝ)..(2/ε), t.val⁻¹ * (1 - exp ((↑t.val : ℂ) * S.exponent ξ)).re := by
+          rw [← intervalIntegral.integral_const_mul]
+  -- IntervalIntegrable for the t-scaled exponent integrand
+  have hint_exp : IntervalIntegrable
+      (fun ξ => t.val⁻¹ * (1 - exp ((t.val : ℂ) * S.exponent ξ)).re) volume 0 (2/ε) :=
+    ((continuous_const.sub
+        (Complex.continuous_re.comp
+          (Complex.continuous_exp.comp
+            (continuous_const.mul S.exponent_continuous)))).const_mul _).intervalIntegrable _ _
+  -- Bound the integrand by 2M (using hkey)
+  have hint_2M : ∫ ξ in (0:ℝ)..(2/ε), t.val⁻¹ * (1 - exp ((t.val : ℂ) * S.exponent ξ)).re ≤
+      ∫ ξ in (0:ℝ)..(2/ε), (2 * M) :=
+    intervalIntegral.integral_mono_on (by positivity) hint_exp intervalIntegrable_const
+      (fun ξ hξ => hkey ξ hξ t)
+  -- ∫_0^{2/ε} 2M = 4M/ε
+  have hint_const : ∫ ξ in (0:ℝ)..(2/ε), (2 * M) = 4 * M / ε := by
+    rw [intervalIntegral.integral_const, smul_eq_mul]
+    field_simp [hε.ne']
+    ring
+  -- Combine: t⁻¹ * μ(largeSet ε) ≤ 4M ≤ 4M + 1
+  calc t.val⁻¹ * (μ (largeSet ε)).toReal
+      = ε * (t.val⁻¹ * ε⁻¹ * (μ (largeSet ε)).toReal) := by field_simp [hε.ne', ne_of_gt t.prop]
+    _ ≤ ε * (∫ ξ in (0:ℝ)..(2/ε), t.val⁻¹ * (1 - exp ((↑t.val : ℂ) * S.exponent ξ)).re) := by
+        exact mul_le_mul_of_nonneg_left hmass_t (le_of_lt hε)
+    _ ≤ ε * (∫ ξ in (0:ℝ)..(2/ε), (2 * M)) := by
+        apply mul_le_mul_of_nonneg_left hint_2M (le_of_lt hε)
+    _ = ε * (4 * M / ε) := by rw [hint_const]
+    _ = 4 * M := by field_simp [hε.ne']
+    _ ≤ 4 * M + 1 := by linarith
 
 /-- **Uniform boundedness of scaled measures on large sets.** The family
     `{(1/t)·μ_t|_{|x|≥ε}}` has uniformly bounded mass as `t → 0⁺`.
@@ -1719,37 +1937,6 @@ Dividing by `t`: `(2/(π²t)) ∫_{|x|<1} x² dμ_t ≤ Re(-ψ(1)) + o(1)`.
 **5.2 — Quadratic expansion:** The integrand `exp(ixξ) - 1 - ixξ` satisfies
 `|exp(iz)-1-iz| ≤ z²/2`, so the scaled integral on `{|x| < 1}` is controlled by
 the second moment, giving convergence of a subsequence. -/
-
-/-- The integrand `x ↦ exp(i·ξ·x)` is integrable against any finite measure. -/
-private lemma integrable_charFun_integrand {μ : Measure ℝ} [IsFiniteMeasure μ] (ξ : ℝ) :
-    Integrable (fun x : ℝ => exp ((↑(ξ * x) : ℂ) * I)) μ :=
-  Integrable.of_bound
-    ((Complex.continuous_ofReal.comp (continuous_const.mul continuous_id')).mul_const I
-      |>.cexp.aestronglyMeasurable)
-    1 (ae_of_all _ fun x => le_of_eq (Complex.norm_exp_ofReal_mul_I _))
-
-/-- `Re(1 - charFun μ ξ) = ∫ (1 - cos(ξ·x)) dμ` for probability measures.
-Proof: unfold charFun to ∫ exp(iξx), commute Re through the integral via `integral_re`,
-use `Re(exp(iy)) = cos y`, and combine with `∫ 1 dμ = 1`. -/
-private lemma re_one_sub_charFun_eq_integral
-    {μ : Measure ℝ} [IsProbabilityMeasure μ] (ξ : ℝ) :
-    (1 - charFun μ ξ).re = ∫ x, (1 - Real.cos (ξ * x)) ∂μ := by
-  have hint := integrable_charFun_integrand (μ := μ) ξ
-  -- Express 1 - charFun as a single integral of (1 - exp(iξx))
-  have h1 : 1 - charFun μ ξ = ∫ x : ℝ, (1 - exp ((↑(ξ * x) : ℂ) * I)) ∂μ := by
-    have hcf : charFun μ ξ = ∫ x : ℝ, exp ((↑(ξ * x) : ℂ) * I) ∂μ := by
-      rw [charFun_apply_real]; congr 1; ext x; congr 1; push_cast; ring
-    rw [hcf]
-    have h_one : (1 : ℂ) = ∫ _ : ℝ, (1 : ℂ) ∂μ := by simp [integral_const]
-    conv_lhs => rw [h_one]
-    exact (integral_sub (integrable_const (1 : ℂ)) hint).symm
-  -- Take Re and commute through integral
-  rw [h1, show (∫ x : ℝ, (1 - exp ((↑(ξ * x) : ℂ) * I)) ∂μ).re =
-    ∫ x : ℝ, (1 - exp ((↑(ξ * x) : ℂ) * I)).re ∂μ from
-    (integral_re (Integrable.sub (integrable_const 1) hint)).symm]
-  -- Simplify Re(1 - exp(iξx)) = 1 - cos(ξx)
-  congr 1; ext x
-  simp only [sub_re, one_re, Complex.exp_ofReal_mul_I_re]
 
 /-- On `{|x| ≤ π}`, `1 - cos x ≥ (2/π²) · x²`. Wrapper for mathlib's
 `cos_le_one_sub_mul_cos_sq`. -/
