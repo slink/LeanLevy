@@ -1573,6 +1573,179 @@ private lemma scaled_mass_bound_real (ε : ℝ) (hε : 0 < ε) :
     _ = 4 * M := by field_simp [hε.ne']
     _ ≤ 4 * M + 1 := by linarith
 
+/-- **Real-valued mass bound parameterized by the max of `‖ψ‖` on `[0, 2/ε]`.**
+    Variant of `scaled_mass_bound_real` that exposes the bound `4·M` explicitly,
+    where `M` is the supremum of `‖ψ‖` on `[0, 2/ε]`. This is used for tightness:
+    as `ε → ∞`, the interval `[0, 2/ε]` shrinks to `{0}` and `M → 0` since `ψ(0) = 0`.
+-/
+private lemma scaled_mass_bound_real_with_max (ε : ℝ) (hε : 0 < ε)
+    (M : ℝ) (_hM_nn : 0 ≤ M)
+    (hM : ∀ ξ ∈ Set.Icc (0:ℝ) (2/ε), ‖S.exponent ξ‖ ≤ M) :
+    ∀ (t : {t : ℝ // 0 < t}),
+      t.val⁻¹ * ((S.measure t : Measure ℝ) (largeSet ε)).toReal ≤ 4 * M := by
+  -- Reuses the proof structure of `scaled_mass_bound_real`, replacing the
+  -- internally-computed max with the user-supplied bound `M`.
+  intro t
+  -- Key uniform bound: t⁻¹ * Re(1-exp(tψ(ξ))) ≤ 2M for ξ ∈ [0,2/ε], t > 0.
+  have hkey : ∀ ξ ∈ Set.Icc (0:ℝ) (2/ε),
+      t.val⁻¹ * (1 - exp ((t.val : ℂ) * S.exponent ξ)).re ≤ 2 * M := by
+    intro ξ hξ
+    have hξM : ‖S.exponent ξ‖ ≤ M := hM ξ hξ
+    have hexp_le1 : ‖exp ((t.val : ℂ) * S.exponent ξ)‖ ≤ 1 := by
+      have h := (S.measure t).norm_characteristicFun_le_one ξ
+      rwa [S.charFun_eq t ξ] at h
+    have hre_le2 : (1 - exp ((t.val : ℂ) * S.exponent ξ)).re ≤ 2 := by
+      have hge : -1 ≤ (exp ((t.val : ℂ) * S.exponent ξ)).re := by
+        have h1 : |(exp ((t.val : ℂ) * S.exponent ξ)).re| ≤ 1 :=
+          (Complex.abs_re_le_norm _).trans hexp_le1
+        linarith [neg_abs_le (exp ((t.val : ℂ) * S.exponent ξ)).re]
+      simp only [sub_re, one_re]; linarith
+    by_cases h : t.val * ‖S.exponent ξ‖ ≤ 1
+    · have htz : ‖(t.val : ℂ) * S.exponent ξ‖ ≤ 1 := by
+        simp only [norm_mul, Complex.norm_real, Real.norm_of_nonneg t.prop.le]; exact h
+      have h_re : (1 - exp ((t.val : ℂ) * S.exponent ξ)).re ≤ 2 * t.val * ‖S.exponent ξ‖ :=
+        calc (1 - exp ((t.val : ℂ) * S.exponent ξ)).re
+            ≤ ‖1 - exp ((t.val : ℂ) * S.exponent ξ)‖ := Complex.re_le_norm _
+          _ = ‖exp ((t.val : ℂ) * S.exponent ξ) - 1‖ := norm_sub_rev _ _
+          _ ≤ 2 * ‖(t.val : ℂ) * S.exponent ξ‖ := Complex.norm_exp_sub_one_le htz
+          _ = 2 * t.val * ‖S.exponent ξ‖ := by
+                simp only [norm_mul, Complex.norm_real, Real.norm_of_nonneg t.prop.le]; ring
+      calc t.val⁻¹ * (1 - exp ((t.val : ℂ) * S.exponent ξ)).re
+          ≤ t.val⁻¹ * (2 * t.val * ‖S.exponent ξ‖) :=
+              mul_le_mul_of_nonneg_left h_re (le_of_lt (inv_pos.mpr t.prop))
+        _ = 2 * ‖S.exponent ξ‖ := by field_simp [ne_of_gt t.prop]
+        _ ≤ 2 * M := by linarith
+    · push_neg at h
+      have hψ_pos : (0 : ℝ) < ‖S.exponent ξ‖ := by
+        rcases ne_or_eq (S.exponent ξ) 0 with hne | h0
+        · exact norm_pos_iff.mpr hne
+        · simp only [h0, norm_zero] at h; linarith
+      have ht_inv : t.val⁻¹ ≤ ‖S.exponent ξ‖ :=
+        (inv_le_iff_one_le_mul₀' t.prop).mpr (le_of_lt h)
+      calc t.val⁻¹ * (1 - exp ((t.val : ℂ) * S.exponent ξ)).re
+          ≤ t.val⁻¹ * 2 :=
+              mul_le_mul_of_nonneg_left hre_le2 (le_of_lt (inv_pos.mpr t.prop))
+        _ ≤ ‖S.exponent ξ‖ * 2 := by nlinarith
+        _ ≤ M * 2 := by nlinarith
+        _ = 2 * M := by ring
+  set μ := (S.measure t : Measure ℝ)
+  haveI : IsProbabilityMeasure μ := inferInstance
+  have h_nn : ∀ (ξ x : ℝ), 0 ≤ 1 - Real.cos (ξ * x) := fun ξ x => one_sub_cos_nonneg x ξ
+  haveI hfin_restrict : IsFiniteMeasure (volume.restrict (Set.uIoc (0:ℝ) (2/ε))) := by
+    rw [Set.uIoc_of_le (by positivity : (0:ℝ) ≤ 2/ε)]
+    infer_instance
+  have hfubini_int : Integrable (fun p : ℝ × ℝ => 1 - Real.cos (p.1 * p.2))
+      ((volume.restrict (Set.uIoc 0 (2/ε))).prod μ) :=
+    Integrable.of_bound
+      ((continuous_const.sub (Real.continuous_cos.comp
+        (continuous_fst.mul continuous_snd))).aestronglyMeasurable)
+      2
+      (ae_of_all _ fun p => by
+        simp only [Real.norm_eq_abs, abs_of_nonneg (h_nn p.1 p.2)]
+        linarith [Real.neg_one_le_cos (p.1 * p.2)])
+  have hfubini : ∫ ξ in (0:ℝ)..(2/ε), ∫ x, (1 - Real.cos (ξ * x)) ∂μ =
+      ∫ x, (∫ ξ in (0:ℝ)..(2/ε), (1 - Real.cos (ξ * x))) ∂μ :=
+    intervalIntegral_integral_swap hfubini_int
+  have hrhs : ∫ ξ in (0:ℝ)..(2/ε), ∫ x, (1 - Real.cos (ξ * x)) ∂μ =
+      ∫ ξ in (0:ℝ)..(2/ε), (1 - exp ((t.val : ℂ) * S.exponent ξ)).re := by
+    congr 1; ext ξ
+    rw [← re_one_sub_charFun_eq_integral ξ]
+    congr 1; congr 1
+    exact S.charFun_eq t ξ
+  have h_intcont : Continuous (fun x => ∫ ξ in (0:ℝ)..(2/ε), (1 - Real.cos (ξ * x))) :=
+    intervalIntegral.continuous_parametric_intervalIntegral_of_continuous'
+      (f := fun x ξ => 1 - Real.cos (ξ * x))
+      (by fun_prop) 0 (2/ε)
+  have hint_outer : Integrable (fun x => ∫ ξ in (0:ℝ)..(2/ε), (1 - Real.cos (ξ * x))) μ :=
+    Integrable.of_bound
+      h_intcont.aestronglyMeasurable
+      (4/ε)
+      (ae_of_all _ fun x => by
+        rw [Real.norm_eq_abs, abs_of_nonneg
+            (intervalIntegral.integral_nonneg (by positivity) fun ξ _ => h_nn ξ x)]
+        have hfx_int : IntervalIntegrable (fun ξ => 1 - Real.cos (ξ * x)) volume 0 (2/ε) :=
+          (continuous_const.sub (Real.continuous_cos.comp
+            (continuous_id.mul continuous_const))).intervalIntegrable 0 (2/ε)
+        calc ∫ ξ in (0:ℝ)..(2/ε), (1 - Real.cos (ξ * x))
+            ≤ ∫ ξ in (0:ℝ)..(2/ε), (2 : ℝ) :=
+              intervalIntegral.integral_mono_on (by positivity) hfx_int intervalIntegrable_const
+                (fun ξ _ => by linarith [Real.neg_one_le_cos (ξ * x)])
+          _ = 4/ε := by
+              rw [intervalIntegral.integral_const, smul_eq_mul]
+              field_simp; ring)
+  have hpointwise : ∀ x ∈ largeSet ε,
+      ε⁻¹ ≤ ∫ ξ in (0:ℝ)..(2/ε), (1 - Real.cos (ξ * x)) := by
+    intro x hx
+    have hxε : ε ≤ |x| := mem_largeSet.mp hx
+    have hx_ne : x ≠ 0 := by
+      intro h0; simp only [h0, abs_zero] at hxε; linarith
+    have hcos_int : IntervalIntegrable (fun ξ => Real.cos (ξ * x)) volume 0 (2/ε) :=
+      (Real.continuous_cos.comp (continuous_id.mul continuous_const)).intervalIntegrable 0 (2/ε)
+    have hmul : ∫ ξ in (0:ℝ)..(2/ε), Real.cos (ξ * x) = Real.sin (2 * x / ε) / x := by
+      rw [intervalIntegral.integral_comp_mul_right (hc := hx_ne)]
+      simp only [zero_mul, smul_eq_mul]
+      rw [integral_cos, Real.sin_zero, sub_zero]
+      rw [show (2 : ℝ) / ε * x = 2 * x / ε from by ring]
+      rw [div_eq_mul_inv (Real.sin _) x, mul_comm]
+    have hcomp : ∫ ξ in (0:ℝ)..(2/ε), (1 - Real.cos (ξ * x)) =
+        2/ε - Real.sin (2 * x / ε) / x := by
+      rw [intervalIntegral.integral_sub intervalIntegrable_const hcos_int,
+        intervalIntegral.integral_const, smul_eq_mul, mul_one, hmul]
+      ring
+    rw [hcomp]
+    have hsin_bd : Real.sin (2 * x / ε) / x ≤ 1/ε := by
+      have habs : |Real.sin (2 * x / ε) / x| ≤ 1/ε := by
+        rw [abs_div, div_le_div_iff₀ (abs_pos.mpr hx_ne) hε]
+        nlinarith [Real.abs_sin_le_one (2 * x / ε)]
+      linarith [le_abs_self (Real.sin (2 * x / ε) / x)]
+    have h1e : (1:ℝ)/ε = ε⁻¹ := one_div ε
+    have h2e : (2:ℝ)/ε = 2 * ε⁻¹ := by rw [div_eq_mul_inv]
+    linarith
+  have hmass : ε⁻¹ * (μ (largeSet ε)).toReal ≤
+      ∫ ξ in (0:ℝ)..(2/ε), (1 - exp ((t.val : ℂ) * S.exponent ξ)).re := by
+    rw [← hrhs, hfubini]
+    rw [show ε⁻¹ * (μ (largeSet ε)).toReal =
+      ∫ _ in largeSet ε, ε⁻¹ ∂μ by
+        rw [setIntegral_const, smul_eq_mul, Measure.real_def, mul_comm]]
+    exact le_trans
+      (setIntegral_mono_on integrableOn_const hint_outer.integrableOn
+        (measurableSet_largeSet ε) (fun x hx => hpointwise x hx))
+      (setIntegral_le_integral hint_outer (ae_of_all _ (fun x =>
+        intervalIntegral.integral_nonneg (by positivity) fun ξ _ => h_nn ξ x)))
+  have ht_inv_nn : 0 ≤ t.val⁻¹ := le_of_lt (inv_pos.mpr t.prop)
+  have hmass_t : t.val⁻¹ * ε⁻¹ * (μ (largeSet ε)).toReal ≤
+      ∫ ξ in (0:ℝ)..(2/ε), t.val⁻¹ * (1 - exp ((t.val : ℂ) * S.exponent ξ)).re := by
+    have hrearrange : t.val⁻¹ * ε⁻¹ * (μ (largeSet ε)).toReal =
+        t.val⁻¹ * (ε⁻¹ * (μ (largeSet ε)).toReal) := by ring
+    rw [hrearrange]
+    calc t.val⁻¹ * (ε⁻¹ * (μ (largeSet ε)).toReal)
+        ≤ t.val⁻¹ * (∫ ξ in (0:ℝ)..(2/ε), (1 - exp ((↑t.val : ℂ) * S.exponent ξ)).re) :=
+          mul_le_mul_of_nonneg_left hmass ht_inv_nn
+      _ = ∫ ξ in (0:ℝ)..(2/ε), t.val⁻¹ * (1 - exp ((↑t.val : ℂ) * S.exponent ξ)).re := by
+          rw [← intervalIntegral.integral_const_mul]
+  have hint_exp : IntervalIntegrable
+      (fun ξ => t.val⁻¹ * (1 - exp ((t.val : ℂ) * S.exponent ξ)).re) volume 0 (2/ε) :=
+    ((continuous_const.sub
+        (Complex.continuous_re.comp
+          (Complex.continuous_exp.comp
+            (continuous_const.mul S.exponent_continuous)))).const_mul _).intervalIntegrable _ _
+  have hint_2M : ∫ ξ in (0:ℝ)..(2/ε), t.val⁻¹ * (1 - exp ((t.val : ℂ) * S.exponent ξ)).re ≤
+      ∫ ξ in (0:ℝ)..(2/ε), (2 * M) :=
+    intervalIntegral.integral_mono_on (by positivity) hint_exp intervalIntegrable_const
+      (fun ξ hξ => hkey ξ hξ)
+  have hint_const : ∫ ξ in (0:ℝ)..(2/ε), (2 * M) = 4 * M / ε := by
+    rw [intervalIntegral.integral_const, smul_eq_mul]
+    field_simp [hε.ne']
+    ring
+  calc t.val⁻¹ * (μ (largeSet ε)).toReal
+      = ε * (t.val⁻¹ * ε⁻¹ * (μ (largeSet ε)).toReal) := by field_simp [hε.ne', ne_of_gt t.prop]
+    _ ≤ ε * (∫ ξ in (0:ℝ)..(2/ε), t.val⁻¹ * (1 - exp ((↑t.val : ℂ) * S.exponent ξ)).re) := by
+        exact mul_le_mul_of_nonneg_left hmass_t (le_of_lt hε)
+    _ ≤ ε * (∫ ξ in (0:ℝ)..(2/ε), (2 * M)) := by
+        apply mul_le_mul_of_nonneg_left hint_2M (le_of_lt hε)
+    _ = ε * (4 * M / ε) := by rw [hint_const]
+    _ = 4 * M := by field_simp [hε.ne']
+
 /-- **Uniform boundedness of scaled measures on large sets.** The family
     `{(1/t)·μ_t|_{|x|≥ε}}` has uniformly bounded mass as `t → 0⁺`.
 
@@ -1622,8 +1795,7 @@ lemma isFiniteMeasure_scaledRestrictedMeasure (ε : ℝ) (hε : 0 < ε) :
     extract a weak limit along a subsequence `t_n → 0`.
 
     **Strategy:** Normalize to probability measures, apply Prokhorov's theorem for
-    sequential compactness, then unnormalize. The proof is sorry'd as it requires
-    substantial measure-theoretic machinery (Prokhorov + normalization). -/
+    sequential compactness, then unnormalize. -/
 theorem exists_measure_limit_large (ε : ℝ) (hε : 0 < ε) :
     ∃ (ν_ε : Measure ℝ) (t_seq : ℕ → {t : ℝ // 0 < t}),
       Tendsto (fun n => (t_seq n).val) atTop (𝓝 0) ∧
@@ -1633,7 +1805,375 @@ theorem exists_measure_limit_large (ε : ℝ) (hε : 0 < ε) :
       (∀ (f : BoundedContinuousFunction ℝ ℝ), (∀ x, |x| < ε → f x = 0) →
         Tendsto (fun n => ∫ x, f x ∂(S.scaledRestrictedMeasure (t_seq n) ε))
           atTop (𝓝 (∫ x, f x ∂ν_ε))) := by
-  sorry
+  -- Step 1: Choose the natural sequence t_n := 1/(n+2).
+  set t_seq : ℕ → {t : ℝ // 0 < t} := fun n => ⟨1/(n+2), by positivity⟩ with ht_seq_def
+  have ht_seq_tendsto : Tendsto (fun n => (t_seq n).val) atTop (𝓝 0) := by
+    have : Tendsto (fun n : ℕ => 1 / ((n : ℝ) + 1)) atTop (𝓝 0) :=
+      tendsto_one_div_add_atTop_nhds_zero_nat
+    have h2 := this.comp (tendsto_add_atTop_nat 1)
+    refine h2.congr (fun n => ?_)
+    simp [t_seq, Nat.cast_add, Nat.cast_one]
+    ring
+  -- Step 2: Uniform mass bound C on ν_n := scaledRestrictedMeasure (t_seq n) ε.
+  obtain ⟨C, hC⟩ := S.scaled_mass_bound_real ε hε
+  set ν : ℕ → Measure ℝ := fun n => S.scaledRestrictedMeasure (t_seq n) ε with hν_def
+  -- Each ν n is a finite measure with mass ≤ C.
+  have hν_mass_real : ∀ n, (ν n Set.univ).toReal ≤ C := fun n => by
+    have hbound := hC (t_seq n)
+    have hfin : (S.measure (t_seq n) : Measure ℝ) (largeSet ε) ≠ ⊤ := measure_ne_top _ _
+    have ht_inv_nn : 0 ≤ (t_seq n).val⁻¹ := le_of_lt (inv_pos.mpr (t_seq n).prop)
+    -- ν n Set.univ = ENNReal.ofReal (t_seq n).val⁻¹ * μ_t(largeSet ε)
+    have hν_univ_eq : ν n Set.univ =
+        ENNReal.ofReal (t_seq n).val⁻¹ * (S.measure (t_seq n) : Measure ℝ) (largeSet ε) := by
+      simp only [hν_def, scaledRestrictedMeasure, Measure.restrict_apply MeasurableSet.univ,
+        Set.univ_inter, scaledMeasure_apply]
+    rw [hν_univ_eq]
+    -- Convert: ofReal t⁻¹ * μ(...) = ofReal (t⁻¹ * μ(...).toReal)
+    have h_eq : ENNReal.ofReal (t_seq n).val⁻¹ *
+        (S.measure (t_seq n) : Measure ℝ) (largeSet ε) =
+        ENNReal.ofReal ((t_seq n).val⁻¹ *
+          ((S.measure (t_seq n) : Measure ℝ) (largeSet ε)).toReal) := by
+      conv_lhs => rw [← ENNReal.ofReal_toReal hfin]
+      rw [← ENNReal.ofReal_mul ht_inv_nn]
+    rw [h_eq, ENNReal.toReal_ofReal (by
+      have h_mass_nn : 0 ≤ ((S.measure (t_seq n) : Measure ℝ) (largeSet ε)).toReal :=
+        ENNReal.toReal_nonneg
+      positivity)]
+    exact hbound
+  have hν_finite : ∀ n, IsFiniteMeasure (ν n) := fun n => by
+    -- ν n is a restricted scaled measure with bounded mass
+    constructor
+    have h_meas_univ : ν n Set.univ =
+        ENNReal.ofReal (t_seq n).val⁻¹ * (S.measure (t_seq n) : Measure ℝ) (largeSet ε) := by
+      simp only [hν_def, scaledRestrictedMeasure, Measure.restrict_apply MeasurableSet.univ,
+        Set.univ_inter, scaledMeasure_apply]
+    rw [h_meas_univ]
+    have hfin : (S.measure (t_seq n) : Measure ℝ) (largeSet ε) ≠ ⊤ := measure_ne_top _ _
+    have ht_inv_nn : (0 : ℝ) ≤ (t_seq n).val⁻¹ := le_of_lt (inv_pos.mpr (t_seq n).prop)
+    have h_eq : ENNReal.ofReal (t_seq n).val⁻¹ *
+        (S.measure (t_seq n) : Measure ℝ) (largeSet ε) =
+        ENNReal.ofReal ((t_seq n).val⁻¹ *
+          ((S.measure (t_seq n) : Measure ℝ) (largeSet ε)).toReal) := by
+      conv_lhs => rw [← ENNReal.ofReal_toReal hfin]
+      rw [← ENNReal.ofReal_mul ht_inv_nn]
+    rw [h_eq]
+    exact ENNReal.ofReal_lt_top
+  -- Step 3: Tightness. For each η > 0, find R > 0 such that for all n,
+  -- ν n (closedBall 0 R)ᶜ ≤ η. We use continuity of ψ at 0.
+  -- For R ≥ ε, (closedBall 0 R)ᶜ ⊆ largeSet R, and ν n is supported on largeSet ε.
+  -- Hence ν n ((closedBall 0 R)ᶜ) ≤ S.scaledMeasure t_seq n (largeSet R) ≤ 4 * M(R)
+  -- where M(R) = sup_{ξ ∈ [0, 2/R]} ‖S.exponent ξ‖, which → 0 as R → ∞.
+  -- For each m : ℕ, we'll find R_m ≥ ε such that the bound is at most 1/(m+1).
+  -- Define M : ℝ≥0 := C + 1 (positive upper bound on mass).
+  set Mass : ℝ≥0 := C + 1 with hMass_def
+  have hMass_pos : (0 : ℝ) < Mass := by
+    rw [hMass_def]; push_cast
+    have : (0 : ℝ) ≤ C := NNReal.coe_nonneg C
+    linarith
+  have hν_mass_le_Mass : ∀ n, ν n Set.univ ≤ ENNReal.ofReal Mass := fun n => by
+    have h1 : (ν n Set.univ).toReal ≤ C := hν_mass_real n
+    have hne_top : ν n Set.univ ≠ ⊤ := (hν_finite n).measure_univ_lt_top.ne
+    rw [show ν n Set.univ = ENNReal.ofReal (ν n Set.univ).toReal from
+      (ENNReal.ofReal_toReal hne_top).symm]
+    apply ENNReal.ofReal_le_ofReal
+    have : (C : ℝ) ≤ Mass := by simp [hMass_def]
+    linarith
+  -- Define the auxiliary probability measures by topping up with a Dirac at 0.
+  -- p_n := (1/Mass) • ν_n + ((Mass - mass(ν_n))/Mass) • δ_0
+  -- This has total mass = 1.
+  set p_meas : ℕ → Measure ℝ := fun n =>
+    (ENNReal.ofReal Mass⁻¹) • ν n +
+      (ENNReal.ofReal Mass⁻¹ * (ENNReal.ofReal Mass - ν n Set.univ)) • Measure.dirac 0 with hp_meas_def
+  -- Show p_meas n is a probability measure.
+  have hp_prob : ∀ n, IsProbabilityMeasure (p_meas n) := by
+    intro n
+    refine ⟨?_⟩
+    have hM_inv_nn : (0 : ℝ) ≤ Mass⁻¹ := le_of_lt (inv_pos.mpr hMass_pos)
+    have hν_uniν_ne : ν n Set.univ ≠ ⊤ := (hν_finite n).measure_univ_lt_top.ne
+    -- Compute p_meas n Set.univ directly
+    have h_sum_eq : ν n Set.univ + (ENNReal.ofReal Mass - ν n Set.univ) =
+        ENNReal.ofReal Mass :=
+      add_tsub_cancel_of_le (hν_mass_le_Mass n)
+    calc p_meas n Set.univ
+        = (ENNReal.ofReal Mass⁻¹) * ν n Set.univ +
+            (ENNReal.ofReal Mass⁻¹ * (ENNReal.ofReal Mass - ν n Set.univ)) *
+              Measure.dirac (0 : ℝ) Set.univ := by
+          simp only [hp_meas_def, Measure.add_apply, Measure.smul_apply, smul_eq_mul]
+      _ = (ENNReal.ofReal Mass⁻¹) * ν n Set.univ +
+            (ENNReal.ofReal Mass⁻¹ * (ENNReal.ofReal Mass - ν n Set.univ)) * 1 := by
+          rw [show Measure.dirac (0 : ℝ) Set.univ = 1 from by
+            rw [Measure.dirac_apply' _ MeasurableSet.univ]
+            simp [Set.indicator_univ]]
+      _ = ENNReal.ofReal Mass⁻¹ *
+            (ν n Set.univ + (ENNReal.ofReal Mass - ν n Set.univ)) := by
+          rw [mul_one]; ring
+      _ = ENNReal.ofReal Mass⁻¹ * ENNReal.ofReal Mass := by rw [h_sum_eq]
+      _ = ENNReal.ofReal ((Mass : ℝ)⁻¹ * (Mass : ℝ)) := (ENNReal.ofReal_mul hM_inv_nn).symm
+      _ = ENNReal.ofReal 1 := by rw [inv_mul_cancel₀ hMass_pos.ne']
+      _ = 1 := ENNReal.ofReal_one
+  -- Now p_n form a sequence in ProbabilityMeasure ℝ.
+  set P : ℕ → ProbabilityMeasure ℝ := fun n => ⟨p_meas n, hp_prob n⟩ with hP_def
+  -- Step 4: Show tightness of the family {P n}.
+  -- For η > 0, find compact K such that P n Kᶜ ≤ η for all n.
+  have h_tight : IsTightMeasureSet {((μ : ProbabilityMeasure ℝ) : Measure ℝ) | μ ∈ Set.range P} := by
+    rw [isTightMeasureSet_iff_exists_isCompact_measure_compl_le]
+    intro η hη
+    -- Handle η = ⊤ trivially.
+    by_cases hη_top : η = ⊤
+    · exact ⟨∅, isCompact_empty, fun _ _ => hη_top ▸ le_top⟩
+    -- Convert η to a positive real
+    set δ := η.toReal with hδ_def
+    have hδ_pos : 0 < δ := ENNReal.toReal_pos hη.ne' hη_top
+    have hδ_le : ENNReal.ofReal δ ≤ η := by
+      rw [hδ_def, ENNReal.ofReal_toReal hη_top]
+    -- Choose ξ_bound > 0 with ‖S.exponent ξ‖ < δ/8 for |ξ| < ξ_bound.
+    have hξ_exist : ∃ r : ℝ, 0 < r ∧ ∀ ξ, |ξ| < r → ‖S.exponent ξ‖ < δ/8 := by
+      have htend : Tendsto (fun ξ : ℝ => ‖S.exponent ξ‖) (𝓝 0) (𝓝 0) := by
+        have h1 : Tendsto S.exponent (𝓝 0) (𝓝 0) := by
+          have := S.exponent_continuous.tendsto 0
+          rw [S.exponent_zero] at this
+          exact this
+        have h2 : Tendsto (fun z : ℂ => ‖z‖) (𝓝 0) (𝓝 0) := by
+          have := (continuous_norm (E := ℂ)).tendsto 0
+          simpa using this
+        exact h2.comp h1
+      have hnhds : ∀ᶠ ξ in 𝓝 (0 : ℝ), ‖S.exponent ξ‖ < δ/8 :=
+        htend.eventually (Iio_mem_nhds (by linarith))
+      rw [Metric.eventually_nhds_iff] at hnhds
+      obtain ⟨r, hr_pos, hr⟩ := hnhds
+      exact ⟨r, hr_pos, fun ξ hξ => hr (by simpa [Real.dist_eq, sub_zero] using hξ)⟩
+    obtain ⟨ξ_bound, hξ_bound_pos, hξ_bound⟩ := hξ_exist
+    -- Choose R > 0 with 2/R < ξ_bound, i.e., R > 2/ξ_bound. Also R ≥ ε.
+    set R := max ε (2 / ξ_bound + 1) with hR_def
+    have hR_pos : 0 < R := by
+      rw [hR_def]; exact lt_of_lt_of_le hε (le_max_left _ _)
+    have hR_ε : ε ≤ R := le_max_left _ _
+    have hR_inv : 2 / R < ξ_bound := by
+      have h_denom_pos : (0 : ℝ) < 2 / ξ_bound + 1 := by positivity
+      have h1 : 2 / R ≤ 2 / (2 / ξ_bound + 1) := by
+        apply div_le_div_of_nonneg_left (by norm_num) h_denom_pos (le_max_right _ _)
+      have h2 : 2 / (2 / ξ_bound + 1) < ξ_bound := by
+        rw [div_lt_iff₀ h_denom_pos]
+        -- Goal: 2 < (2/ξ_bound + 1) * ξ_bound
+        have h3 : (2 / ξ_bound + 1) * ξ_bound = 2 + ξ_bound := by
+          field_simp
+        linarith [h3]
+      linarith
+    -- The bound on ‖ψ‖ over [0, 2/R].
+    have hM_bound : ∀ ξ ∈ Set.Icc (0:ℝ) (2/R), ‖S.exponent ξ‖ ≤ δ/8 := by
+      intro ξ hξ
+      have h1 : |ξ| < ξ_bound := by
+        rw [abs_of_nonneg hξ.1]
+        exact lt_of_le_of_lt hξ.2 hR_inv
+      exact le_of_lt (hξ_bound ξ h1)
+    -- Apply the tightness bound: for all t, t⁻¹ * μ_t(largeSet R) ≤ 4 * (δ/8) = δ/2.
+    have hbound : ∀ t : {t : ℝ // 0 < t},
+        t.val⁻¹ * ((S.measure t : Measure ℝ) (largeSet R)).toReal ≤ δ/2 := by
+      intro t
+      have h_aux := S.scaled_mass_bound_real_with_max R hR_pos (δ/8)
+        (by linarith) hM_bound t
+      linarith
+    -- Choose K = Set.Icc (-R) R, which is compact and (Kᶜ ∩ largeSet ε) ⊆ largeSet R.
+    refine ⟨Set.Icc (-R) R, isCompact_Icc, ?_⟩
+    intro μ' hμ'
+    obtain ⟨ν', hν'_range, hν'_eq⟩ := hμ'
+    obtain ⟨n, hPn⟩ := hν'_range
+    rw [← hν'_eq, ← hPn]
+    -- Now goal: (((P n) : ProbabilityMeasure ℝ) : Measure ℝ) (Set.Icc (-R) R)ᶜ ≤ η
+    have hP_unfold : ((P n : ProbabilityMeasure ℝ) : Measure ℝ) = p_meas n := rfl
+    rw [hP_unfold]
+    -- p_meas n (Kᶜ) = (1/Mass) * ν_n (Kᶜ) + (1/Mass)*(Mass - ν_n(univ)) * δ_0 (Kᶜ).
+    -- δ_0 (Kᶜ) = 0 since 0 ∈ K.
+    have h0_in_K : (0 : ℝ) ∈ Set.Icc (-R) R := ⟨by linarith, by linarith⟩
+    have hdirac0 : Measure.dirac 0 (Set.Icc (-R) R)ᶜ = 0 := by
+      rw [Measure.dirac_apply' _ isClosed_Icc.measurableSet.compl, Set.indicator_apply]
+      simp [h0_in_K]
+    -- The mass on Kᶜ:
+    have hKc_measurable : MeasurableSet (Set.Icc (-R) R)ᶜ :=
+      isClosed_Icc.measurableSet.compl
+    have hKc_sub : (Set.Icc (-R) R)ᶜ ⊆ largeSet R := by
+      intro x hx
+      simp only [Set.mem_compl_iff, Set.mem_Icc, not_and_or, not_le] at hx
+      simp only [mem_largeSet]
+      rcases hx with hx | hx
+      · -- x < -R, so |x| = -x ≥ R
+        have h_neg : x < 0 := lt_of_lt_of_le hx (neg_nonpos_of_nonneg hR_pos.le)
+        rw [abs_of_neg h_neg]; linarith
+      · -- R < x, so |x| = x ≥ R
+        have h_pos : 0 < x := lt_of_le_of_lt hR_pos.le hx
+        rw [abs_of_pos h_pos]; linarith
+    -- Estimate ν_n on Kᶜ.
+    -- ν_n is supported on largeSet ε; ν_n(Kᶜ) = ν_n(Kᶜ ∩ largeSet ε).
+    -- For R ≥ ε, Kᶜ ⊆ largeSet R ⊆ largeSet ε.
+    -- So ν_n(Kᶜ) ≤ ν_n(largeSet R) ≤ S.scaledMeasure t_seq n (largeSet R)
+    have hν_n_Kc : ν n (Set.Icc (-R) R)ᶜ ≤ S.scaledMeasure (t_seq n) (largeSet R) := by
+      simp only [hν_def, scaledRestrictedMeasure,
+        Measure.restrict_apply hKc_measurable]
+      apply measure_mono
+      intro x ⟨hxKc, _⟩
+      exact hKc_sub hxKc
+    have hsm_R : S.scaledMeasure (t_seq n) (largeSet R) ≤ ENNReal.ofReal (δ/2) := by
+      rw [S.scaledMeasure_apply]
+      have h1 := hbound (t_seq n)
+      have hfin : (S.measure (t_seq n) : Measure ℝ) (largeSet R) ≠ ⊤ := measure_ne_top _ _
+      have ht_inv_nn : 0 ≤ (t_seq n).val⁻¹ := le_of_lt (inv_pos.mpr (t_seq n).prop)
+      calc ENNReal.ofReal (t_seq n).val⁻¹ * (S.measure (t_seq n) : Measure ℝ) (largeSet R)
+          = ENNReal.ofReal ((t_seq n).val⁻¹ *
+            ((S.measure (t_seq n) : Measure ℝ) (largeSet R)).toReal) := by
+            conv_lhs => rw [← ENNReal.ofReal_toReal hfin]
+            rw [← ENNReal.ofReal_mul ht_inv_nn]
+        _ ≤ ENNReal.ofReal (δ/2) := ENNReal.ofReal_le_ofReal h1
+    -- Now compute p_meas n (Kᶜ).
+    have hp_Kc : p_meas n (Set.Icc (-R) R)ᶜ ≤ ENNReal.ofReal Mass⁻¹ * ENNReal.ofReal (δ/2) := by
+      simp only [hp_meas_def, Measure.add_apply, Measure.smul_apply, smul_eq_mul, hdirac0,
+        mul_zero, add_zero]
+      exact mul_le_mul_left' (le_trans hν_n_Kc hsm_R) (ENNReal.ofReal Mass⁻¹)
+    -- Bound (1/Mass) * (δ/2) ≤ δ.
+    have hM_pos_ge_one : (1 : ℝ) ≤ Mass := by
+      rw [hMass_def]; push_cast
+      have : (0 : ℝ) ≤ C := NNReal.coe_nonneg C
+      linarith
+    have hM_inv_le_one : Mass⁻¹ ≤ 1 := by
+      rw [inv_le_one_iff₀]; right; exact hM_pos_ge_one
+    have hM_inv_nn : (0 : ℝ) ≤ Mass⁻¹ := le_of_lt (inv_pos.mpr hMass_pos)
+    have hδ_pos' : 0 < δ/2 := by linarith
+    have hfinal_real : Mass⁻¹ * (δ/2) ≤ δ := by
+      calc Mass⁻¹ * (δ/2) ≤ 1 * (δ/2) := by
+            exact mul_le_mul_of_nonneg_right hM_inv_le_one (by linarith)
+        _ = δ/2 := one_mul _
+        _ ≤ δ := by linarith
+    -- Convert to ENNReal.
+    have hfinal_ennreal : ENNReal.ofReal Mass⁻¹ * ENNReal.ofReal (δ/2) ≤ ENNReal.ofReal δ := by
+      have heq : ENNReal.ofReal Mass⁻¹ * ENNReal.ofReal (δ/2) =
+          ENNReal.ofReal (Mass⁻¹ * (δ/2)) :=
+        (ENNReal.ofReal_mul hM_inv_nn).symm
+      rw [heq]
+      exact ENNReal.ofReal_le_ofReal hfinal_real
+    calc p_meas n (Set.Icc (-R) R)ᶜ
+        ≤ ENNReal.ofReal Mass⁻¹ * ENNReal.ofReal (δ/2) := hp_Kc
+      _ ≤ ENNReal.ofReal δ := hfinal_ennreal
+      _ ≤ η := hδ_le
+  -- Step 5: Apply Prokhorov to get a convergent subsequence.
+  have h_compact : IsCompact (closure (Set.range P)) :=
+    isCompact_closure_of_isTightMeasureSet h_tight
+  have h_in_range : ∀ n, P n ∈ closure (Set.range P) :=
+    fun n => subset_closure (Set.mem_range_self n)
+  obtain ⟨P_inf, _, φ, hφ_mono, hP_tendsto⟩ := h_compact.tendsto_subseq h_in_range
+  -- Define the candidate measure
+  let ν_inf : Measure ℝ := (ENNReal.ofReal Mass) • ((P_inf : Measure ℝ).restrict (largeSet ε))
+  -- Verify ν_inf is a finite measure.
+  have hν_inf_fin : IsFiniteMeasure ν_inf := by
+    constructor
+    simp only [ν_inf, Measure.smul_apply, Measure.restrict_apply MeasurableSet.univ,
+      Set.univ_inter, smul_eq_mul]
+    calc ENNReal.ofReal Mass * (P_inf : Measure ℝ) (largeSet ε)
+        ≤ ENNReal.ofReal Mass * 1 := by
+          gcongr
+          exact prob_le_one
+      _ = ENNReal.ofReal Mass := by rw [mul_one]
+      _ < ⊤ := ENNReal.ofReal_lt_top
+  -- Verify ν_inf {0} = 0 (since 0 ∉ largeSet ε).
+  have h0_not_in_large : (0 : ℝ) ∉ largeSet ε := by
+    simp [mem_largeSet, abs_zero]; exact hε
+  have hν_inf_zero_singleton : ν_inf {0} = 0 := by
+    simp only [ν_inf, Measure.smul_apply, smul_eq_mul]
+    rw [Measure.restrict_apply (measurableSet_singleton 0)]
+    have : {(0 : ℝ)} ∩ largeSet ε = ∅ := by
+      ext x; simp
+      intro hx
+      simp [hx, mem_largeSet, abs_zero]; exact hε
+    rw [this, measure_empty, mul_zero]
+  -- Verify ν_inf (largeSet ε)ᶜ = 0.
+  have hν_inf_compl : ν_inf (largeSet ε)ᶜ = 0 := by
+    simp only [ν_inf, Measure.smul_apply, smul_eq_mul]
+    rw [Measure.restrict_apply (measurableSet_largeSet ε).compl]
+    rw [Set.inter_comm, Set.inter_compl_self, measure_empty, mul_zero]
+  -- Step 6: Show weak convergence.
+  -- We use the subsequence ψ := t_seq ∘ φ; need ψ → 0.
+  refine ⟨ν_inf, t_seq ∘ φ, ?_, hν_inf_fin, hν_inf_zero_singleton, hν_inf_compl, ?_⟩
+  · exact ht_seq_tendsto.comp hφ_mono.tendsto_atTop
+  -- Convergence of integrals.
+  intro f hf_zero
+  -- Convert tendsto in ProbabilityMeasure to convergence of BCF integrals.
+  have hP_int := (ProbabilityMeasure.tendsto_iff_forall_integral_tendsto.mp hP_tendsto) f
+  simp only [Function.comp_apply, P, ProbabilityMeasure.coe_mk] at hP_int
+  -- ∫ f d(P_inf : Measure ℝ) = (1/Mass) * ∫ f dν_n + (1/Mass)(Mass-mass(ν_n)) * f(0)
+  -- = (1/Mass) * ∫ f dν_n  (since f(0) = 0 when ε > 0)
+  -- So ∫ f dν_n = Mass * ∫ f dP_n → Mass * ∫ f dP_inf
+  -- And ∫ f dν_inf = Mass * ∫_largeSet ε f dP_inf = Mass * ∫ f dP_inf (since f vanishes off largeSet ε)
+  have hf_continuous : Continuous f := f.continuous
+  have hf_meas : Measurable f := hf_continuous.measurable
+  have hf_strongly_meas : StronglyMeasurable f := hf_continuous.stronglyMeasurable
+  have hf_int : ∀ μ : Measure ℝ, [IsFiniteMeasure μ] → Integrable f μ := fun μ _ => by
+    exact f.integrable μ
+  -- Step A: f vanishes on (largeSet ε)ᶜ (since f vanishes on |x| < ε = (largeSet ε)ᶜ).
+  have hf_vanish_compl : ∀ x, x ∉ largeSet ε → f x = 0 := by
+    intro x hx
+    have : |x| < ε := by
+      simp only [mem_largeSet, not_le] at hx
+      exact hx
+    exact hf_zero x this
+  have hf0 : f 0 = 0 := hf_zero 0 (by simp [abs_zero, hε])
+  -- We'll use Mass.toReal as a real number to avoid type-mismatch issues with `Mass : ℝ≥0`.
+  set MR : ℝ := (Mass : ℝ) with hMR_def
+  have hMR_pos : 0 < MR := hMass_pos
+  -- Step B: ∫ f dν_inf = MR * ∫ f dP_inf.
+  have h_int_ν_inf : ∫ x, f x ∂ν_inf = MR * ∫ x, f x ∂(P_inf : Measure ℝ) := by
+    show ∫ x, f x ∂((ENNReal.ofReal Mass) •
+        ((P_inf : Measure ℝ).restrict (largeSet ε))) = MR * _
+    rw [integral_smul_measure]
+    rw [ENNReal.toReal_ofReal hMass_pos.le]
+    -- Reduce restrict-integral using setIntegral
+    show MR • ∫ x in largeSet ε, f x ∂(P_inf : Measure ℝ) = _
+    rw [setIntegral_eq_integral_of_forall_compl_eq_zero hf_vanish_compl, smul_eq_mul]
+  -- Step C: ∫ f dP_n = MR⁻¹ * ∫ f dν_n  (since f(0) = 0).
+  have h_int_P_eq : ∀ n, ∫ x, f x ∂(p_meas n) = MR⁻¹ * ∫ x, f x ∂(ν n) := by
+    intro n
+    haveI : IsFiniteMeasure (ν n) := hν_finite n
+    have h_integrable_ν : Integrable f (ν n) := f.integrable (ν n)
+    have h_integrable_dirac : Integrable f (Measure.dirac (0 : ℝ)) :=
+      integrable_dirac (by
+        rw [hf0]; simp)
+    -- Integrability for the two summands
+    have h_int1 : Integrable f (ENNReal.ofReal Mass⁻¹ • ν n) :=
+      Integrable.smul_measure h_integrable_ν ENNReal.ofReal_ne_top
+    have hcoeff_finite : ENNReal.ofReal Mass⁻¹ * (ENNReal.ofReal Mass - ν n Set.univ) ≠ ⊤ := by
+      apply ENNReal.mul_ne_top ENNReal.ofReal_ne_top
+      exact ne_top_of_le_ne_top ENNReal.ofReal_ne_top tsub_le_self
+    have h_int2 : Integrable f ((ENNReal.ofReal Mass⁻¹ *
+        (ENNReal.ofReal Mass - ν n Set.univ)) • Measure.dirac (0 : ℝ)) :=
+      Integrable.smul_measure h_integrable_dirac hcoeff_finite
+    show ∫ x, f x ∂(((ENNReal.ofReal Mass⁻¹) • ν n) +
+        ((ENNReal.ofReal Mass⁻¹ * (ENNReal.ofReal Mass - ν n Set.univ)) •
+          Measure.dirac (0 : ℝ))) = MR⁻¹ * _
+    rw [integral_add_measure h_int1 h_int2]
+    rw [integral_smul_measure, integral_smul_measure, integral_dirac _ _]
+    simp only [smul_eq_mul, hf0, mul_zero, add_zero]
+    -- Goal: (ENNReal.ofReal (↑Mass)⁻¹).toReal * ∫ f dν n = MR⁻¹ * ∫ f dν n
+    have hMR_inv_nn : (0 : ℝ) ≤ (MR : ℝ)⁻¹ := le_of_lt (inv_pos.mpr hMR_pos)
+    rw [show (ENNReal.ofReal (Mass : ℝ)⁻¹).toReal = MR⁻¹ from
+      ENNReal.toReal_ofReal hMR_inv_nn]
+  -- Step D: From hP_int: ∫ f d p_meas (φ k) → ∫ f d P_inf.
+  -- So MR⁻¹ * ∫ f dν (φ k) → ∫ f d P_inf, hence ∫ f dν (φ k) → MR * ∫ f d P_inf.
+  have h_int_ν_subseq : Tendsto (fun k => ∫ x, f x ∂(ν (φ k))) atTop
+      (𝓝 (MR * ∫ x, f x ∂(P_inf : Measure ℝ))) := by
+    have hP_seq : Tendsto (fun k => ∫ x, f x ∂(p_meas (φ k))) atTop
+        (𝓝 (∫ x, f x ∂(P_inf : Measure ℝ))) := hP_int
+    have h_eq : ∀ k, ∫ x, f x ∂(p_meas (φ k)) = MR⁻¹ * ∫ x, f x ∂(ν (φ k)) :=
+      fun k => h_int_P_eq (φ k)
+    have h_eq' : (fun k => ∫ x, f x ∂(p_meas (φ k))) =
+        (fun k => MR⁻¹ * ∫ x, f x ∂(ν (φ k))) := funext h_eq
+    rw [h_eq'] at hP_seq
+    have h_mul : Tendsto (fun k => MR * (MR⁻¹ * ∫ x, f x ∂(ν (φ k)))) atTop
+        (𝓝 (MR * ∫ x, f x ∂(P_inf : Measure ℝ))) :=
+      hP_seq.const_mul MR
+    refine h_mul.congr (fun k => ?_)
+    rw [← mul_assoc, mul_inv_cancel₀ hMR_pos.ne', one_mul]
+  -- Final: relate scaledRestrictedMeasure (t_seq (φ k)) ε = ν (φ k).
+  rw [Function.comp_def]
+  show Tendsto (fun k => ∫ x, f x ∂(ν (φ k))) atTop (𝓝 _)
+  rw [h_int_ν_inf]
+  exact h_int_ν_subseq
 
 /-! ### 3.3 — Consistency of extracted measures -/
 
