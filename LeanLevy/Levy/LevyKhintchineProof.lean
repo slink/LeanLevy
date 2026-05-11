@@ -1217,6 +1217,27 @@ from the convolution semigroup `{μ_t}_{t>0}`.
 4. The Lévy measure is constructed as the monotone limit `ν = sup_ε ν_ε`.
 -/
 
+private lemma abs_sub_sin_le_sq_div_two {x : ℝ} (hx : |x| ≤ 1) :
+    |x - Real.sin x| ≤ x ^ 2 / 2 := by
+  by_cases hx0 : 0 ≤ x
+  · -- x ≥ 0: x - sin x ≥ 0
+    have hx1 : x ≤ 1 := (abs_of_nonneg hx0 ▸ hx)
+    rcases eq_or_lt_of_le hx0 with rfl | hx_pos
+    · simp
+    · rw [abs_of_nonneg (sub_nonneg.mpr (Real.sin_le hx0))]
+      have h1 : x - Real.sin x < x ^ 3 / 4 := by linarith [Real.sin_gt_sub_cube hx_pos hx1]
+      nlinarith [sq_nonneg x]
+  · -- x < 0: use sin(-x) = -sin x and (-x) ∈ (0, 1]
+    push_neg at hx0
+    have hmx_pos : 0 < -x := neg_pos.mpr hx0
+    have hmx1 : -x ≤ 1 := by linarith [show |x| = -x from abs_of_neg hx0]
+    rw [show x - Real.sin x = -((-x) - Real.sin (-x)) from by simp [Real.sin_neg]; ring,
+        abs_neg,
+        abs_of_nonneg (sub_nonneg.mpr (Real.sin_le (le_of_lt hmx_pos)))]
+    have h1 : -x - Real.sin (-x) < (-x) ^ 3 / 4 := by
+      linarith [Real.sin_gt_sub_cube hmx_pos hmx1]
+    nlinarith [sq_nonneg x]
+
 namespace ConvolutionSemigroup
 
 variable (S : ConvolutionSemigroup)
@@ -2608,16 +2629,182 @@ contributions from the total limit `ψ(ξ)`.
 `ξ · I · ∫ x dμ_t`, so after scaling by `1/t` and taking the limit, contributes `b · ξ · I`
 to the decomposition. -/
 
-/-- The scaled first moment on the small set converges along `t_n → 0`, defining the drift `b`.
-This follows from: the total limit `ψ(ξ)` is known (Phase 1), the large-jump contribution
-converges (Phase 3/4), and the quadratic contribution converges (Phase 5), so the remaining
-linear term must also converge by difference. -/
+/-- The scaled first moment on the small set is eventually bounded along `t_n → 0`, so
+Bolzano-Weierstrass gives a convergent subsequence.  Boundedness follows from the sin
+decomposition: `t⁻¹∫_{small} x = Im((charFun-1)/t) − t⁻¹∫_{large} sin + t⁻¹∫_{small}(x-sin)`,
+where the three terms are respectively eventually bounded (via charFun limit), globally bounded
+(via scaled_mass_bound_real), and eventually bounded (via the x²/2 bound + second-moment). -/
 lemma drift_limit
     {t_seq : ℕ → {t : ℝ // 0 < t}} (ht : Tendsto (fun n => (t_seq n).val) atTop (𝓝 0)) :
-    ∃ b : ℝ, Tendsto (fun n =>
-      (t_seq n).val⁻¹ * ∫ x in smallSet, x ∂(S.measure (t_seq n) : Measure ℝ))
+    ∃ b : ℝ, ∃ φ : ℕ → ℕ, StrictMono φ ∧
+    Tendsto (fun n =>
+      (t_seq (φ n)).val⁻¹ * ∫ x in smallSet, x ∂(S.measure (t_seq (φ n)) : Measure ℝ))
     atTop (𝓝 b) := by
-  sorry
+  -- Pull `t_seq` back through the comap filter used by `charFun_scaled_limit`.
+  have htseq_filter : Tendsto t_seq atTop (Filter.comap Subtype.val (𝓝[>] (0 : ℝ))) := by
+    rw [Filter.tendsto_comap_iff]
+    exact tendsto_nhdsWithin_iff.mpr ⟨ht, Filter.Eventually.of_forall (fun n => (t_seq n).prop)⟩
+  -- Convergence of the charFun quotient Im part at ξ = 1.
+  have hcf_tend : Tendsto
+      (fun n => ((S.measure (t_seq n)).characteristicFun 1 - 1) / ↑(t_seq n).val)
+      atTop (𝓝 (S.exponent 1)) :=
+    (S.charFun_scaled_limit 1).comp htseq_filter
+  -- The Im of the charFun quotient converges to Im(S.exponent 1), hence eventually bounded.
+  have hIm_tend : Tendsto
+      (fun n => (((S.measure (t_seq n)).characteristicFun 1 - 1) / ↑(t_seq n).val).im)
+      atTop (𝓝 (S.exponent 1).im) :=
+    (Complex.continuous_im.tendsto _).comp hcf_tend
+  -- Eventually |Im(charFun/t)| ≤ |Im(ψ(1))| + 1.
+  have hIm_bdd : ∀ᶠ n in atTop, |(((S.measure (t_seq n)).characteristicFun 1 - 1) /
+      ↑(t_seq n).val).im| ≤ |(S.exponent 1).im| + 1 := by
+    have h := hIm_tend.eventually (Metric.ball_mem_nhds (S.exponent 1).im one_pos)
+    filter_upwards [h] with n hn
+    simp only [Metric.mem_ball, Real.dist_eq] at hn
+    linarith [abs_sub_abs_le_abs_sub
+      (((S.measure (t_seq n)).characteristicFun 1 - 1) / ↑(t_seq n).val).im
+      (S.exponent 1).im]
+  -- Im((charFun μ 1 - 1)/t) = t⁻¹ * ∫ sin x dμ  (for probability measure μ).
+  have hIm_eq : ∀ n,
+      (((S.measure (t_seq n)).characteristicFun 1 - 1) / ↑(t_seq n).val).im =
+      (t_seq n).val⁻¹ * ∫ x, Real.sin x ∂(S.measure (t_seq n) : Measure ℝ) := by
+    intro n
+    set t := (t_seq n).val
+    set μ : Measure ℝ := (S.measure (t_seq n) : Measure ℝ)
+    haveI : IsProbabilityMeasure μ := (S.measure (t_seq n)).prop
+    have hcf : charFun μ (1 : ℝ) = ∫ x : ℝ, Complex.exp (↑x * I) ∂μ := by
+      rw [charFun_apply_real]; congr 1; ext x; push_cast; ring
+    have hint1 : Integrable (fun x : ℝ => Complex.exp (↑x * I)) μ := by
+      convert integrable_charFun_integrand (μ := μ) 1 using 2; push_cast; ring
+    have hnum : charFun μ (1 : ℝ) - 1 = ∫ x : ℝ, (Complex.exp (↑x * I) - 1) ∂μ := by
+      rw [hcf]
+      conv_lhs => rw [show (1 : ℂ) = ∫ _ : ℝ, (1 : ℂ) ∂μ by simp [integral_const]]
+      rw [← integral_sub hint1 (integrable_const 1)]
+    rw [ProbabilityMeasure.characteristicFun_def, hnum, Complex.div_ofReal_im,
+        show (∫ x : ℝ, (Complex.exp (↑x * I) - 1) ∂μ).im =
+            ∫ x : ℝ, (Complex.exp (↑x * I) - 1).im ∂μ from
+            ((RCLike.imCLM (K := ℂ)).integral_comp_comm
+              (hint1.sub (integrable_const 1))).symm]
+    simp only [Complex.sub_im, Complex.one_im, sub_zero, Complex.exp_ofReal_mul_I_im]
+    rw [div_eq_inv_mul]
+  -- Global bound on t⁻¹ * μ_t(largeSet 1) via scaled_mass_bound_real.
+  obtain ⟨C_large, hC_large⟩ := S.scaled_mass_bound_real 1 one_pos
+  -- Eventually bounded second moment: t⁻¹ ∫_small x² ≤ C₂.
+  obtain ⟨C₂, hC₂_pos, hC₂⟩ := S.scaled_second_moment_bounded_along_seq ht
+  -- The sequence a_n := t_n⁻¹ ∫_small x dμ_n is eventually in a compact interval.
+  set a : ℕ → ℝ := fun n =>
+    (t_seq n).val⁻¹ * ∫ x in smallSet, x ∂(S.measure (t_seq n) : Measure ℝ)
+  have ha_bdd : ∀ᶠ n in atTop, a n ∈ Set.Icc (-(|(S.exponent 1).im| + 1 + C_large + C₂))
+      (|(S.exponent 1).im| + 1 + C_large + C₂) := by
+    filter_upwards [hIm_bdd, hC₂] with n hIm hC₂n
+    simp only [Set.mem_Icc]
+    -- sin-decomposition: a_n = Im_n + small_(x-sin) - large_sin
+    -- where Im_n := Im((charFun-1)/t_n)
+    haveI hμ_prob : IsProbabilityMeasure (S.measure (t_seq n) : Measure ℝ) :=
+      (S.measure (t_seq n)).prop
+    have t_pos := (t_seq n).prop
+    -- Integrability lemmas
+    have hint_sin : Integrable (fun x => Real.sin x) (S.measure (t_seq n) : Measure ℝ) :=
+      Integrable.of_bound Real.continuous_sin.aestronglyMeasurable 1
+        (ae_of_all _ fun x => by simp [Real.abs_sin_le_abs, abs_le.mpr ⟨Real.neg_one_le_sin x,
+          Real.sin_le_one x⟩])
+    have hint_x_small : IntegrableOn (fun x => x) smallSet (S.measure (t_seq n) : Measure ℝ) :=
+      IntegrableOn.of_bound (measure_lt_top _ _)
+        continuous_id.aestronglyMeasurable.restrict 1
+        ((ae_restrict_mem measurableSet_smallSet).mono
+          (fun x hx => by simp only [Real.norm_eq_abs]; exact le_of_lt (mem_smallSet.mp hx)))
+    have hint_sin_small : IntegrableOn (fun x => Real.sin x) smallSet
+        (S.measure (t_seq n) : Measure ℝ) :=
+      hint_sin.integrableOn
+    have hint_sin_large : IntegrableOn (fun x => Real.sin x) (largeSet 1)
+        (S.measure (t_seq n) : Measure ℝ) :=
+      hint_sin.integrableOn
+    have hint_xsin_small : IntegrableOn (fun x => x - Real.sin x) smallSet
+        (S.measure (t_seq n) : Measure ℝ) :=
+      (hint_x_small.sub hint_sin_small)
+    -- ∫_small x = ∫_small (x - sin x) + ∫_small sin x
+    have hsplit_x : ∫ x in smallSet, x ∂(S.measure (t_seq n) : Measure ℝ) =
+        ∫ x in smallSet, (x - Real.sin x) ∂(S.measure (t_seq n) : Measure ℝ) +
+        ∫ x in smallSet, Real.sin x ∂(S.measure (t_seq n) : Measure ℝ) := by
+      rw [← integral_add hint_xsin_small hint_sin_small]
+      congr 1; ext x; ring
+    -- ∫_small sin x = ∫ sin x - ∫_large sin x (split by smallSet = largeSet 1 complement)
+    have hsplit_sin : ∫ x in smallSet, Real.sin x ∂(S.measure (t_seq n) : Measure ℝ) =
+        ∫ x, Real.sin x ∂(S.measure (t_seq n) : Measure ℝ) -
+        ∫ x in largeSet 1, Real.sin x ∂(S.measure (t_seq n) : Measure ℝ) := by
+      rw [smallSet_eq_compl_largeSet,
+          ← integral_add_compl (measurableSet_largeSet 1) hint_sin]
+      ring
+    -- a_n = t⁻¹∫_small(x-sin) + Im(charFun/t) - t⁻¹∫_large sin
+    have ha_eq : a n = (t_seq n).val⁻¹ *
+        ∫ x in smallSet, (x - Real.sin x) ∂(S.measure (t_seq n) : Measure ℝ) +
+        (((S.measure (t_seq n)).characteristicFun 1 - 1) / ↑(t_seq n).val).im -
+        (t_seq n).val⁻¹ *
+        ∫ x in largeSet 1, Real.sin x ∂(S.measure (t_seq n) : Measure ℝ) := by
+      simp only [a, hIm_eq n, hsplit_x, hsplit_sin]
+      ring
+    -- Bound |t⁻¹∫_large sin x|: each |sin x| ≤ 1, so ≤ t⁻¹ * μ(large 1) ≤ C_large
+    have hL : |(t_seq n).val⁻¹ *
+        ∫ x in largeSet 1, Real.sin x ∂(S.measure (t_seq n) : Measure ℝ)| ≤ C_large := by
+      have hbound : ‖∫ x in largeSet 1, Real.sin x ∂(S.measure (t_seq n) : Measure ℝ)‖ ≤
+          ((S.measure (t_seq n) : Measure ℝ) (largeSet 1)).toReal := by
+        have h := norm_setIntegral_le_of_norm_le_const
+            (measure_lt_top (S.measure (t_seq n) : Measure ℝ) (largeSet 1))
+            (fun x _ => show ‖Real.sin x‖ ≤ 1 by
+              simp only [Real.norm_eq_abs]
+              exact abs_le.mpr ⟨by linarith [Real.neg_one_le_sin x], Real.sin_le_one x⟩)
+        simpa [one_mul] using h
+      rw [abs_mul, abs_of_pos (inv_pos.mpr t_pos)]
+      calc (t_seq n).val⁻¹ * |∫ x in largeSet 1, Real.sin x ∂(S.measure (t_seq n) : Measure ℝ)|
+          ≤ (t_seq n).val⁻¹ * ((S.measure (t_seq n) : Measure ℝ) (largeSet 1)).toReal := by
+            apply mul_le_mul_of_nonneg_left _ (inv_nonneg.mpr (le_of_lt t_pos))
+            rwa [Real.norm_eq_abs] at hbound
+        _ ≤ C_large := hC_large (t_seq n)
+    -- Bound |t⁻¹∫_small (x - sin x)|: |x - sin x| ≤ x²/2 on smallSet
+    have hS : |(t_seq n).val⁻¹ *
+        ∫ x in smallSet, (x - Real.sin x) ∂(S.measure (t_seq n) : Measure ℝ)| ≤ C₂ := by
+      have habs_bound : ∀ x ∈ smallSet, |x - Real.sin x| ≤ x ^ 2 / 2 :=
+        fun x hx => abs_sub_sin_le_sq_div_two (le_of_lt (mem_smallSet.mp hx))
+      have hxsin_norm : ‖∫ x in smallSet, (x - Real.sin x) ∂(S.measure (t_seq n) : Measure ℝ)‖ ≤
+          (1/2) * ∫ x in smallSet, x ^ 2 ∂(S.measure (t_seq n) : Measure ℝ) := by
+        calc ‖∫ x in smallSet, (x - Real.sin x) ∂(S.measure (t_seq n) : Measure ℝ)‖
+            ≤ ∫ x in smallSet, ‖x - Real.sin x‖ ∂(S.measure (t_seq n) : Measure ℝ) :=
+              norm_integral_le_integral_norm _
+          _ ≤ ∫ x in smallSet, x ^ 2 / 2 ∂(S.measure (t_seq n) : Measure ℝ) := by
+              apply setIntegral_mono_on hint_xsin_small.norm
+              · refine IntegrableOn.of_bound (measure_lt_top _ _) ?_ 1 ?_
+                · exact ((continuous_pow 2).measurable.div_const 2
+                           |>.aemeasurable.aestronglyMeasurable).restrict
+                · exact (ae_restrict_mem measurableSet_smallSet).mono (fun x hx => by
+                    have hxlt : |x| < 1 := mem_smallSet.mp hx
+                    simp only [Real.norm_eq_abs]
+                    have h1 : 0 ≤ x ^ 2 / 2 := by positivity
+                    rw [abs_of_nonneg h1]
+                    have h2 : x ^ 2 < 1 := by
+                      have h3 : |x| ^ 2 < 1 := pow_lt_one₀ (abs_nonneg x) hxlt two_ne_zero
+                      rwa [sq_abs] at h3
+                    linarith)
+              · exact measurableSet_smallSet
+              · intro x hx
+                simp only [Real.norm_eq_abs]
+                exact habs_bound x hx
+          _ = (1/2) * ∫ x in smallSet, x ^ 2 ∂(S.measure (t_seq n) : Measure ℝ) := by
+              rw [← integral_const_mul]; congr 1; funext x; ring
+      rw [Real.norm_eq_abs, abs_mul, abs_of_pos (inv_pos.mpr t_pos)] at *
+      calc (t_seq n).val⁻¹ * ‖∫ x in smallSet, (x - Real.sin x) ∂(S.measure (t_seq n) : Measure ℝ)‖
+          ≤ (t_seq n).val⁻¹ * ((1/2) * ∫ x in smallSet, x ^ 2 ∂(S.measure (t_seq n) : Measure ℝ)) :=
+            mul_le_mul_of_nonneg_left hxsin_norm (inv_nonneg.mpr (le_of_lt t_pos))
+        _ = (1/2) * ((t_seq n).val⁻¹ * ∫ x in smallSet, x ^ 2 ∂(S.measure (t_seq n) : Measure ℝ)) :=
+            by ring
+        _ ≤ (1/2) * C₂ := by
+            apply mul_le_mul_of_nonneg_left hC₂n (by norm_num)
+        _ ≤ C₂ := by linarith [hC₂_pos]
+    constructor
+    · linarith [ha_eq, (abs_le.mp hS).1, (abs_le.mp hIm).1, (abs_le.mp hL).2]
+    · linarith [ha_eq, (abs_le.mp hS).2, (abs_le.mp hIm).2, (abs_le.mp hL).1]
+  -- Apply Bolzano-Weierstrass to `a`.
+  obtain ⟨b, -, φ, hφ_mono, hb⟩ :=
+    isCompact_Icc.tendsto_subseq' ha_bdd.frequently
+  exact ⟨b, φ, hφ_mono, hb⟩
 
 /-- The drift term contributes `b * ξ * I` to the decomposition.
 Factor out `ξ * I` from the integral of `x * ξ * I`. -/
@@ -2673,10 +2860,9 @@ theorem exists_levy_drift : ∃ b : ℝ, ∃ t_seq : ℕ → {t : ℝ // 0 < t},
     Tendsto (fun n =>
       (t_seq n).val⁻¹ * ∫ x in smallSet, x ∂(S.measure (t_seq n) : Measure ℝ))
       atTop (𝓝 b) := by
-  -- Use the t_seq from large-set extraction at ε = 1, then apply `drift_limit`.
   obtain ⟨_, t_seq, ht_seq, _, _, _, _⟩ := S.exists_measure_limit_large 1 one_pos
-  obtain ⟨b, hb⟩ := S.drift_limit ht_seq
-  exact ⟨b, t_seq, ht_seq, hb⟩
+  obtain ⟨b, φ, hφ_mono, hb⟩ := S.drift_limit ht_seq
+  exact ⟨b, t_seq ∘ φ, ht_seq.comp hφ_mono.tendsto_atTop, hb⟩
 
 /-- The Gaussian variance `σ²` of the Lévy-Khintchine triple exists.
 The witness will be chosen so that, together with the drift, it identifies the
