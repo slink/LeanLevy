@@ -3261,6 +3261,77 @@ theorem exists_gaussian_variance_finite
   rw [Real.coe_toNNReal σ hσ_mem.1]
   exact hσ
 
+/-- **Joint extraction of drift, Gaussian variance, and Lévy measure along a single
+subsequence.**
+
+Combines `exists_levyMeasure_finite`, `drift_limit`, and Bolzano-Weierstrass on the scaled
+second moment via three nested subsequence extractions. The outer subsequence comes from
+the Lévy-measure construction; the drift extracts a sub-subsequence; the variance extracts
+a sub-sub-subsequence. All three convergences hold along the final composite subsequence
+since `Tendsto` is preserved under further sub-extraction. -/
+theorem exists_drift_variance_jumpMeasure_along_seq
+    (h_finite_small_mass : ∃ C : ℝ≥0, ∀ t : {t : ℝ // 0 < t},
+        t.val⁻¹ * ((S.measure t : Measure ℝ) smallSet).toReal ≤ ↑C) :
+    ∃ (b : ℝ) (σ_sq : ℝ≥0) (ν : Measure ℝ) (_ : IsFiniteMeasure ν)
+      (t_seq : ℕ → {t : ℝ // 0 < t}),
+      ν {0} = 0 ∧
+      Tendsto (fun n => (t_seq n).val) atTop (𝓝 0) ∧
+      Tendsto (fun n =>
+        (t_seq n).val⁻¹ * ∫ x in smallSet, x ∂(S.measure (t_seq n) : Measure ℝ))
+          atTop (𝓝 b) ∧
+      Tendsto (fun n =>
+        (t_seq n).val⁻¹ * ∫ x in smallSet, x ^ 2 ∂(S.measure (t_seq n) : Measure ℝ))
+          atTop (𝓝 (σ_sq : ℝ)) ∧
+      (∀ (f : BoundedContinuousFunction ℝ ℝ), (∃ r > 0, ∀ x, |x| < r → f x = 0) →
+        Tendsto (fun n => (t_seq n).val⁻¹ * ∫ x, f x ∂(S.measure (t_seq n) : Measure ℝ))
+          atTop (𝓝 (∫ x, f x ∂ν))) := by
+  -- Step 1: Outer extraction — Lévy measure ν and its witnessing sequence t_seq_ν.
+  obtain ⟨ν, hν_fin, t_seq_ν, ht_seq_ν, hν_zero, h_jump_conv⟩ :=
+    S.exists_levyMeasure_finite h_finite_small_mass
+  -- Step 2: Drift sub-subsequence φ₁ along t_seq_ν.
+  obtain ⟨b, φ₁, hφ₁_mono, hb⟩ := S.drift_limit ht_seq_ν
+  -- The composed sequence t_seq_ν ∘ φ₁ still tends to 0.
+  have ht_seq₁ : Tendsto (fun n => (t_seq_ν (φ₁ n)).val) atTop (𝓝 0) :=
+    ht_seq_ν.comp hφ₁_mono.tendsto_atTop
+  -- Step 3: Variance sub-sub-subsequence φ₂ via Bolzano-Weierstrass on Icc 0 C.
+  obtain ⟨C, _hC_pos, hC⟩ := S.scaled_second_moment_bounded_along_seq ht_seq₁
+  set a : ℕ → ℝ := fun n =>
+    (t_seq_ν (φ₁ n)).val⁻¹ *
+      ∫ x in smallSet, x ^ 2 ∂(S.measure (t_seq_ν (φ₁ n)) : Measure ℝ) with ha_def
+  have ha_nonneg : ∀ n, 0 ≤ a n := fun n => by
+    have ht_pos : 0 < (t_seq_ν (φ₁ n)).val := (t_seq_ν (φ₁ n)).prop
+    refine mul_nonneg (inv_nonneg.mpr ht_pos.le) ?_
+    exact setIntegral_nonneg measurableSet_smallSet (fun x _ => sq_nonneg x)
+  have ha_bdd : ∀ᶠ n in atTop, a n ∈ Set.Icc (0 : ℝ) C := by
+    filter_upwards [hC] with n hCn
+    exact ⟨ha_nonneg n, hCn⟩
+  obtain ⟨σ, hσ_mem, φ₂, hφ₂_mono, hσ⟩ :=
+    isCompact_Icc.tendsto_subseq' ha_bdd.frequently
+  -- Step 4: Assemble the final subsequence t_seq_ν ∘ φ₁ ∘ φ₂.
+  set t_seq : ℕ → {t : ℝ // 0 < t} := fun n => t_seq_ν (φ₁ (φ₂ n)) with ht_seq_def
+  -- t_seq tends to 0.
+  have ht_seq : Tendsto (fun n => (t_seq n).val) atTop (𝓝 0) :=
+    ht_seq₁.comp hφ₂_mono.tendsto_atTop
+  -- Drift convergence along the composite subsequence.
+  have hb_final : Tendsto (fun n =>
+      (t_seq n).val⁻¹ * ∫ x in smallSet, x ∂(S.measure (t_seq n) : Measure ℝ))
+      atTop (𝓝 b) := hb.comp hφ₂_mono.tendsto_atTop
+  -- Variance convergence: σ ≥ 0 so it coerces from Real.toNNReal.
+  have hσ_final : Tendsto (fun n =>
+      (t_seq n).val⁻¹ * ∫ x in smallSet, x ^ 2 ∂(S.measure (t_seq n) : Measure ℝ))
+      atTop (𝓝 ((Real.toNNReal σ : ℝ≥0) : ℝ)) := by
+    rw [Real.coe_toNNReal σ hσ_mem.1]
+    exact hσ
+  -- Jump-measure convergence: subseq of jump-convergent is still jump-convergent.
+  have h_jump_final : ∀ (f : BoundedContinuousFunction ℝ ℝ),
+      (∃ r > 0, ∀ x, |x| < r → f x = 0) →
+      Tendsto (fun n => (t_seq n).val⁻¹ * ∫ x, f x ∂(S.measure (t_seq n) : Measure ℝ))
+        atTop (𝓝 (∫ x, f x ∂ν)) := by
+    intro f hf
+    have h := h_jump_conv f hf
+    exact h.comp ((hφ₁_mono.comp hφ₂_mono).tendsto_atTop)
+  exact ⟨b, Real.toNNReal σ, ν, hν_fin, t_seq, hν_zero, ht_seq, hb_final, hσ_final, h_jump_final⟩
+
 /-- **The Lévy-Khintchine formula for ψ.** Given the drift `b`, the Gaussian variance
 `σ²`, and using `S.levyMeasure` as the Lévy measure, the exponent `ψ` admits the
 canonical decomposition. The proof combines:
