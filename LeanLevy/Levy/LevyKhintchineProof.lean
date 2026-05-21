@@ -234,6 +234,43 @@ theorem IsInfinitelyDivisible.exists_continuous_log
     simp [Function.comp] at this
     exact this.symm⟩
 
+/-- Hermitian symmetry of the continuous logarithm: `ψ(-ξ) = conj(ψ(ξ))`.
+
+Both `ψ` and `ξ ↦ conj(ψ(-ξ))` are continuous lifts of `charFun μ` through `exp`,
+both equal to 0 at 0; by uniqueness of covering map lifts they coincide. -/
+theorem IsInfinitelyDivisible.hermitian_log
+    {μ : Measure ℝ} [IsProbabilityMeasure μ] (h : IsInfinitelyDivisible μ)
+    {ψ : ℝ → ℂ} (hψ_cont : Continuous ψ) (hψ_zero : ψ 0 = 0)
+    (hψ_exp : ∀ ξ, charFun μ ξ = exp (ψ ξ)) :
+    ∀ ξ, ψ (-ξ) = starRingEnd ℂ (ψ ξ) := by
+  have hcont : Continuous (charFun μ) := MeasureTheory.continuous_charFun
+  have hne : ∀ ξ, charFun μ ξ ≠ 0 := h.charFun_ne_zero
+  have hφ0 : charFun μ 0 = 1 := by simp [charFun_zero, Measure.real, measure_univ]
+  set f : C(ℝ, ℂ) := ⟨charFun μ, hcont⟩
+  have he : Complex.exp (0 : ℂ) = f (0 : ℝ) := by simp [f, hφ0]
+  have hs : ∀ ξ : ℝ, f ξ ∈ ({0}ᶜ : Set ℂ) := fun ξ => Set.mem_compl_singleton_iff.mpr (hne ξ)
+  obtain ⟨F, ⟨_hF0, _hFexp⟩, hF_unique⟩ :=
+    Complex.isCoveringMapOn_exp.existsUnique_continuousMap_lifts f he hs
+  set Ψ : C(ℝ, ℂ) := ⟨ψ, hψ_cont⟩
+  have hΨ_lift : Ψ 0 = 0 ∧ Complex.exp ∘ Ψ = f := by
+    refine ⟨hψ_zero, ?_⟩
+    ext ξ; simp [Ψ, f, hψ_exp ξ]
+  set G : C(ℝ, ℂ) := ⟨fun ξ => starRingEnd ℂ (ψ (-ξ)), by
+    exact continuous_star.comp (hψ_cont.comp continuous_neg)⟩
+  have hG_lift : G 0 = 0 ∧ Complex.exp ∘ G = f := by
+    refine ⟨by simp [G, hψ_zero], ?_⟩
+    ext ξ; simp only [G, ContinuousMap.coe_mk, Function.comp_apply, f]
+    rw [exp_conj, ← hψ_exp (-ξ), charFun_neg, starRingEnd_self_apply]
+  have hΨ_eq : Ψ = F := hF_unique Ψ hΨ_lift
+  have hG_eq : G = F := hF_unique G hG_lift
+  have hΨG : ∀ ξ, ψ ξ = starRingEnd ℂ (ψ (-ξ)) := fun ξ => by
+    have := congr_arg (· ξ) (hΨ_eq.trans hG_eq.symm)
+    exact this
+  intro ξ
+  have := hΨG (-ξ)
+  simp only [neg_neg] at this
+  exact this
+
 /-! ## Sub-lemma 3: Conditional negative definiteness -/
 
 /-- A function `ψ : ℝ → ℂ` is **conditionally negative definite** if for all finite
@@ -3224,6 +3261,44 @@ lemma `psi_eq_levyKhintchine_formula` will discharge the formula. -/
 theorem exists_gaussian_variance : ∃ _σ_sq : ℝ≥0, True :=
   ⟨0, trivial⟩
 
+/-- The scaled second moment `t⁻¹ · ∫_{smallSet} x² dμ_t` converges along a subsequence
+to a finite nonneg limit `σ²`. Mirrors `exists_levy_drift`: a uniformly bounded
+sequence of nonneg reals admits a convergent subsequence by Bolzano-Weierstrass.
+The hypothesis `_h_finite_small_mass` is not used in the proof (boundedness is
+supplied by `scaled_second_moment_bounded_along_seq`) and is retained only to
+match the planned compound-Poisson + Gaussian assembly signature. -/
+theorem exists_gaussian_variance_finite
+    (_h_finite_small_mass : ∃ C : ℝ≥0, ∀ t : {t : ℝ // 0 < t},
+        t.val⁻¹ * (S.measure t : Measure ℝ).real smallSet ≤ C) :
+    ∃ (σ_sq : ℝ≥0) (t_seq : ℕ → {t : ℝ // 0 < t}),
+      Tendsto (fun n => (t_seq n).val) atTop (𝓝 0) ∧
+      Tendsto (fun n =>
+        (t_seq n).val⁻¹ * ∫ x in smallSet, x ^ 2 ∂(S.measure (t_seq n) : Measure ℝ))
+          atTop (𝓝 (σ_sq : ℝ)) := by
+  -- Extract a positive sequence tending to 0 from the large-jump construction.
+  obtain ⟨_, t_seq, ht_seq, _, _, _, _⟩ := S.exists_measure_limit_large 1 one_pos
+  -- The scaled second moment along `t_seq` is eventually bounded by some `C > 0`.
+  obtain ⟨C, _hC_pos, hC⟩ := S.scaled_second_moment_bounded_along_seq ht_seq
+  -- Define the sequence `a n := t_n⁻¹ · ∫_smallSet x² dμ_{t_n}`.
+  set a : ℕ → ℝ := fun n =>
+    (t_seq n).val⁻¹ * ∫ x in smallSet, x ^ 2 ∂(S.measure (t_seq n) : Measure ℝ)
+  -- Each `a n` is nonneg: t⁻¹ ≥ 0 and the integrand x² ≥ 0.
+  have ha_nonneg : ∀ n, 0 ≤ a n := fun n => by
+    have ht_pos : 0 < (t_seq n).val := (t_seq n).prop
+    refine mul_nonneg (inv_nonneg.mpr ht_pos.le) ?_
+    exact setIntegral_nonneg measurableSet_smallSet (fun x _ => sq_nonneg x)
+  -- Eventually `a n ∈ Icc 0 C`.
+  have ha_bdd : ∀ᶠ n in atTop, a n ∈ Set.Icc (0 : ℝ) C := by
+    filter_upwards [hC] with n hCn
+    exact ⟨ha_nonneg n, hCn⟩
+  -- Apply Bolzano-Weierstrass on `Icc 0 C`.
+  obtain ⟨σ, hσ_mem, φ, hφ_mono, hσ⟩ :=
+    isCompact_Icc.tendsto_subseq' ha_bdd.frequently
+  -- Package `σ : ℝ` as `ℝ≥0` via `Real.toNNReal`; coercion identity uses `0 ≤ σ`.
+  refine ⟨Real.toNNReal σ, t_seq ∘ φ, ht_seq.comp hφ_mono.tendsto_atTop, ?_⟩
+  rw [Real.coe_toNNReal σ hσ_mem.1]
+  exact hσ
+
 /-- **The Lévy-Khintchine formula for ψ.** Given the drift `b`, the Gaussian variance
 `σ²`, and using `S.levyMeasure` as the Lévy measure, the exponent `ψ` admits the
 canonical decomposition. The proof combines:
@@ -3296,6 +3371,61 @@ noncomputable def convolutionSemigroupOfCND
       (schoenberg_exp_of_cnd hψ_cont hψ_zero hψ_cnd hψ_herm t ht)
       (by rw [hψ_zero, mul_zero, exp_zero])).choose_spec ξ
 
+/-- Convolution semigroup canonically associated with an infinitely divisible
+probability measure `μ`. By construction, the t=1 member of the semigroup is
+literally `μ` (see `convolutionSemigroupOfMeasure_one`).
+
+This bundles `exists_continuous_log`, `isConditionallyNegativeDefinite_log`,
+`hermitian_log`, and `convolutionSemigroupOfCND`, then patches the t=1 slot to
+be exactly `μ` (rather than the abstract Bochner-extracted measure that merely
+shares its characteristic function). The patch preserves the convolution-semigroup
+laws because `charFun μ = exp ψ` by `exists_continuous_log`. -/
+noncomputable def convolutionSemigroupOfMeasure
+    (μ : Measure ℝ) [hμ : IsProbabilityMeasure μ] (h : IsInfinitelyDivisible μ) :
+    ConvolutionSemigroup :=
+  let ψ_data := h.exists_continuous_log
+  let ψ := ψ_data.choose
+  let hψ_cont := ψ_data.choose_spec.1
+  let hψ_zero := ψ_data.choose_spec.2.1
+  let hψ_exp := ψ_data.choose_spec.2.2
+  let hψ_cnd := h.isConditionallyNegativeDefinite_log hψ_cont hψ_zero hψ_exp
+  let hψ_herm := h.hermitian_log hψ_cont hψ_zero hψ_exp
+  let S₀ := convolutionSemigroupOfCND hψ_cont hψ_zero hψ_cnd hψ_herm
+  { exponent := S₀.exponent
+    exponent_continuous := S₀.exponent_continuous
+    exponent_zero := S₀.exponent_zero
+    measure := fun t =>
+      if h1 : t.val = 1 then ⟨μ, hμ⟩ else S₀.measure t
+    charFun_eq := by
+      intro t ξ
+      by_cases ht : t.val = 1
+      · simp only [dif_pos ht]
+        show charFun μ ξ = exp ((↑t.val : ℂ) * S₀.exponent ξ)
+        rw [ht]
+        show charFun μ ξ = exp ((1 : ℂ) * ψ ξ)
+        rw [one_mul, hψ_exp ξ]
+      · simp only [dif_neg ht]
+        exact S₀.charFun_eq t ξ }
+
+/-- The t=1 member of `convolutionSemigroupOfMeasure μ h` is literally `μ`
+(as a `ProbabilityMeasure`). -/
+@[simp]
+theorem convolutionSemigroupOfMeasure_one
+    (μ : Measure ℝ) [hμ : IsProbabilityMeasure μ] (h : IsInfinitelyDivisible μ) :
+    ((convolutionSemigroupOfMeasure μ h).measure ⟨1, one_pos⟩ :
+        MeasureTheory.ProbabilityMeasure ℝ) = ⟨μ, hμ⟩ := by
+  show (if _ : (1 : ℝ) = 1 then (⟨μ, hμ⟩ : MeasureTheory.ProbabilityMeasure ℝ) else _) = _
+  rw [dif_pos rfl]
+
+/-- The underlying measure of the t=1 member is `μ`. -/
+@[simp]
+theorem convolutionSemigroupOfMeasure_one_coe
+    (μ : Measure ℝ) [hμ : IsProbabilityMeasure μ] (h : IsInfinitelyDivisible μ) :
+    (((convolutionSemigroupOfMeasure μ h).measure ⟨1, one_pos⟩ :
+        MeasureTheory.ProbabilityMeasure ℝ) : Measure ℝ) = μ := by
+  rw [convolutionSemigroupOfMeasure_one]
+  rfl
+
 /-! ## Sub-lemma 4: Integral representation (deepest) -/
 
 /-- A continuous, conditionally negative definite function `ψ : ℝ → ℂ` with `ψ(0) = 0`
@@ -3345,51 +3475,9 @@ theorem levyKhintchine_representation
   obtain ⟨ψ, hψ_cont, hψ_zero, hψ_exp⟩ := h.exists_continuous_log
   -- Sub-lemma 3: ψ is conditionally negative definite
   have hψ_cnd := h.isConditionallyNegativeDefinite_log hψ_cont hψ_zero hψ_exp
+  -- Hermitian symmetry: ψ(-ξ) = conj(ψ(ξ)) — see `hermitian_log`.
+  have hψ_herm := h.hermitian_log hψ_cont hψ_zero hψ_exp
   -- Sub-lemma 4: CND function has LK integral representation
-  -- Hermitian symmetry: ψ(-ξ) = conj(ψ(ξ)) from charFun(-ξ) = conj(charFun(ξ))
-  -- Follows from exp(ψ(-ξ)) = charFun(-ξ) = conj(charFun(ξ)) = exp(conj(ψ(ξ)))
-  -- and injectivity of exp on the strip (continuous log stays in strip with ψ(0)=0).
-  have hψ_herm : ∀ ξ, ψ (-ξ) = starRingEnd ℂ (ψ ξ) := by
-    -- Strategy: both ψ and g := conj ∘ ψ ∘ neg are continuous lifts of charFun μ through exp
-    -- with value 0 at 0. By uniqueness of covering map lifts, they are equal.
-    -- That gives conj(ψ(-ξ)) = ψ(ξ), hence ψ(-ξ) = conj(ψ(ξ)).
-    have hcont : Continuous (charFun μ) := MeasureTheory.continuous_charFun
-    have hne : ∀ ξ, charFun μ ξ ≠ 0 := h.charFun_ne_zero
-    have hφ0 : charFun μ 0 = 1 := by simp [charFun_zero, Measure.real, measure_univ]
-    -- Set up the continuous map for charFun
-    set f : C(ℝ, ℂ) := ⟨charFun μ, hcont⟩
-    have he : Complex.exp (0 : ℂ) = f (0 : ℝ) := by simp [f, hφ0]
-    have hs : ∀ ξ : ℝ, f ξ ∈ ({0}ᶜ : Set ℂ) := fun ξ => Set.mem_compl_singleton_iff.mpr (hne ξ)
-    -- Get the unique lift
-    obtain ⟨F, ⟨hF0, hFexp⟩, hF_unique⟩ :=
-      Complex.isCoveringMapOn_exp.existsUnique_continuousMap_lifts f he hs
-    -- ψ as a ContinuousMap is a lift
-    set Ψ : C(ℝ, ℂ) := ⟨ψ, hψ_cont⟩
-    have hΨ_lift : Ψ 0 = 0 ∧ Complex.exp ∘ Ψ = f := by
-      constructor
-      · exact hψ_zero
-      · ext ξ; simp [Ψ, f, hψ_exp ξ]
-    -- g(ξ) := conj(ψ(-ξ)) is also a continuous lift
-    set G : C(ℝ, ℂ) := ⟨fun ξ => starRingEnd ℂ (ψ (-ξ)), by
-      exact continuous_star.comp (hψ_cont.comp continuous_neg)⟩
-    have hG_lift : G 0 = 0 ∧ Complex.exp ∘ G = f := by
-      constructor
-      · simp [G, hψ_zero]
-      · ext ξ; simp only [G, ContinuousMap.coe_mk, Function.comp_apply, f]
-        rw [exp_conj, ← hψ_exp (-ξ), charFun_neg, starRingEnd_self_apply]
-    -- By uniqueness, Ψ = F and G = F, hence Ψ = G
-    have hΨ_eq : Ψ = F := hF_unique Ψ hΨ_lift
-    have hG_eq : G = F := hF_unique G hG_lift
-    -- Therefore Ψ = G pointwise: ψ(ξ) = conj(ψ(-ξ))
-    have hΨG : ∀ ξ, ψ ξ = starRingEnd ℂ (ψ (-ξ)) := by
-      intro ξ
-      have := congr_arg (· ξ) (hΨ_eq.trans hG_eq.symm)
-      exact this
-    -- We need ψ(-ξ) = conj(ψ(ξ)). Apply hΨG at -ξ and simplify.
-    intro ξ
-    have := hΨG (-ξ)
-    simp only [neg_neg] at this
-    exact this
   obtain ⟨T, hT⟩ := levyKhintchine_of_cnd hψ_cont hψ_zero hψ_cnd hψ_herm
   -- Combine: charFun μ ξ = exp(ψ ξ) = exp(ibξ - σ²ξ²/2 + ∫ f dν)
   exact ⟨T, fun ξ => by rw [hψ_exp ξ, hT ξ]⟩
