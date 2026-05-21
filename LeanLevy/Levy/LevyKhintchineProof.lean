@@ -2608,31 +2608,6 @@ lemma scaledRestrictedMeasure_restrict (t : {t : ℝ // 0 < t})
   · intro ⟨h1, _⟩; exact h1
   · intro h1; exact ⟨h1, le_trans h h1⟩
 
-/-- **Consistency of extracted measures.** For `0 < ε₁ ≤ ε₂`, the measure `ν_{ε₂}`
-    is the restriction of `ν_{ε₁}` to `{|x| ≥ ε₂}`.
-
-    This ensures the family `{ν_ε}` is consistent and can be glued into a single
-    Lévy measure. The proof requires passing limits through restrictions, which
-    is a standard but technically involved measure theory argument. -/
-theorem consistent_large_measures {ε₁ ε₂ : ℝ} (_hε₁ : 0 < ε₁) (_h : ε₁ ≤ ε₂)
-    {ν₁ ν₂ : Measure ℝ}
-    {t_seq₁ t_seq₂ : ℕ → {t : ℝ // 0 < t}}
-    (_ht₁ : Tendsto (fun n => (t_seq₁ n).val) atTop (𝓝 0))
-    (_ht₂ : Tendsto (fun n => (t_seq₂ n).val) atTop (𝓝 0))
-    (_hν₁ : IsFiniteMeasure ν₁)
-    (_hν₂ : IsFiniteMeasure ν₂)
-    (_hν₁_supp : ν₁ (largeSet ε₁)ᶜ = 0)
-    (_hν₂_supp : ν₂ (largeSet ε₂)ᶜ = 0)
-    -- Weak convergence conditions for ν₁, ν₂
-    (_hconv₁ : ∀ (f : BoundedContinuousFunction ℝ ℝ), (∀ x, |x| < ε₁ → f x = 0) →
-      Tendsto (fun n => ∫ x, f x ∂(S.scaledRestrictedMeasure (t_seq₁ n) ε₁))
-        atTop (𝓝 (∫ x, f x ∂ν₁)))
-    (_hconv₂ : ∀ (f : BoundedContinuousFunction ℝ ℝ), (∀ x, |x| < ε₂ → f x = 0) →
-      Tendsto (fun n => ∫ x, f x ∂(S.scaledRestrictedMeasure (t_seq₂ n) ε₂))
-        atTop (𝓝 (∫ x, f x ∂ν₂))) :
-    ν₁.restrict (largeSet ε₂) = ν₂ := by
-  sorry
-
 /-! ### 3.4 — Lévy measure construction -/
 
 /-- The Lévy measure associated to a convolution semigroup, defined as the finite measure
@@ -2994,19 +2969,6 @@ theorem scaled_second_moment_bounded_along_seq
     exact Filter.Eventually.of_forall (fun n => (t_seq n).prop)
   exact htseq_filter.eventually hC
 
-/-- The scaled integral of `exp(ixξ) - 1 - ixξ` on the small set, along a sequence
-`t_n → 0`, converges. The integrand satisfies `|exp(iz) - 1 - iz| ≤ z²/2`, so the
-integral is controlled by the second moment bound. -/
-theorem small_jump_expansion (ξ : ℝ)
-    {t_seq : ℕ → {t : ℝ // 0 < t}} (ht : Tendsto (fun n => (t_seq n).val) atTop (𝓝 0)) :
-    ∃ L : ℂ, Tendsto (fun n =>
-      ((t_seq n).val⁻¹ : ℂ) *
-      ∫ x in smallSet,
-        (Complex.exp (↑x * ↑ξ * Complex.I) - 1 - ↑x * ↑ξ * Complex.I)
-        ∂(S.measure (t_seq n) : Measure ℝ))
-    atTop (𝓝 L) := by
-  sorry
-
 /-! ### Phase 6: Drift extraction (first moment limit + drift contribution)
 
 **6.1 — Drift limit:** The scaled first moment on `{|x| < 1}` converges along `t_n → 0`,
@@ -3237,8 +3199,8 @@ We split the assembly into three witness sub-lemmas:
   Lévy-Khintchine formula holds for `S.exponent`.
 
 These follow from the Phase 1–6 lemmas (`charFun_scaled_limit`, `drift_limit`,
-`small_jump_expansion`, `large_jump_limit`, `drift_term`, `large_jump_exhaustion`,
-etc.) together with the consistency / restriction results in Phase 3. They are
+`large_jump_limit`, `drift_term`, `large_jump_exhaustion`, etc.) together with
+the consistency / restriction results in Phase 3. They are
 stated separately so that `psi_decomposition` reduces to combining them.
 -/
 
@@ -3308,8 +3270,9 @@ canonical decomposition. The proof combines:
 * `large_jump_exhaustion` (Phase 4): the truncated large-jump integral exhausts the
   full compensated integral as ε → 0.
 * `drift_term` + `drift_limit` (Phase 6): the linear part contributes `b · ξ · I`.
-* `small_jump_expansion` (Phase 5): the quadratic remainder contributes
-  `-σ² · ξ² / 2` in the limit. -/
+* the scaled small-jump quadratic bound (Phase 5,
+  `scaled_second_moment_bounded_along_seq`): the quadratic remainder
+  contributes `-σ² · ξ² / 2` in the limit. -/
 theorem psi_eq_levyKhintchine_formula
     (b : ℝ) (σ_sq : ℝ≥0)
     (_t_seq : ℕ → {t : ℝ // 0 < t})
@@ -3325,7 +3288,7 @@ theorem psi_eq_levyKhintchine_formula
 
 /-- Main assembly: combine all phases to decompose the characteristic exponent `ψ`
 into drift, diffusion, and jump components. The proof assembles Phase 1–6 lemmas
-(charFun_scaled_limit, large_jump_limit, small_jump_expansion, drift_limit, etc.)
+(charFun_scaled_limit, large_jump_limit, drift_limit, etc.)
 to identify the Lévy-Khintchine triple `(b, σ², ν)`.
 
 The triple is `(b, σ², S.levyMeasure)` where:
