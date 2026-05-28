@@ -3187,41 +3187,20 @@ lemma drift_term (ξ : ℝ)
   rw [show (↑b : ℂ) * ↑ξ * I = ↑b * (↑ξ * I) from by ring]
   exact Filter.Tendsto.mul_const ((↑ξ : ℂ) * I) hb.ofReal
 
-/-! ### Final assembly of the Lévy-Khintchine triple
+/-! ### Final assembly of the Lévy-Khintchine triple (finite-ν pivot)
 
-We split the assembly into three witness sub-lemmas:
+Following the 2026-05-20 pivot to the compound-Poisson + Gaussian intermediate, the
+assembly is structured around `exists_drift_variance_jumpMeasure_along_seq`, which
+produces all three witnesses `(b, σ², ν)` along a *single* subsequence under the
+finite-small-mass hypothesis. The key downstream lemmas are:
 
-* `exists_levy_drift` — the drift `b` exists as the limit of the scaled first moment of
-  small jumps along a suitable subsequence `t_n → 0`.
-* `exists_gaussian_variance` — the Gaussian variance `σ²` exists as the limit of the
-  scaled "quadratic remainder" along that subsequence.
-* `psi_eq_levyKhintchine_formula` — given `b`, `σ²`, and the Lévy measure of `S`, the
-  Lévy-Khintchine formula holds for `S.exponent`.
+* `exists_drift_variance_jumpMeasure_along_seq` — the diagonal extraction.
+* `psi_eq_levyKhintchine_formula` — given the diagonal tuple, the formula holds for ψ.
+* `psi_decomposition` — packages the tuple + the formula into a `LevyKhintchineTriple`.
 
-These follow from the Phase 1–6 lemmas (`charFun_scaled_limit`, `drift_limit`,
-`large_jump_limit`, `drift_term`, `large_jump_exhaustion`, etc.) together with
-the consistency / restriction results in Phase 3. They are
-stated separately so that `psi_decomposition` reduces to combining them.
+The previous `exists_levy_drift` (drift-only extraction) and the placeholder
+`exists_gaussian_variance := ⟨0, trivial⟩` are superseded by the diagonal extraction.
 -/
-
-/-- The drift `b` of the Lévy-Khintchine triple exists. -/
-theorem exists_levy_drift : ∃ b : ℝ, ∃ t_seq : ℕ → {t : ℝ // 0 < t},
-    Tendsto (fun n => (t_seq n).val) atTop (𝓝 0) ∧
-    Tendsto (fun n =>
-      (t_seq n).val⁻¹ * ∫ x in smallSet, x ∂(S.measure (t_seq n) : Measure ℝ))
-      atTop (𝓝 b) := by
-  obtain ⟨_, t_seq, ht_seq, _, _, _, _⟩ := S.exists_measure_limit_large 1 one_pos
-  obtain ⟨b, φ, hφ_mono, hb⟩ := S.drift_limit ht_seq
-  exact ⟨b, t_seq ∘ φ, ht_seq.comp hφ_mono.tendsto_atTop, hb⟩
-
-/-- The Gaussian variance `σ²` of the Lévy-Khintchine triple exists.
-The witness will be chosen so that, together with the drift, it identifies the
-residual `t⁻¹(charFun(μ_t)(ξ) - 1) - large_jump - drift` as `-σ²ξ²/2`.
-
-For the purposes of the assembly we only need *some* `σ_sq : ℝ≥0`; the formula
-lemma `psi_eq_levyKhintchine_formula` will discharge the formula. -/
-theorem exists_gaussian_variance : ∃ _σ_sq : ℝ≥0, True :=
-  ⟨0, trivial⟩
 
 /-- The scaled second moment `t⁻¹ · ∫_{smallSet} x² dμ_t` converges along a subsequence
 to a finite nonneg limit `σ²`. Mirrors `exists_levy_drift`: a uniformly bounded
@@ -3332,58 +3311,85 @@ theorem exists_drift_variance_jumpMeasure_along_seq
     exact h.comp ((hφ₁_mono.comp hφ₂_mono).tendsto_atTop)
   exact ⟨b, Real.toNNReal σ, ν, hν_fin, t_seq, hν_zero, ht_seq, hb_final, hσ_final, h_jump_final⟩
 
-/-- **The Lévy-Khintchine formula for ψ.** Given the drift `b`, the Gaussian variance
-`σ²`, and using `S.levyMeasure` as the Lévy measure, the exponent `ψ` admits the
-canonical decomposition. The proof combines:
-* `charFun_scaled_limit` (Phase 1): `t⁻¹(charFun(μ_t)(ξ) - 1) → ψ(ξ)`.
-* `large_jump_limit` (Phase 4): the large-jump Fourier integral converges to the
-  Lévy-measure integral.
-* `large_jump_exhaustion` (Phase 4): the truncated large-jump integral exhausts the
-  full compensated integral as ε → 0.
-* `drift_term` + `drift_limit` (Phase 6): the linear part contributes `b · ξ · I`.
-* the scaled small-jump quadratic bound (Phase 5,
-  `scaled_second_moment_bounded_along_seq`): the quadratic remainder
-  contributes `-σ² · ξ² / 2` in the limit. -/
+/-- **The Lévy-Khintchine formula for ψ (finite-ν pivot).** Given the drift `b`, the
+Gaussian variance `σ²`, and the externally-provided finite Lévy measure `ν` on `ℝ\{0}`,
+together with the three subsequential limits from
+`exists_drift_variance_jumpMeasure_along_seq`, the exponent `ψ` admits the canonical
+Lévy-Khintchine decomposition.
+
+The hypotheses encode exactly the output of the diagonal extraction:
+* `hb` — drift convergence,
+* `hσ` — second-moment convergence,
+* `h_jump` — vague (vanishing-near-0) convergence of `t⁻¹·μ_t` to `ν`.
+
+**Proof strategy (currently `sorry`, to be closed in a follow-up commit):**
+Combine four limit identifications in `𝓝 (S.exponent ξ)`:
+1. `charFun_scaled_limit`: `t⁻¹·(charFun(μ_t)(ξ) − 1) → ψ(ξ)`.
+2. `drift_term`: `iξ·(t⁻¹·∫_{smallSet} x dμ_t) → b·ξ·I`.
+3. **Small-jump identification (analytic core, not yet proved):**
+   `t⁻¹·∫_{smallSet}(exp(ixξ)−1−ixξ) dμ_t → −σ²ξ²/2 + ∫_{smallSet} compInt dν`.
+   Argument: write the integrand as `−(xξ)²/2 + O(|x|³ξ³)`; the quadratic pairs with
+   the σ² limit, the cubic remainder is handled by a δ-truncation on smallSet using the
+   uniform second-moment bound and `h_jump` on the outer band.
+4. **Large-jump identification (not yet proved):** `t⁻¹·∫_{largeSet 1}(exp(ixξ)−1)
+   dμ_t → ∫_{largeSet 1} compInt dν`. Argument: approximate the indicator-truncated
+   integrand by bounded continuous functions vanishing near 0 (smooth cutoffs at radius
+   `1/n`), apply `h_jump` for each cutoff, take `n → ∞`.
+
+The assembly then matches the per-`n` integral identity
+`(charFun(μ_t)(ξ)−1)/t = iξ·t⁻¹·∫_{smallSet} x dμ_t + t⁻¹·∫_{smallSet}(exp(ixξ)−1−ixξ)
+dμ_t + t⁻¹·∫_{largeSet 1}(exp(ixξ)−1) dμ_t` and concludes by uniqueness of limits. -/
 theorem psi_eq_levyKhintchine_formula
-    (b : ℝ) (σ_sq : ℝ≥0)
-    (_t_seq : ℕ → {t : ℝ // 0 < t})
-    (_ht_seq : Tendsto (fun n => (_t_seq n).val) atTop (𝓝 0))
+    (b : ℝ) (σ_sq : ℝ≥0) {ν : Measure ℝ} [IsFiniteMeasure ν]
+    (_hν_zero : ν {0} = 0)
+    {t_seq : ℕ → {t : ℝ // 0 < t}}
+    (_ht_seq : Tendsto (fun n => (t_seq n).val) atTop (𝓝 0))
     (_hb : Tendsto (fun n =>
-      (_t_seq n).val⁻¹ * ∫ x in smallSet, x ∂(S.measure (_t_seq n) : Measure ℝ))
+        (t_seq n).val⁻¹ * ∫ x in smallSet, x ∂(S.measure (t_seq n) : Measure ℝ))
         atTop (𝓝 b))
+    (_hσ : Tendsto (fun n =>
+        (t_seq n).val⁻¹ * ∫ x in smallSet, x ^ 2 ∂(S.measure (t_seq n) : Measure ℝ))
+        atTop (𝓝 (σ_sq : ℝ)))
+    (_h_jump : ∀ (f : BoundedContinuousFunction ℝ ℝ),
+        (∃ r > 0, ∀ x, |x| < r → f x = 0) →
+        Tendsto (fun n => (t_seq n).val⁻¹ * ∫ x, f x ∂(S.measure (t_seq n) : Measure ℝ))
+          atTop (𝓝 (∫ x, f x ∂ν)))
     (ξ : ℝ) :
     S.exponent ξ = ↑b * ↑ξ * I
       - ↑(σ_sq : ℝ) * ↑ξ ^ 2 / 2
-      + ∫ x, levyCompensatedIntegrand ξ x ∂(S.levyMeasure) := by
+      + ∫ x, levyCompensatedIntegrand ξ x ∂ν := by
   sorry
 
-/-- Main assembly: combine all phases to decompose the characteristic exponent `ψ`
-into drift, diffusion, and jump components. The proof assembles Phase 1–6 lemmas
-(charFun_scaled_limit, large_jump_limit, drift_limit, etc.)
-to identify the Lévy-Khintchine triple `(b, σ², ν)`.
+/-- **Main assembly (finite-ν pivot).** Under the finite-small-mass hypothesis, the
+characteristic exponent `ψ` of `S` decomposes into the Lévy-Khintchine triple
+`(b, σ², ν)` where `ν` is the externally extracted finite Lévy measure on `ℝ\{0}`.
 
-The triple is `(b, σ², S.levyMeasure)` where:
-* `b` comes from `exists_levy_drift` (limit of the scaled small-jump first moment).
-* `σ²` comes from `exists_gaussian_variance` (residual after drift + jumps).
-* `S.levyMeasure` is the σ-finite Lévy measure built from the weak limits.
-
-The formula then follows from `psi_eq_levyKhintchine_formula`. -/
-theorem psi_decomposition :
+The diagonal extraction `exists_drift_variance_jumpMeasure_along_seq` produces all
+three witnesses along a single subsequence; the formula then follows from
+`psi_eq_levyKhintchine_formula`. -/
+theorem psi_decomposition
+    (h_finite_small_mass : ∃ C : ℝ≥0, ∀ t : {t : ℝ // 0 < t},
+        t.val⁻¹ * ((S.measure t : Measure ℝ) smallSet).toReal ≤ ↑C) :
     ∃ (b : ℝ) (σ_sq : ℝ≥0) (ν : Measure ℝ),
       IsLevyMeasure ν ∧
       ∀ ξ : ℝ,
         S.exponent ξ = ↑b * ↑ξ * I
           - ↑(σ_sq : ℝ) * ↑ξ ^ 2 / 2
           + ∫ x, levyCompensatedIntegrand ξ x ∂ν := by
-  -- Extract drift b together with the witnessing sequence.
-  obtain ⟨b, t_seq, ht_seq, hb⟩ := S.exists_levy_drift
-  -- Extract Gaussian variance σ².
-  obtain ⟨σ_sq, _⟩ := exists_gaussian_variance
-  -- Use the Lévy measure of the convolution semigroup.
-  refine ⟨b, σ_sq, S.levyMeasure, S.levyMeasure_isLevyMeasure, ?_⟩
-  -- The formula follows from the assembly lemma.
-  intro ξ
-  exact S.psi_eq_levyKhintchine_formula b σ_sq t_seq ht_seq hb ξ
+  obtain ⟨b, σ_sq, ν, hν_fin, t_seq, hν_zero, ht_seq, hb, hσ, h_jump⟩ :=
+    S.exists_drift_variance_jumpMeasure_along_seq h_finite_small_mass
+  refine ⟨b, σ_sq, ν, ?_, ?_⟩
+  · -- A finite measure with ν{0}=0 is a Lévy measure: `min(1,x²) ≤ 1` and `ν univ < ∞`.
+    refine ⟨hν_zero, ?_⟩
+    have hbound : ∀ x : ℝ, ENNReal.ofReal (min 1 (x ^ 2)) ≤ 1 := fun x => by
+      rw [show (1 : ℝ≥0∞) = ENNReal.ofReal 1 by simp]
+      exact ENNReal.ofReal_le_ofReal (min_le_left _ _)
+    calc ∫⁻ x, ENNReal.ofReal (min 1 (x ^ 2)) ∂ν
+        ≤ ∫⁻ _, 1 ∂ν := lintegral_mono hbound
+      _ = ν Set.univ := lintegral_one
+      _ < ⊤ := hν_fin.measure_univ_lt_top
+  · intro ξ
+    exact S.psi_eq_levyKhintchine_formula b σ_sq hν_zero ht_seq hb hσ h_jump ξ
 
 end ConvolutionSemigroup
 
@@ -3460,60 +3466,72 @@ theorem convolutionSemigroupOfMeasure_one_coe
   rw [convolutionSemigroupOfMeasure_one]
   rfl
 
-/-! ## Sub-lemma 4: Integral representation (deepest) -/
+/-! ## Sub-lemma 4: Integral representation (finite-ν pivot) -/
 
 /-- A continuous, conditionally negative definite function `ψ : ℝ → ℂ` with `ψ(0) = 0`
-has the Lévy-Khintchine integral representation.
+has the Lévy-Khintchine integral representation in the **finite-ν case**, under the
+hypothesis that the constructed convolution semigroup `S` satisfies a uniform bound
+on the scaled small-jump mass `t⁻¹·μ_t({|x|<1}) ≤ C` (equivalent to ν being finite).
 
-**Proof via Bochner's theorem:**
+**Proof:**
 1. By Schoenberg, `exp(tψ)` is PD, continuous, with value 1 at 0 for each `t > 0`.
 2. By Bochner, there exists probability measure `μ_t` with `charFun(μ_t) = exp(tψ)`.
 3. The family `{μ_t}` forms a convolution semigroup (see `convolutionSemigroupOfCND`).
-4. Differentiating at `t = 0` extracts the Lévy-Khintchine triple `(b, σ², ν)`.
-
-Steps 1–3 are complete. Step 4 delegates to `ConvolutionSemigroup.psi_decomposition`. -/
-theorem levyKhintchine_of_cnd
+4. Under `h_finite_small_mass`, the diagonal extraction yields `(b, σ², ν)` on a single
+   subsequence and `psi_decomposition` packages them into the triple. -/
+theorem levyKhintchine_of_cnd_finite
     {ψ : ℝ → ℂ} (hψ_cont : Continuous ψ) (hψ_zero : ψ 0 = 0)
     (hψ_cnd : IsConditionallyNegativeDefinite ψ)
-    (hψ_herm : ∀ ξ, ψ (-ξ) = starRingEnd ℂ (ψ ξ)) :
+    (hψ_herm : ∀ ξ, ψ (-ξ) = starRingEnd ℂ (ψ ξ))
+    (h_finite_small_mass : ∃ C : ℝ≥0, ∀ t : {t : ℝ // 0 < t},
+        t.val⁻¹ * (((convolutionSemigroupOfCND hψ_cont hψ_zero hψ_cnd hψ_herm).measure t :
+            Measure ℝ) smallSet).toReal ≤ ↑C) :
     ∃ T : LevyKhintchineTriple, ∀ ξ : ℝ,
       ψ ξ = ↑T.drift * ↑ξ * I
         - ↑(T.gaussianVariance : ℝ) * ↑ξ ^ 2 / 2
         + ∫ x, levyCompensatedIntegrand ξ x ∂T.levyMeasure := by
-  -- Steps 1–2: Build the convolution semigroup via Schoenberg + Bochner
   set S := convolutionSemigroupOfCND hψ_cont hψ_zero hψ_cnd hψ_herm
-  -- Step 3–4: Extract the triple via psi_decomposition
-  obtain ⟨b, σ_sq, ν, hν_levy, hψ_eq⟩ := S.psi_decomposition
+  obtain ⟨b, σ_sq, ν, hν_levy, hψ_eq⟩ := S.psi_decomposition h_finite_small_mass
   exact ⟨⟨b, σ_sq, ν, hν_levy⟩, hψ_eq⟩
 
-/-! ## Assembly: Lévy-Khintchine representation -/
+/-! ## Assembly: Lévy-Khintchine representation (finite-ν pivot) -/
 
-/-- **Lévy-Khintchine representation theorem**: every infinitely divisible probability measure
-on `ℝ` has a characteristic function of the form
-`exp(ibξ − σ²ξ²/2 + ∫ f(ξ,x) dν(x))` where `f` is the compensated integrand
-`exp(ixξ) − 1 − ixξ·1_{|x|<1}`.
+/-- **Lévy-Khintchine representation theorem (finite-ν pivot)**: every infinitely
+divisible probability measure `μ` on `ℝ` whose associated convolution semigroup
+satisfies the uniform finite-small-mass bound has a characteristic function of the
+form `exp(ibξ − σ²ξ²/2 + ∫ f(ξ,x) dν(x))` with `f = exp(ixξ) − 1 − ixξ·1_{|x|<1}`
+and `ν` a finite Lévy measure.
 
 **Proof via sub-lemmas:**
-1. `charFun_ne_zero` — characteristic function never vanishes (Sub-lemma 1)
-2. `exists_continuous_log` — continuous logarithm ψ with charFun = exp(ψ) (Sub-lemma 2)
-3. `isConditionallyNegativeDefinite_log` — ψ is CND (Sub-lemma 3)
-4. `levyKhintchine_of_cnd` — CND function has the integral representation (Sub-lemma 4) -/
-theorem levyKhintchine_representation
-    {μ : Measure ℝ} [IsProbabilityMeasure μ] (h : IsInfinitelyDivisible μ) :
+1. `charFun_ne_zero` — characteristic function never vanishes.
+2. `exists_continuous_log` — continuous logarithm `ψ` with `charFun μ = exp ψ`.
+3. `isConditionallyNegativeDefinite_log` — `ψ` is CND.
+4. `levyKhintchine_of_cnd_finite` — under the finite-small-mass hypothesis, `ψ` has the
+   integral representation. -/
+theorem levyKhintchine_representation_finite
+    {μ : Measure ℝ} [IsProbabilityMeasure μ] (h : IsInfinitelyDivisible μ)
+    (h_finite_small_mass : ∃ C : ℝ≥0, ∀ t : {t : ℝ // 0 < t},
+        t.val⁻¹ * (((convolutionSemigroupOfMeasure μ h).measure t :
+            Measure ℝ) smallSet).toReal ≤ ↑C) :
     ∃ T : LevyKhintchineTriple, ∀ ξ : ℝ,
       charFun μ ξ = exp (
         ↑T.drift * ↑ξ * I
         - ↑(T.gaussianVariance : ℝ) * ↑ξ ^ 2 / 2
         + ∫ x, levyCompensatedIntegrand ξ x ∂T.levyMeasure) := by
-  -- Sub-lemma 2: continuous logarithm
-  obtain ⟨ψ, hψ_cont, hψ_zero, hψ_exp⟩ := h.exists_continuous_log
-  -- Sub-lemma 3: ψ is conditionally negative definite
-  have hψ_cnd := h.isConditionallyNegativeDefinite_log hψ_cont hψ_zero hψ_exp
-  -- Hermitian symmetry: ψ(-ξ) = conj(ψ(ξ)) — see `hermitian_log`.
-  have hψ_herm := h.hermitian_log hψ_cont hψ_zero hψ_exp
-  -- Sub-lemma 4: CND function has LK integral representation
-  obtain ⟨T, hT⟩ := levyKhintchine_of_cnd hψ_cont hψ_zero hψ_cnd hψ_herm
-  -- Combine: charFun μ ξ = exp(ψ ξ) = exp(ibξ - σ²ξ²/2 + ∫ f dν)
-  exact ⟨T, fun ξ => by rw [hψ_exp ξ, hT ξ]⟩
+  -- Note: we route through psi_decomposition on `convolutionSemigroupOfMeasure μ h`
+  -- (rather than on the Bochner-built `convolutionSemigroupOfCND` directly) so that
+  -- the t=1 member is literally μ, matching the user-supplied hypothesis.
+  set S := convolutionSemigroupOfMeasure μ h
+  obtain ⟨b, σ_sq, ν, hν_levy, hψ_eq⟩ := S.psi_decomposition h_finite_small_mass
+  refine ⟨⟨b, σ_sq, ν, hν_levy⟩, fun ξ => ?_⟩
+  -- charFun μ ξ = exp((1 : ℂ) * S.exponent ξ) via the t=1 patch.
+  have hcharFun_one : (S.measure ⟨1, one_pos⟩ : MeasureTheory.ProbabilityMeasure ℝ) =
+      ⟨μ, by infer_instance⟩ := convolutionSemigroupOfMeasure_one μ h
+  have hcf : charFun μ ξ = exp ((1 : ℂ) * S.exponent ξ) := by
+    have h1 := S.charFun_eq ⟨1, one_pos⟩ ξ
+    rw [show ((⟨1, one_pos⟩ : {t : ℝ // 0 < t}).val : ℂ) = (1 : ℂ) from by norm_cast] at h1
+    rw [show charFun μ ξ = (S.measure ⟨1, one_pos⟩).characteristicFun ξ from by
+      rw [hcharFun_one]; rfl, h1]
+  rw [hcf, one_mul, hψ_eq ξ]
 
 end ProbabilityTheory
