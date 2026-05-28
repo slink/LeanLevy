@@ -1157,6 +1157,45 @@ lemma exp_first_order (z : ℂ) :
     rw [inv_mul_eq_div]
     norm_cast)
 
+/-- Third-order Taylor remainder for `exp` along the imaginary axis. For `z : ℝ`
+with `|z| ≤ 1`,
+`‖exp(i·z) − 1 − i·z + z²/2‖ ≤ (2/9)·|z|³`.
+This will be used by the planned δ-truncation proof of the small-jump limit
+identification in the Lévy-Khintchine assembly: the integrand
+`exp(ixξ) − 1 − ixξ` admits the expansion `−(xξ)²/2 + O(|xξ|³)`, and the
+`O(|xξ|³)` term is controlled by this bound combined with the uniform scaled
+second-moment bound.
+
+Direct specialization of `Complex.exp_bound` with `n = 3`, using
+`(i·z)² = −z²` to convert the third-order tail term `(i·z)²/2` into `−z²/2`. -/
+lemma norm_exp_I_mul_real_sub_taylor3_le {z : ℝ} (hz : |z| ≤ 1) :
+    ‖Complex.exp ((↑z : ℂ) * I) - 1 - (↑z : ℂ) * I + (↑z : ℂ) ^ 2 / 2‖ ≤
+      (2 / 9 : ℝ) * |z| ^ 3 := by
+  set w : ℂ := (↑z : ℂ) * I with hw_def
+  have hw_norm : ‖w‖ ≤ 1 := by
+    rw [hw_def, norm_mul, Complex.norm_I, mul_one, Complex.norm_real, Real.norm_eq_abs]
+    exact hz
+  have hbound := Complex.exp_bound hw_norm (n := 3) (by decide)
+  -- Compute ∑_{m<3} w^m/m! = 1 + w + w²/2.
+  have hsum : ∑ m ∈ Finset.range 3, w ^ m / (m.factorial : ℂ) = 1 + w + w ^ 2 / 2 := by
+    rw [show (3 : ℕ) = 2 + 1 from rfl, Finset.sum_range_succ, Finset.sum_range_succ,
+        Finset.sum_range_one]
+    simp [Nat.factorial]
+  rw [hsum] at hbound
+  -- Use w² = −↑z² (from I² = −1) to rewrite the LHS into the target form.
+  have hw_sq : w ^ 2 = -((↑z : ℂ) ^ 2) := by
+    rw [hw_def, mul_pow, Complex.I_sq]; ring
+  have hLHS : ‖Complex.exp w - (1 + w + w ^ 2 / 2)‖ =
+      ‖Complex.exp w - 1 - w + (↑z : ℂ) ^ 2 / 2‖ := by
+    congr 1; rw [hw_sq]; ring
+  rw [hLHS] at hbound
+  have hw_pow : ‖w‖ ^ 3 = |z| ^ 3 := by
+    rw [hw_def, norm_mul, Complex.norm_I, mul_one, Complex.norm_real, Real.norm_eq_abs]
+  calc ‖Complex.exp w - 1 - w + (↑z : ℂ) ^ 2 / 2‖
+      ≤ ‖w‖ ^ 3 * ((Nat.succ 3 : ℝ) * ((3 : ℕ).factorial * 3 : ℝ)⁻¹) := hbound
+    _ = |z| ^ 3 * (4 / 18) := by rw [hw_pow]; norm_num [Nat.factorial]
+    _ = (2 / 9 : ℝ) * |z| ^ 3 := by ring
+
 namespace ConvolutionSemigroup
 
 variable (S : ConvolutionSemigroup)
