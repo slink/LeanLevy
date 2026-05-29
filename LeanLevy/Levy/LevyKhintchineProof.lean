@@ -3488,6 +3488,35 @@ private lemma largeAnnulusBCF_vanishes_near_zero (n : ℕ) (hn : 2 ≤ n) :
     linarith
   linarith
 
+/-- As `n → ∞`, `largeAnnulusBCF n x → 1_{|x| = 1}` pointwise. -/
+private lemma largeAnnulusBCF_tendsto_indicator (x : ℝ) :
+    Tendsto (fun n : ℕ => largeAnnulusBCF n x) atTop
+      (𝓝 (Set.indicator {y : ℝ | |y| = 1} (fun _ => (1 : ℝ)) x)) := by
+  by_cases hx : |x| = 1
+  · -- At |x| = 1, χ_n x = 1 always.
+    rw [Set.indicator_of_mem (show x ∈ {y | |y| = 1} from hx)]
+    refine tendsto_atTop_of_eventually_const (i₀ := 0) (fun n _ => ?_)
+    apply largeAnnulusBCF_eq_one
+    rw [hx]
+    rw [show (1 : ℝ) - 1 = 0 from sub_self 1, abs_zero]
+    positivity
+  · -- |x| ≠ 1: eventually χ_n x = 0.
+    rw [Set.indicator_of_notMem (show x ∉ {y | |y| = 1} from hx)]
+    have h_pos : 0 < |(|x| - 1)| := abs_pos.mpr (sub_ne_zero.mpr hx)
+    obtain ⟨N, hN⟩ := exists_nat_gt (2/|(|x| - 1)|)
+    rw [div_lt_iff₀ h_pos] at hN  -- hN : 2 < ↑N * |(|x| - 1)|
+    refine tendsto_atTop_of_eventually_const (i₀ := N) (fun n hn => ?_)
+    apply largeAnnulusBCF_eq_zero
+    -- Goal: 2/(n+1) ≤ |(|x| - 1)|
+    have hn1_pos : (0 : ℝ) < n + 1 := by positivity
+    have hN_le : (N : ℝ) ≤ (n : ℝ) := by exact_mod_cast hn
+    have h2 : 2 ≤ (n + 1 : ℝ) * |(|x| - 1)| :=
+      calc (2 : ℝ) ≤ (N : ℝ) * |(|x| - 1)| := le_of_lt hN
+        _ ≤ (n : ℝ) * |(|x| - 1)| := mul_le_mul_of_nonneg_right hN_le h_pos.le
+        _ ≤ (n + 1 : ℝ) * |(|x| - 1)| :=
+            mul_le_mul_of_nonneg_right (by linarith) h_pos.le
+    rw [div_le_iff₀ hn1_pos]; linarith
+
 /-! ### Final assembly of the Lévy-Khintchine triple (finite-ν pivot)
 
 Following the 2026-05-20 pivot to the compound-Poisson + Gaussian intermediate, the
