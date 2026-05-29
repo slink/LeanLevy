@@ -3517,6 +3517,66 @@ private lemma largeAnnulusBCF_tendsto_indicator (x : ℝ) :
             mul_le_mul_of_nonneg_right (by linarith) h_pos.le
     rw [div_le_iff₀ hn1_pos]; linarith
 
+/-- BCF representing `largeUpperBCF n · g` for a bounded continuous `g`. -/
+private noncomputable def largeUpperMulBCF (n : ℕ) (g : ℝ → ℝ) (hg_cont : Continuous g)
+    (M : ℝ) (hg_bnd : ∀ x, |g x| ≤ M) : BoundedContinuousFunction ℝ ℝ :=
+  BoundedContinuousFunction.mkOfBound
+    ⟨fun x => largeUpperBCF n x * g x,
+      (largeUpperBCF n).continuous.mul hg_cont⟩
+    (2 * M)
+    (fun x y => by
+      simp only [ContinuousMap.coe_mk]
+      rw [Real.dist_eq]
+      have hbnd : ∀ z, |largeUpperBCF n z * g z| ≤ M := fun z => by
+        rw [abs_mul, abs_of_nonneg (largeUpperBCF_nonneg n z)]
+        calc largeUpperBCF n z * |g z|
+            ≤ 1 * |g z| :=
+              mul_le_mul_of_nonneg_right (largeUpperBCF_le_one n z) (abs_nonneg _)
+          _ ≤ 1 * M := mul_le_mul_of_nonneg_left (hg_bnd z) zero_le_one
+          _ = M := one_mul _
+      have hx := hbnd x; have hy := hbnd y
+      rw [abs_le] at hx hy
+      refine abs_sub_le_iff.mpr ⟨?_, ?_⟩ <;> linarith)
+
+@[simp]
+private lemma largeUpperMulBCF_apply (n : ℕ) (g : ℝ → ℝ) (hg_cont : Continuous g)
+    (M : ℝ) (hg_bnd : ∀ x, |g x| ≤ M) (x : ℝ) :
+    largeUpperMulBCF n g hg_cont M hg_bnd x = largeUpperBCF n x * g x := rfl
+
+private lemma largeUpperMulBCF_abs_le (n : ℕ) (g : ℝ → ℝ) (hg_cont : Continuous g)
+    (M : ℝ) (hg_bnd : ∀ x, |g x| ≤ M) (x : ℝ) :
+    |largeUpperMulBCF n g hg_cont M hg_bnd x| ≤ M := by
+  rw [largeUpperMulBCF_apply, abs_mul, abs_of_nonneg (largeUpperBCF_nonneg n x)]
+  calc largeUpperBCF n x * |g x|
+      ≤ 1 * M :=
+        mul_le_mul (largeUpperBCF_le_one n x) (hg_bnd x) (abs_nonneg _) zero_le_one
+    _ = M := one_mul _
+
+private lemma largeUpperMulBCF_vanishes_near_zero (n : ℕ) (hn : 1 ≤ n)
+    (g : ℝ → ℝ) (hg_cont : Continuous g) (M : ℝ) (hg_bnd : ∀ x, |g x| ≤ M) :
+    ∃ r > (0 : ℝ), ∀ x, |x| < r → largeUpperMulBCF n g hg_cont M hg_bnd x = 0 := by
+  obtain ⟨r, hr_pos, hr_zero⟩ := largeUpperBCF_vanishes_near_zero n hn
+  refine ⟨r, hr_pos, fun x hx => ?_⟩
+  rw [largeUpperMulBCF_apply, hr_zero x hx, zero_mul]
+
+private lemma largeUpperMulBCF_tendsto_indicator
+    (g : ℝ → ℝ) (hg_cont : Continuous g) (M : ℝ) (hg_bnd : ∀ x, |g x| ≤ M) (x : ℝ) :
+    Tendsto (fun n => largeUpperMulBCF n g hg_cont M hg_bnd x) atTop
+      (𝓝 (Set.indicator (largeSet 1) g x)) := by
+  have h1 := (largeUpperBCF_tendsto_indicator x).mul
+      (tendsto_const_nhds : Tendsto (fun _ : ℕ => g x) atTop (𝓝 (g x)))
+  have h_eq :
+      Set.indicator {y : ℝ | 1 ≤ |y|} (fun _ => (1 : ℝ)) x * g x =
+        Set.indicator (largeSet 1) g x := by
+    by_cases hx : 1 ≤ |x|
+    · rw [Set.indicator_of_mem (show x ∈ {y : ℝ | 1 ≤ |y|} from hx),
+          Set.indicator_of_mem (show x ∈ largeSet 1 from hx), one_mul]
+    · push_neg at hx
+      rw [Set.indicator_of_notMem (show x ∉ {y : ℝ | 1 ≤ |y|} from not_le.mpr hx),
+          Set.indicator_of_notMem (show x ∉ largeSet 1 from not_le.mpr hx), zero_mul]
+  rw [← h_eq]
+  exact h1.congr (fun n => (largeUpperMulBCF_apply n g hg_cont M hg_bnd x).symm)
+
 /-! ### Final assembly of the Lévy-Khintchine triple (finite-ν pivot)
 
 Following the 2026-05-20 pivot to the compound-Poisson + Gaussian intermediate, the
