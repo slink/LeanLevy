@@ -3577,6 +3577,224 @@ private lemma largeUpperMulBCF_tendsto_indicator
   rw [← h_eq]
   exact h1.congr (fun n => (largeUpperMulBCF_apply n g hg_cont M hg_bnd x).symm)
 
+/-- Pointwise bound `|largeUpperMulBCF n g x − Set.indicator (largeSet 1) g x| ≤
+M · largeAnnulusBCF n x`, the key inequality controlling the discrepancy between
+the smooth cutoff product and the true indicator product. -/
+private lemma largeUpperMulBCF_sub_indicator_abs_le
+    (n : ℕ) (g : ℝ → ℝ) (hg_cont : Continuous g) (M : ℝ) (hM_nn : 0 ≤ M)
+    (hg_bnd : ∀ x, |g x| ≤ M) (x : ℝ) :
+    |largeUpperMulBCF n g hg_cont M hg_bnd x - Set.indicator (largeSet 1) g x| ≤
+      M * largeAnnulusBCF n x := by
+  rw [largeUpperMulBCF_apply]
+  by_cases hx : 1 ≤ |x|
+  · -- |x| ≥ 1: both = g(x), difference 0.
+    rw [Set.indicator_of_mem (show x ∈ largeSet 1 from hx),
+        largeUpperBCF_eq_one n hx, one_mul]
+    rw [show g x - g x = 0 from sub_self (g x), abs_zero]
+    exact mul_nonneg hM_nn (largeAnnulusBCF_nonneg n x)
+  · push_neg at hx
+    rw [Set.indicator_of_notMem (show x ∉ largeSet 1 from not_le.mpr hx), sub_zero,
+        abs_mul, abs_of_nonneg (largeUpperBCF_nonneg n x)]
+    by_cases hx' : |x| ≤ 1 - 1/(n + 1 : ℝ)
+    · rw [largeUpperBCF_eq_zero n hx', zero_mul]
+      exact mul_nonneg hM_nn (largeAnnulusBCF_nonneg n x)
+    · push_neg at hx'
+      have h_in_annulus : |(|x| - 1)| ≤ 1/(n + 1 : ℝ) := by
+        rw [abs_of_nonpos (by linarith : |x| - 1 ≤ 0), neg_sub]; linarith
+      rw [largeAnnulusBCF_eq_one n h_in_annulus, mul_one]
+      calc largeUpperBCF n x * |g x|
+          ≤ 1 * M :=
+            mul_le_mul (largeUpperBCF_le_one n x) (hg_bnd x) (abs_nonneg _) zero_le_one
+        _ = M := one_mul _
+
+/-- **Scalar large-jump limit identification.** For any continuous bounded `g : ℝ → ℝ`,
+under the hypothesis that `ν` has no atom at `|x| = 1`, the scaled set integral over
+`largeSet 1` of `g` against `μ_t` converges to the corresponding ν-integral.
+
+The proof is an ε/3 sandwich: approximate `1_{|x| ≥ 1}` from above by the smooth cutoff
+`largeUpperBCF n`, bound the discrepancy by `largeAnnulusBCF n` (whose ν-integral
+vanishes as `n → ∞` by `hν_atom`), and apply `h_jump` for each fixed `n`. -/
+private lemma scaled_largeSet_integral_tendsto
+    (g : ℝ → ℝ) (hg_cont : Continuous g) {M : ℝ} (hM_nn : 0 ≤ M)
+    (hg_bnd : ∀ x, |g x| ≤ M)
+    {ν : Measure ℝ} [IsFiniteMeasure ν] (hν_atom : ν {x | |x| = 1} = 0)
+    {t_seq : ℕ → {t : ℝ // 0 < t}}
+    (h_jump : ∀ (f : BoundedContinuousFunction ℝ ℝ),
+        (∃ r > 0, ∀ x, |x| < r → f x = 0) →
+        Tendsto (fun k => (t_seq k).val⁻¹ * ∫ x, f x ∂(S.measure (t_seq k) : Measure ℝ))
+          atTop (𝓝 (∫ x, f x ∂ν))) :
+    Tendsto (fun k =>
+      (t_seq k).val⁻¹ * ∫ x in largeSet 1, g x ∂(S.measure (t_seq k) : Measure ℝ))
+    atTop (𝓝 (∫ x in largeSet 1, g x ∂ν)) := by
+  -- Composite BCFs `largeUpperBCF n · g` for each n.
+  set φg : ℕ → BoundedContinuousFunction ℝ ℝ :=
+    fun n => largeUpperMulBCF n g hg_cont M hg_bnd with hφg_def
+  -- DCT on ν for the BCFs: ∫ φg n dν → ∫_{largeSet 1} g dν.
+  have h_dct_φg : Tendsto (fun n => ∫ x, φg n x ∂ν) atTop
+      (𝓝 (∫ x in largeSet 1, g x ∂ν)) := by
+    have h_lim : Tendsto (fun n => ∫ x, φg n x ∂ν) atTop
+        (𝓝 (∫ x, Set.indicator (largeSet 1) g x ∂ν)) := by
+      refine MeasureTheory.tendsto_integral_of_dominated_convergence (bound := fun _ => M)
+        (fun n => (φg n).continuous.aestronglyMeasurable)
+        (integrable_const M)
+        (fun n => Filter.Eventually.of_forall (fun x => by
+          rw [Real.norm_eq_abs]
+          exact largeUpperMulBCF_abs_le n g hg_cont M hg_bnd x))
+        (Filter.Eventually.of_forall
+          (fun x => largeUpperMulBCF_tendsto_indicator g hg_cont M hg_bnd x))
+    rwa [integral_indicator (measurableSet_largeSet 1)] at h_lim
+  -- DCT on ν for χ_n: ∫ χ_n dν → 0, using hν_atom.
+  have h_dct_χ : Tendsto (fun n => ∫ x, largeAnnulusBCF n x ∂ν) atTop (𝓝 0) := by
+    have h_lim : Tendsto (fun n => ∫ x, largeAnnulusBCF n x ∂ν) atTop
+        (𝓝 (∫ x, Set.indicator {y : ℝ | |y| = 1} (fun _ => (1 : ℝ)) x ∂ν)) := by
+      refine MeasureTheory.tendsto_integral_of_dominated_convergence (bound := fun _ => 1)
+        (fun n => (largeAnnulusBCF n).continuous.aestronglyMeasurable)
+        (integrable_const 1)
+        (fun n => Filter.Eventually.of_forall (fun x => by
+          rw [Real.norm_eq_abs, abs_of_nonneg (largeAnnulusBCF_nonneg n x)]
+          exact largeAnnulusBCF_le_one n x))
+        (Filter.Eventually.of_forall (fun x => largeAnnulusBCF_tendsto_indicator x))
+    have h_meas_singleton : MeasurableSet {y : ℝ | |y| = 1} :=
+      (isClosed_singleton.preimage continuous_abs).measurableSet
+    rw [integral_indicator h_meas_singleton] at h_lim
+    have h_zero : ∫ _ in {y : ℝ | |y| = 1}, (1 : ℝ) ∂ν = 0 := by
+      have : (ν.restrict {y : ℝ | |y| = 1}) = 0 := by
+        rw [Measure.restrict_eq_zero]; exact hν_atom
+      rw [show (∫ _ in {y : ℝ | |y| = 1}, (1 : ℝ) ∂ν) =
+            ∫ _, (1 : ℝ) ∂(ν.restrict {y : ℝ | |y| = 1}) from rfl, this,
+          integral_zero_measure]
+    rw [h_zero] at h_lim
+    exact h_lim
+  -- ε/3 argument.
+  rw [Metric.tendsto_atTop]
+  intro ε hε
+  have hMplus : (0 : ℝ) < M + 1 := by linarith
+  have hpos_3 : (0 : ℝ) < ε / 3 := by positivity
+  have hpos_6Mplus : (0 : ℝ) < ε / (6 * (M + 1)) := by positivity
+  -- Choose n₀ ≥ 2 such that |∫ φg n₀ dν - target| < ε/3 AND ∫ χ_{n₀} dν < ε/(6(M+1)).
+  obtain ⟨N₁, hN₁⟩ := (Metric.tendsto_atTop.mp h_dct_φg) (ε / 3) hpos_3
+  obtain ⟨N₂, hN₂⟩ := (Metric.tendsto_atTop.mp h_dct_χ) (ε / (6 * (M + 1))) hpos_6Mplus
+  set n₀ : ℕ := max (max N₁ N₂) 2 with hn₀_def
+  have hn₀_N₁ : N₁ ≤ n₀ := le_trans (le_max_left _ _) (le_max_left _ _)
+  have hn₀_N₂ : N₂ ≤ n₀ := le_trans (le_max_right _ _) (le_max_left _ _)
+  have hn₀_2 : 2 ≤ n₀ := le_max_right _ _
+  have hn₀_1 : 1 ≤ n₀ := le_trans (by norm_num) hn₀_2
+  have h_bnd_φg_int : |∫ x, φg n₀ x ∂ν - ∫ x in largeSet 1, g x ∂ν| < ε / 3 := by
+    have := hN₁ n₀ hn₀_N₁; rwa [Real.dist_eq] at this
+  have h_χ_int_nn : 0 ≤ ∫ x, largeAnnulusBCF n₀ x ∂ν :=
+    integral_nonneg (fun x => largeAnnulusBCF_nonneg n₀ x)
+  have h_bnd_χ_int : ∫ x, largeAnnulusBCF n₀ x ∂ν < ε / (6 * (M + 1)) := by
+    have := hN₂ n₀ hn₀_N₂
+    rw [Real.dist_eq, sub_zero, abs_of_nonneg h_χ_int_nn] at this
+    exact this
+  -- Apply h_jump to φg n₀ and χ_{n₀}.
+  have h_φg_kjump : Tendsto (fun k => (t_seq k).val⁻¹ *
+      ∫ x, φg n₀ x ∂(S.measure (t_seq k) : Measure ℝ))
+      atTop (𝓝 (∫ x, φg n₀ x ∂ν)) :=
+    h_jump (φg n₀) (largeUpperMulBCF_vanishes_near_zero n₀ hn₀_1 g hg_cont M hg_bnd)
+  have h_χ_kjump : Tendsto (fun k => (t_seq k).val⁻¹ *
+      ∫ x, largeAnnulusBCF n₀ x ∂(S.measure (t_seq k) : Measure ℝ))
+      atTop (𝓝 (∫ x, largeAnnulusBCF n₀ x ∂ν)) :=
+    h_jump (largeAnnulusBCF n₀) (largeAnnulusBCF_vanishes_near_zero n₀ hn₀_2)
+  obtain ⟨K₁, hK₁⟩ := (Metric.tendsto_atTop.mp h_φg_kjump) (ε / 3) hpos_3
+  obtain ⟨K₂, hK₂⟩ := (Metric.tendsto_atTop.mp h_χ_kjump) (ε / (6 * (M + 1))) hpos_6Mplus
+  refine ⟨max K₁ K₂, fun k hk => ?_⟩
+  have hk_K₁ : K₁ ≤ k := le_trans (le_max_left _ _) hk
+  have hk_K₂ : K₂ ≤ k := le_trans (le_max_right _ _) hk
+  -- Bound on |t_k⁻¹ · ∫ φg n₀ dμ_k - ∫ φg n₀ dν|.
+  have h_bnd_φg_k : |(t_seq k).val⁻¹ *
+      ∫ x, φg n₀ x ∂(S.measure (t_seq k) : Measure ℝ) - ∫ x, φg n₀ x ∂ν| < ε / 3 := by
+    have := hK₁ k hk_K₁; rwa [Real.dist_eq] at this
+  -- Bound on t_k⁻¹ · ∫ χ_{n₀} dμ_k via the limit of ∫ χ dν.
+  have h_bnd_χ_k : (t_seq k).val⁻¹ *
+      ∫ x, largeAnnulusBCF n₀ x ∂(S.measure (t_seq k) : Measure ℝ) ≤
+      2 * (ε / (6 * (M + 1))) := by
+    have h_diff := hK₂ k hk_K₂
+    rw [Real.dist_eq] at h_diff
+    have h_abs_sub := abs_sub_lt_iff.mp h_diff
+    linarith [h_bnd_χ_int, h_abs_sub.1]
+  -- Pointwise bound: |φg n₀ x - indicator g x| ≤ M · χ_{n₀} x.
+  -- Integrate against μ_k: |t_k⁻¹ · ∫ (φg n₀ - indicator g) dμ_k| ≤ M · t_k⁻¹ · ∫ χ_{n₀} dμ_k.
+  have h_int_diff_bnd :
+      |(t_seq k).val⁻¹ * ∫ x, φg n₀ x ∂(S.measure (t_seq k) : Measure ℝ) -
+        (t_seq k).val⁻¹ * ∫ x in largeSet 1, g x ∂(S.measure (t_seq k) : Measure ℝ)| ≤
+      M * ((t_seq k).val⁻¹ *
+        ∫ x, largeAnnulusBCF n₀ x ∂(S.measure (t_seq k) : Measure ℝ)) := by
+    set μk : Measure ℝ := (S.measure (t_seq k) : Measure ℝ) with hμk_def
+    have h_indicator_int :
+        ∫ x in largeSet 1, g x ∂μk = ∫ x, Set.indicator (largeSet 1) g x ∂μk :=
+      (integral_indicator (measurableSet_largeSet 1)).symm
+    rw [h_indicator_int, ← mul_sub, abs_mul]
+    have h_tinv_nn : (0 : ℝ) ≤ (t_seq k).val⁻¹ :=
+      inv_nonneg.mpr (le_of_lt (t_seq k).prop)
+    rw [abs_of_nonneg h_tinv_nn,
+        show M * ((t_seq k).val⁻¹ * ∫ x, largeAnnulusBCF n₀ x ∂μk) =
+            (t_seq k).val⁻¹ * (M * ∫ x, largeAnnulusBCF n₀ x ∂μk) from by ring]
+    refine mul_le_mul_of_nonneg_left ?_ h_tinv_nn
+    -- |∫ (φg - indicator g) dμk| ≤ M · ∫ χ dμk
+    have h_φg_int : Integrable (φg n₀) μk := (φg n₀).integrable _
+    have h_ind_int : Integrable (Set.indicator (largeSet 1) g) μk := by
+      have hg_int : Integrable g μk :=
+        Integrable.mono' (integrable_const M)
+          hg_cont.aestronglyMeasurable
+          (Filter.Eventually.of_forall (fun x => by
+            rw [Real.norm_eq_abs]; exact hg_bnd x))
+      exact hg_int.indicator (measurableSet_largeSet 1)
+    rw [← integral_sub h_φg_int h_ind_int]
+    have h_ptwise : ∀ x, |φg n₀ x - Set.indicator (largeSet 1) g x| ≤
+        M * largeAnnulusBCF n₀ x := fun x =>
+      largeUpperMulBCF_sub_indicator_abs_le n₀ g hg_cont M hM_nn hg_bnd x
+    calc |∫ x, (φg n₀ x - Set.indicator (largeSet 1) g x) ∂μk|
+        ≤ ∫ x, M * largeAnnulusBCF n₀ x ∂μk := by
+          have h_bnd_int :=
+            MeasureTheory.norm_integral_le_of_norm_le
+              (((largeAnnulusBCF n₀).integrable μk).const_mul M)
+              (Filter.Eventually.of_forall (fun x => by
+                rw [Real.norm_eq_abs]; exact h_ptwise x))
+          rwa [Real.norm_eq_abs] at h_bnd_int
+      _ = M * ∫ x, largeAnnulusBCF n₀ x ∂μk := integral_const_mul _ _
+  -- Triangle inequality assembly.
+  rw [Real.dist_eq]
+  have h_split :
+      (t_seq k).val⁻¹ * ∫ x in largeSet 1, g x ∂(S.measure (t_seq k) : Measure ℝ) -
+        ∫ x in largeSet 1, g x ∂ν =
+      ((t_seq k).val⁻¹ * ∫ x in largeSet 1, g x ∂(S.measure (t_seq k) : Measure ℝ) -
+          (t_seq k).val⁻¹ * ∫ x, φg n₀ x ∂(S.measure (t_seq k) : Measure ℝ)) +
+        ((t_seq k).val⁻¹ * ∫ x, φg n₀ x ∂(S.measure (t_seq k) : Measure ℝ) -
+          ∫ x, φg n₀ x ∂ν) +
+        (∫ x, φg n₀ x ∂ν - ∫ x in largeSet 1, g x ∂ν) := by ring
+  rw [h_split]
+  have h_tri : ∀ a b c : ℝ, |a + b + c| ≤ |a| + |b| + |c| := fun a b c => by
+    have h1 : |a + b + c| ≤ |a + b| + |c| := by
+      have := norm_add_le (a + b) c
+      rw [Real.norm_eq_abs, Real.norm_eq_abs, Real.norm_eq_abs] at this; exact this
+    have h2 : |a + b| ≤ |a| + |b| := by
+      have := norm_add_le a b
+      rw [Real.norm_eq_abs, Real.norm_eq_abs, Real.norm_eq_abs] at this; exact this
+    linarith
+  refine lt_of_le_of_lt (h_tri _ _ _) ?_
+  have h_step1 :
+      |(t_seq k).val⁻¹ * ∫ x in largeSet 1, g x ∂(S.measure (t_seq k) : Measure ℝ) -
+        (t_seq k).val⁻¹ * ∫ x, φg n₀ x ∂(S.measure (t_seq k) : Measure ℝ)| ≤
+      M * ((t_seq k).val⁻¹ *
+        ∫ x, largeAnnulusBCF n₀ x ∂(S.measure (t_seq k) : Measure ℝ)) := by
+    rw [abs_sub_comm]; exact h_int_diff_bnd
+  have h_main_bnd :
+      M * ((t_seq k).val⁻¹ *
+        ∫ x, largeAnnulusBCF n₀ x ∂(S.measure (t_seq k) : Measure ℝ)) ≤
+        M * (2 * (ε / (6 * (M + 1)))) :=
+    mul_le_mul_of_nonneg_left h_bnd_χ_k hM_nn
+  have h_alg : M * (2 * (ε / (6 * (M + 1)))) ≤ ε / 3 := by
+    have hM1 : 0 < M + 1 := by linarith
+    have h_ratio : M / (M + 1) ≤ 1 := by
+      rw [div_le_one hM1]; linarith
+    calc M * (2 * (ε / (6 * (M + 1))))
+        = (M / (M + 1)) * (ε / 3) := by field_simp; ring
+      _ ≤ 1 * (ε / 3) :=
+          mul_le_mul_of_nonneg_right h_ratio (by linarith [hε.le])
+      _ = ε / 3 := one_mul _
+  linarith [h_step1, h_main_bnd, h_alg, h_bnd_φg_k, h_bnd_φg_int]
+
 /-! ### Final assembly of the Lévy-Khintchine triple (finite-ν pivot)
 
 Following the 2026-05-20 pivot to the compound-Poisson + Gaussian intermediate, the
