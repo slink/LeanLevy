@@ -3304,6 +3304,190 @@ private lemma charFun_sub_one_div_decomp (t : {t : ℝ // 0 < t}) (ξ : ℝ) :
   push_cast
   ring
 
+/-! ### Smooth cutoff BCFs for the LK assembly
+
+To identify the small- and large-jump limit pieces in `psi_eq_levyKhintchine_formula`,
+we need to approximate the indicator `1_{|x| ≥ 1}` (and the related annulus indicator
+near `|x| = 1`) by bounded continuous functions, then apply `h_jump`. -/
+
+/-- Bounded continuous "upper" cutoff approximating `1_{|x| ≥ 1}` from above.
+
+* `largeUpperBCF n x = 1` for `|x| ≥ 1`
+* `largeUpperBCF n x = 0` for `|x| ≤ 1 - 1/(n+1)`
+* linear ramp from `0` to `1` on `[1 - 1/(n+1), 1]`. -/
+private noncomputable def largeUpperBCF (n : ℕ) : BoundedContinuousFunction ℝ ℝ :=
+  BoundedContinuousFunction.mkOfBound
+    ⟨fun x => min 1 (max 0 ((|x| - 1) * (n + 1 : ℝ) + 1)),
+      Continuous.min continuous_const
+        (Continuous.max continuous_const
+          (((continuous_abs.sub continuous_const).mul continuous_const).add continuous_const))⟩
+    1
+    (fun x y => by
+      have hbnd : ∀ z : ℝ,
+          0 ≤ min 1 (max 0 ((|z| - 1) * (n + 1 : ℝ) + 1)) ∧
+          min 1 (max 0 ((|z| - 1) * (n + 1 : ℝ) + 1)) ≤ 1 := fun z =>
+        ⟨le_min zero_le_one (le_max_left _ _), min_le_left _ _⟩
+      rw [Real.dist_eq]
+      simp only [ContinuousMap.coe_mk]
+      have hx := hbnd x; have hy := hbnd y
+      refine abs_sub_le_iff.mpr ⟨?_, ?_⟩ <;> linarith)
+
+private lemma largeUpperBCF_apply (n : ℕ) (x : ℝ) :
+    largeUpperBCF n x = min 1 (max 0 ((|x| - 1) * (n + 1 : ℝ) + 1)) := rfl
+
+private lemma largeUpperBCF_nonneg (n : ℕ) (x : ℝ) : 0 ≤ largeUpperBCF n x := by
+  rw [largeUpperBCF_apply]; exact le_min zero_le_one (le_max_left _ _)
+
+private lemma largeUpperBCF_le_one (n : ℕ) (x : ℝ) : largeUpperBCF n x ≤ 1 := by
+  rw [largeUpperBCF_apply]; exact min_le_left _ _
+
+private lemma largeUpperBCF_eq_one (n : ℕ) {x : ℝ} (hx : 1 ≤ |x|) :
+    largeUpperBCF n x = 1 := by
+  rw [largeUpperBCF_apply]
+  have hnn : (0 : ℝ) ≤ (n + 1 : ℝ) := by positivity
+  have h1 : 0 ≤ (|x| - 1) * (n + 1 : ℝ) := mul_nonneg (by linarith) hnn
+  have h2 : 1 ≤ (|x| - 1) * (n + 1 : ℝ) + 1 := by linarith
+  rw [show max 0 ((|x| - 1) * (n + 1 : ℝ) + 1) = (|x| - 1) * (n + 1 : ℝ) + 1 from
+      max_eq_right (by linarith)]
+  exact min_eq_left h2
+
+private lemma largeUpperBCF_eq_zero (n : ℕ) {x : ℝ}
+    (hx : |x| ≤ 1 - 1/(n + 1 : ℝ)) : largeUpperBCF n x = 0 := by
+  rw [largeUpperBCF_apply]
+  have hn1 : (0 : ℝ) < n + 1 := by positivity
+  have hbnd : (|x| - 1) * (n + 1 : ℝ) + 1 ≤ 0 := by
+    have h1 : |x| - 1 ≤ -(1/(n + 1 : ℝ)) := by linarith
+    have h2 : (|x| - 1) * (n + 1 : ℝ) ≤ -(1/(n + 1 : ℝ)) * (n + 1 : ℝ) :=
+      mul_le_mul_of_nonneg_right h1 hn1.le
+    rw [show -(1/(n + 1 : ℝ)) * (n + 1 : ℝ) = -1 from by field_simp] at h2
+    linarith
+  rw [show max 0 ((|x| - 1) * (n + 1 : ℝ) + 1) = 0 from max_eq_left hbnd]
+  exact min_eq_right zero_le_one
+
+/-- `largeUpperBCF n` vanishes on a neighborhood of `0` for `n ≥ 1`, hence it
+lies in the test class of `h_jump`. -/
+private lemma largeUpperBCF_vanishes_near_zero (n : ℕ) (hn : 1 ≤ n) :
+    ∃ r > (0 : ℝ), ∀ x, |x| < r → largeUpperBCF n x = 0 := by
+  refine ⟨1/(n + 2 : ℝ), by positivity, fun x hx => ?_⟩
+  apply largeUpperBCF_eq_zero
+  have hn1 : (0 : ℝ) < n + 1 := by positivity
+  have hn2 : (0 : ℝ) < n + 2 := by positivity
+  have hn_cast : (1 : ℝ) ≤ n := by exact_mod_cast hn
+  have h_ineq : 1/(n + 2 : ℝ) ≤ 1 - 1/(n + 1 : ℝ) := by
+    rw [le_sub_iff_add_le, div_add_div _ _ hn2.ne' hn1.ne', div_le_one (by positivity)]
+    nlinarith
+  linarith [le_of_lt hx]
+
+/-- As `n → ∞`, `largeUpperBCF n x → 1_{|x| ≥ 1}` pointwise. -/
+private lemma largeUpperBCF_tendsto_indicator (x : ℝ) :
+    Tendsto (fun n : ℕ => largeUpperBCF n x) atTop
+      (𝓝 (Set.indicator {y : ℝ | 1 ≤ |y|} (fun _ => (1 : ℝ)) x)) := by
+  by_cases hx : 1 ≤ |x|
+  · rw [Set.indicator_of_mem (show x ∈ {y | 1 ≤ |y|} from hx)]
+    refine tendsto_atTop_of_eventually_const (i₀ := 0) (fun n _ => ?_)
+    exact largeUpperBCF_eq_one n hx
+  · push_neg at hx
+    rw [Set.indicator_of_notMem (show x ∉ {y | 1 ≤ |y|} from not_le.mpr hx)]
+    have h_pos : 0 < 1 - |x| := by linarith
+    obtain ⟨N, hN⟩ := exists_nat_gt (1/(1 - |x|))
+    rw [div_lt_iff₀ h_pos] at hN  -- hN : 1 < ↑N * (1 - |x|)
+    refine tendsto_atTop_of_eventually_const (i₀ := N) (fun n hn => ?_)
+    apply largeUpperBCF_eq_zero
+    have hn1_pos : (0 : ℝ) < n + 1 := by positivity
+    have hN_le : (N : ℝ) ≤ (n : ℝ) := by exact_mod_cast hn
+    have h1 : 1 ≤ (1 - |x|) * (n + 1 : ℝ) := by
+      calc (1 : ℝ) ≤ (N : ℝ) * (1 - |x|) := le_of_lt hN
+        _ ≤ (n : ℝ) * (1 - |x|) := mul_le_mul_of_nonneg_right hN_le h_pos.le
+        _ ≤ (n + 1 : ℝ) * (1 - |x|) :=
+            mul_le_mul_of_nonneg_right (by linarith) h_pos.le
+        _ = (1 - |x|) * (n + 1 : ℝ) := by ring
+    rw [← div_le_iff₀ hn1_pos] at h1
+    linarith
+
+/-- Bounded continuous "annulus" cutoff centered at `|x| = 1`.
+
+* `largeAnnulusBCF n x = 1` for `||x| - 1| ≤ 1/(n+1)` (plateau on the annulus)
+* `largeAnnulusBCF n x = 0` for `||x| - 1| ≥ 2/(n+1)` (outside a slightly wider annulus)
+* linear ramp on the transition bands. -/
+private noncomputable def largeAnnulusBCF (n : ℕ) : BoundedContinuousFunction ℝ ℝ :=
+  BoundedContinuousFunction.mkOfBound
+    ⟨fun x => max 0 (1 - (n + 1 : ℝ) * max 0 (|(|x| - 1)| - 1/(n + 1 : ℝ))),
+      Continuous.max continuous_const
+        (continuous_const.sub (continuous_const.mul
+          (Continuous.max continuous_const
+            ((continuous_abs.comp (continuous_abs.sub continuous_const)).sub continuous_const))))⟩
+    1
+    (fun x y => by
+      have hbnd : ∀ z : ℝ,
+          0 ≤ max 0 (1 - (n + 1 : ℝ) * max 0 (|(|z| - 1)| - 1/(n + 1 : ℝ))) ∧
+          max 0 (1 - (n + 1 : ℝ) * max 0 (|(|z| - 1)| - 1/(n + 1 : ℝ))) ≤ 1 := fun z => by
+        refine ⟨le_max_left _ _, max_le zero_le_one ?_⟩
+        have h1 : 0 ≤ (n + 1 : ℝ) * max 0 (|(|z| - 1)| - 1/(n + 1 : ℝ)) := by positivity
+        linarith
+      rw [Real.dist_eq]
+      simp only [ContinuousMap.coe_mk]
+      have hx := hbnd x; have hy := hbnd y
+      refine abs_sub_le_iff.mpr ⟨?_, ?_⟩ <;> linarith)
+
+private lemma largeAnnulusBCF_apply (n : ℕ) (x : ℝ) :
+    largeAnnulusBCF n x =
+      max 0 (1 - (n + 1 : ℝ) * max 0 (|(|x| - 1)| - 1/(n + 1 : ℝ))) := rfl
+
+private lemma largeAnnulusBCF_nonneg (n : ℕ) (x : ℝ) : 0 ≤ largeAnnulusBCF n x := by
+  rw [largeAnnulusBCF_apply]; exact le_max_left _ _
+
+private lemma largeAnnulusBCF_le_one (n : ℕ) (x : ℝ) : largeAnnulusBCF n x ≤ 1 := by
+  rw [largeAnnulusBCF_apply]
+  refine max_le zero_le_one ?_
+  have h1 : 0 ≤ (n + 1 : ℝ) * max 0 (|(|x| - 1)| - 1/(n + 1 : ℝ)) := by positivity
+  linarith
+
+private lemma largeAnnulusBCF_eq_one (n : ℕ) {x : ℝ}
+    (hx : |(|x| - 1)| ≤ 1/(n + 1 : ℝ)) : largeAnnulusBCF n x = 1 := by
+  rw [largeAnnulusBCF_apply]
+  have hsub : |(|x| - 1)| - 1/(n + 1 : ℝ) ≤ 0 := by linarith
+  rw [show max 0 (|(|x| - 1)| - 1/(n + 1 : ℝ)) = 0 from max_eq_left hsub,
+      mul_zero, sub_zero, max_eq_right zero_le_one]
+
+private lemma largeAnnulusBCF_eq_zero (n : ℕ) {x : ℝ}
+    (hx : 2/(n + 1 : ℝ) ≤ |(|x| - 1)|) : largeAnnulusBCF n x = 0 := by
+  rw [largeAnnulusBCF_apply]
+  have hn1 : (0 : ℝ) < n + 1 := by positivity
+  have h_diff : 1/(n + 1 : ℝ) ≤ |(|x| - 1)| - 1/(n + 1 : ℝ) := by
+    have : 2/(n + 1 : ℝ) = 1/(n + 1 : ℝ) + 1/(n + 1 : ℝ) := by ring
+    linarith [this ▸ hx]
+  have h_nn : 0 ≤ |(|x| - 1)| - 1/(n + 1 : ℝ) := le_trans (by positivity) h_diff
+  rw [max_eq_right h_nn]
+  have h_prod : 1 ≤ (n + 1 : ℝ) * (|(|x| - 1)| - 1/(n + 1 : ℝ)) := by
+    have := mul_le_mul_of_nonneg_left h_diff hn1.le
+    rw [show (n + 1 : ℝ) * (1/(n + 1 : ℝ)) = 1 from by field_simp] at this
+    exact this
+  have : 1 - (n + 1 : ℝ) * (|(|x| - 1)| - 1/(n + 1 : ℝ)) ≤ 0 := by linarith
+  exact max_eq_left this
+
+/-- `largeAnnulusBCF n` vanishes on a neighborhood of `0` for `n ≥ 2`. -/
+private lemma largeAnnulusBCF_vanishes_near_zero (n : ℕ) (hn : 2 ≤ n) :
+    ∃ r > (0 : ℝ), ∀ x, |x| < r → largeAnnulusBCF n x = 0 := by
+  refine ⟨1/(n + 1 : ℝ), by positivity, fun x hx => ?_⟩
+  apply largeAnnulusBCF_eq_zero
+  -- |x| < 1/(n+1), so |x| - 1 < 1/(n+1) - 1 ≤ 0 (since n+1 ≥ 3), hence ||x| - 1| = 1 - |x| ≥ 1 - 1/(n+1) ≥ 2/(n+1) when n ≥ 2.
+  have hn1 : (0 : ℝ) < n + 1 := by positivity
+  have hx_nn : 0 ≤ |x| := abs_nonneg _
+  have hx_lt : |x| < 1/(n + 1 : ℝ) := hx
+  have h_ratio : 1/(n + 1 : ℝ) ≤ 1/3 := by
+    rw [div_le_div_iff₀ hn1 (by norm_num : (0 : ℝ) < 3)]
+    have : (3 : ℝ) ≤ n + 1 := by exact_mod_cast Nat.add_le_add_right hn 1
+    linarith
+  have hx_lt_1 : |x| < 1 := by linarith
+  have h_neg : |x| - 1 < 0 := by linarith
+  rw [abs_of_neg h_neg, neg_sub]
+  -- goal: 2/(n+1) ≤ 1 - |x|
+  have h_bound : 2/(n + 1 : ℝ) + 1/(n + 1 : ℝ) ≤ 1 := by
+    rw [← add_div, show (2 : ℝ) + 1 = 3 from by norm_num, div_le_one hn1]
+    have : (3 : ℝ) ≤ n + 1 := by exact_mod_cast Nat.add_le_add_right hn 1
+    linarith
+  linarith
+
 /-! ### Final assembly of the Lévy-Khintchine triple (finite-ν pivot)
 
 Following the 2026-05-20 pivot to the compound-Poisson + Gaussian intermediate, the
