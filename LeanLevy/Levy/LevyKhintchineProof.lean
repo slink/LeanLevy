@@ -3545,6 +3545,142 @@ private lemma scaled_band_integral_tendsto
   refine h_sub_lim.congr (fun k => ?_)
   rw [h_split (S.measure (t_seq k) : Measure ℝ), mul_sub]
 
+/-- The `ν`-small-ball second moment is dominated by the scaled-second-moment limit:
+`∫_{|x|<r} x² dν ≤ σ_sq_r`. This makes the Gaussian variance
+`σ_G² = σ_sq_r − ∫_{|x|<r} x² dν` nonnegative. -/
+private lemma smallBall_second_moment_nu_le
+    {r : ℝ} (hr : 0 < r)
+    {ν : Measure ℝ} [IsFiniteMeasure ν] (hν_zero : ν {0} = 0)
+    (hν_r : ν {x | |x| = r} = 0)
+    {t_seq : ℕ → {t : ℝ // 0 < t}} {σ_sq_r : ℝ}
+    (hσ : Tendsto (fun k => (t_seq k).val⁻¹ *
+        ∫ x in {x | |x| < r}, x ^ 2 ∂(S.measure (t_seq k) : Measure ℝ)) atTop (𝓝 σ_sq_r))
+    (h_jump : ∀ (f : BoundedContinuousFunction ℝ ℝ),
+        (∃ r > 0, ∀ x, |x| < r → f x = 0) →
+        Tendsto (fun k => (t_seq k).val⁻¹ * ∫ x, f x ∂(S.measure (t_seq k) : Measure ℝ))
+          atTop (𝓝 (∫ x, f x ∂ν))) :
+    ∫ x in {x | |x| < r}, x ^ 2 ∂ν ≤ σ_sq_r := by
+  -- Clamp `x²` to `[0, r²]`: globally bounded, continuous, and equal to `x²` on `{|x|<r}`.
+  set g : ℝ → ℝ := fun x => min (x ^ 2) (r ^ 2) with hg_def
+  have hg_cont : Continuous g := (continuous_pow 2).min continuous_const
+  have hr2_nn : (0 : ℝ) ≤ r ^ 2 := sq_nonneg r
+  have hg_nn : ∀ x, 0 ≤ g x := fun x => le_min (sq_nonneg x) hr2_nn
+  have hg_bnd : ∀ x, |g x| ≤ r ^ 2 := fun x =>
+    abs_le.mpr ⟨le_trans (by linarith [hr2_nn]) (hg_nn x), min_le_right _ _⟩
+  -- On the ball `{|x| < r}`, the clamp is inactive: `g x = x²`.
+  have hg_eq_ball : ∀ x ∈ {x : ℝ | |x| < r}, g x = x ^ 2 := by
+    intro x hx
+    have hx' : |x| < r := hx
+    have : x ^ 2 ≤ r ^ 2 := by
+      have := sq_le_sq' (by linarith [abs_lt.mp hx']) (le_of_lt (abs_lt.mp hx').2)
+      simpa using this
+    exact min_eq_left this
+  have h_meas_ball : MeasurableSet {x : ℝ | |x| < r} :=
+    (isOpen_lt continuous_abs continuous_const).measurableSet
+  -- Atom-free shrinking sequence `δ m ↓ 0` inside `(0, r)`.
+  obtain ⟨δ, hδ_pos, hδ_lt, hδ_null, hδ_tendsto⟩ := exists_atomFree_seq_tendsto_zero ν hr
+  -- Per-`m` ν-band second moment, bounded by `σ_sq_r`.
+  have h_band_le : ∀ m, ∫ x in {x | δ m ≤ |x| ∧ |x| < r}, x ^ 2 ∂ν ≤ σ_sq_r := by
+    intro m
+    -- The band is measurable and contained in the ball.
+    have h_meas_band : MeasurableSet {x : ℝ | δ m ≤ |x| ∧ |x| < r} :=
+      (measurableSet_le measurable_const continuous_abs.measurable).inter
+        (measurableSet_lt continuous_abs.measurable measurable_const)
+    have h_band_sub : {x : ℝ | δ m ≤ |x| ∧ |x| < r} ⊆ {x : ℝ | |x| < r} :=
+      fun x hx => hx.2
+    -- Step 1: band limit for the clamped `g`, then rewrite to `x²` on both sides.
+    have h_band_lim : Tendsto (fun k => (t_seq k).val⁻¹ *
+        ∫ x in {x | δ m ≤ |x| ∧ |x| < r}, x ^ 2 ∂(S.measure (t_seq k) : Measure ℝ))
+        atTop (𝓝 (∫ x in {x | δ m ≤ |x| ∧ |x| < r}, x ^ 2 ∂ν)) := by
+      have h := S.scaled_band_integral_tendsto (hδ := hδ_pos m) (hδρ := hδ_lt m)
+        g hg_cont hr2_nn hg_bnd (hδ_null m) hν_r h_jump
+      -- Swap `g` for `x²` on the band (it lies in the ball where `g = x²`).
+      have hswap : ∀ (μ : Measure ℝ),
+          ∫ x in {x | δ m ≤ |x| ∧ |x| < r}, g x ∂μ =
+            ∫ x in {x | δ m ≤ |x| ∧ |x| < r}, x ^ 2 ∂μ :=
+        fun μ => setIntegral_congr_fun h_meas_band
+          (fun x hx => hg_eq_ball x (h_band_sub hx))
+      simpa only [hswap ν, hswap (S.measure (t_seq _) : Measure ℝ)] using h
+    -- Step 2: per-`k` comparison band ⊆ ball, using the clamped `g` for integrability.
+    have h_compare : ∀ k, (t_seq k).val⁻¹ *
+        ∫ x in {x | δ m ≤ |x| ∧ |x| < r}, x ^ 2 ∂(S.measure (t_seq k) : Measure ℝ) ≤
+        (t_seq k).val⁻¹ *
+          ∫ x in {x | |x| < r}, x ^ 2 ∂(S.measure (t_seq k) : Measure ℝ) := by
+      intro k
+      refine mul_le_mul_of_nonneg_left ?_ (le_of_lt (inv_pos.mpr (t_seq k).2))
+      set μ := (S.measure (t_seq k) : Measure ℝ)
+      -- Compare via the clamped `g`, which is integrable on the ball (bounded, finite measure).
+      have hg_int_ball : IntegrableOn g {x : ℝ | |x| < r} μ :=
+        integrableOn_of_bounded hg_cont
+          (fun x => by simpa [Real.norm_eq_abs] using hg_bnd x)
+      have h_band : ∫ x in {x | δ m ≤ |x| ∧ |x| < r}, x ^ 2 ∂μ =
+          ∫ x in {x | δ m ≤ |x| ∧ |x| < r}, g x ∂μ :=
+        (setIntegral_congr_fun h_meas_band
+          (fun x hx => hg_eq_ball x (h_band_sub hx))).symm
+      have h_ball : ∫ x in {x | |x| < r}, x ^ 2 ∂μ =
+          ∫ x in {x | |x| < r}, g x ∂μ :=
+        (setIntegral_congr_fun h_meas_ball hg_eq_ball).symm
+      rw [h_band, h_ball]
+      exact setIntegral_mono_set hg_int_ball
+        (ae_restrict_of_forall_mem h_meas_ball (fun x _ => hg_nn x))
+        (HasSubset.Subset.eventuallyLE h_band_sub)
+    exact le_of_tendsto_of_tendsto' h_band_lim hσ h_compare
+  -- Step 3: `m → ∞`. The bands exhaust the punctured ball; `x²·1_{band m} → x²·1_{ball∖{0}}`
+  -- pointwise off `{0}`, dominated by `r²`, so the band integrals tend to the ball integral.
+  set f : ℕ → ℝ → ℝ := fun m x =>
+    Set.indicator {x : ℝ | δ m ≤ |x| ∧ |x| < r} (fun x => x ^ 2) x with hf_def
+  have h_meas_band' : ∀ m, MeasurableSet {x : ℝ | δ m ≤ |x| ∧ |x| < r} := fun m =>
+    (measurableSet_le measurable_const continuous_abs.measurable).inter
+      (measurableSet_lt continuous_abs.measurable measurable_const)
+  -- Rewrite band/ball integrals as integrals of indicators on all of ℝ.
+  have h_band_int : ∀ m, ∫ x in {x | δ m ≤ |x| ∧ |x| < r}, x ^ 2 ∂ν = ∫ x, f m x ∂ν :=
+    fun m => (integral_indicator (h_meas_band' m)).symm
+  have h_ball_int : ∫ x in {x | |x| < r}, x ^ 2 ∂ν =
+      ∫ x, Set.indicator {x : ℝ | |x| < r} (fun x => x ^ 2) x ∂ν :=
+    (integral_indicator h_meas_ball).symm
+  have h_lim : Tendsto (fun m => ∫ x, f m x ∂ν) atTop
+      (𝓝 (∫ x, Set.indicator {x : ℝ | |x| < r} (fun x => x ^ 2) x ∂ν)) := by
+    refine MeasureTheory.tendsto_integral_of_dominated_convergence
+      (bound := fun x => Set.indicator {x : ℝ | |x| < r} (fun x => r ^ 2) x)
+      (fun m => ((continuous_pow 2).aestronglyMeasurable.indicator (h_meas_band' m)))
+      ?_ ?_ ?_
+    · -- the dominating function is integrable.
+      exact (integrable_const (r ^ 2)).indicator h_meas_ball
+    · -- domination `|f m x| ≤ r²·1_ball x`.
+      intro m
+      refine Filter.Eventually.of_forall (fun x => ?_)
+      simp only [Real.norm_eq_abs, hf_def, Set.indicator_apply]
+      by_cases hx : x ∈ {x : ℝ | δ m ≤ |x| ∧ |x| < r}
+      · have hxr : x ∈ {x : ℝ | |x| < r} := hx.2
+        rw [if_pos hx, if_pos hxr]
+        have : x ^ 2 ≤ r ^ 2 := by rw [← hg_eq_ball x hxr]; exact min_le_right _ _
+        rw [abs_of_nonneg (sq_nonneg x)]; exact this
+      · rw [if_neg hx]
+        simp only [abs_zero]
+        split <;> [exact hr2_nn; exact le_refl 0]
+    · -- pointwise convergence ν-a.e. (off the ν-null point `0`).
+      have h_ae : ∀ᵐ x ∂ν, x ≠ 0 := by
+        rw [ae_iff]
+        simpa using hν_zero
+      filter_upwards [h_ae] with x hx0
+      by_cases hxr : x ∈ {x : ℝ | |x| < r}
+      · rw [Set.indicator_of_mem hxr]
+        -- eventually `δ m < |x|`, so `x` enters the band and stays.
+        have hx_pos : 0 < |x| := abs_pos.mpr hx0
+        have h_ev : ∀ᶠ m in atTop, δ m < |x| :=
+          (hδ_tendsto.eventually_lt_const hx_pos)
+        refine Filter.Tendsto.congr' ?_ tendsto_const_nhds
+        filter_upwards [h_ev] with m hm
+        have hmem : x ∈ {x : ℝ | δ m ≤ |x| ∧ |x| < r} := ⟨le_of_lt hm, hxr⟩
+        simp only [hf_def, Set.indicator_apply, if_pos hmem]
+      · rw [Set.indicator_of_notMem hxr]
+        refine Filter.Tendsto.congr' ?_ tendsto_const_nhds
+        refine Filter.Eventually.of_forall (fun m => ?_)
+        have hnmem : x ∉ {x : ℝ | δ m ≤ |x| ∧ |x| < r} := fun h => hxr h.2
+        simp only [hf_def, Set.indicator_apply, if_neg hnmem]
+  rw [h_ball_int]
+  exact le_of_tendsto' (h_lim.congr (fun m => (h_band_int m).symm)) h_band_le
+
 /-! ### Final assembly of the Lévy-Khintchine triple (finite-ν pivot)
 
 Following the 2026-05-20 pivot to the compound-Poisson + Gaussian intermediate, the
