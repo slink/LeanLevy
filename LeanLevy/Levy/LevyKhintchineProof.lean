@@ -3378,12 +3378,13 @@ private lemma scaled_largeSet_integral_tendsto
       _ = ε / 3 := one_mul _
   linarith [h_step1, h_main_bnd, h_alg, h_bnd_φg_k, h_bnd_φg_int]
 
-/-- Bounded continuous integrands are set-integrable against finite/probability measures. -/
+/-- Bounded continuous integrands are set-integrable against finite measures. -/
 private lemma integrableOn_of_bounded {s : Set ℝ} {μ : Measure ℝ} [IsFiniteMeasure μ]
-    {f : ℝ → ℂ} (hf_cont : Continuous f) {M : ℝ} (hf_bnd : ∀ x, ‖f x‖ ≤ M) :
+    {E : Type*} [NormedAddCommGroup E]
+    {f : ℝ → E} (hf_cont : Continuous f) {M : ℝ} (hf_bnd : ∀ x, ‖f x‖ ≤ M) :
     IntegrableOn f s μ :=
   Integrable.mono' (integrable_const M) hf_cont.aestronglyMeasurable
-    (Filter.Eventually.of_forall hf_bnd)
+    (Filter.Eventually.of_forall hf_bnd) |>.integrableOn
 
 /-- **Large-jump identification (complex), at split radius `ρ`.** The scaled set integral
 over `largeSet ρ` of the characteristic integrand `exp(ix·ξ) − 1` against `μ_t` converges
@@ -3473,6 +3474,76 @@ private lemma scaled_largeSet_charFun_tendsto
   rw [h_decomp (S.measure (t_seq k) : Measure ℝ)]
   push_cast
   ring
+
+/-- **Band convergence.** For atom-free radii `0 < δ < ρ`, the scaled band integral of a
+bounded continuous function converges to the `ν`-band integral. Proof: clamp `g` to
+`[-ρ, ρ]` and subtract two `largeSet` limits (`largeSet ρ ⊆ largeSet δ`). -/
+private lemma scaled_band_integral_tendsto
+    {δ ρ : ℝ} (hδ : 0 < δ) (hδρ : δ < ρ)
+    (g : ℝ → ℝ) (hg_cont : Continuous g) {M : ℝ} (hM_nn : 0 ≤ M)
+    (hg_bnd : ∀ x, |g x| ≤ M)
+    {ν : Measure ℝ} [IsFiniteMeasure ν]
+    (hν_δ : ν {x | |x| = δ} = 0) (hν_ρ : ν {x | |x| = ρ} = 0)
+    {t_seq : ℕ → {t : ℝ // 0 < t}}
+    (h_jump : ∀ (f : BoundedContinuousFunction ℝ ℝ),
+        (∃ r > 0, ∀ x, |x| < r → f x = 0) →
+        Tendsto (fun k => (t_seq k).val⁻¹ * ∫ x, f x ∂(S.measure (t_seq k) : Measure ℝ))
+          atTop (𝓝 (∫ x, f x ∂ν))) :
+    Tendsto (fun k => (t_seq k).val⁻¹ *
+        ∫ x in {x | δ ≤ |x| ∧ |x| < ρ}, g x ∂(S.measure (t_seq k) : Measure ℝ))
+      atTop (𝓝 (∫ x in {x | δ ≤ |x| ∧ |x| < ρ}, g x ∂ν)) := by
+  have hρ : 0 < ρ := hδ.trans hδρ
+  -- Clamp `g` to `[-ρ, ρ]`: `g̃ := g ∘ clamp`, continuous and globally bounded by `M`.
+  set clamp : ℝ → ℝ := fun x => max (-ρ) (min x ρ)
+  have hclamp_cont : Continuous clamp :=
+    continuous_const.max (continuous_id.min continuous_const)
+  set g' : ℝ → ℝ := fun x => g (clamp x)
+  have hg'_cont : Continuous g' := hg_cont.comp hclamp_cont
+  have hg'_bnd : ∀ x, |g' x| ≤ M := fun x => hg_bnd (clamp x)
+  -- The band is `largeSet δ \ largeSet ρ`, with `largeSet ρ ⊆ largeSet δ`.
+  have h_sub : largeSet ρ ⊆ largeSet δ := largeSet_antitone (le_of_lt hδρ)
+  have h_band_eq : {x | δ ≤ |x| ∧ |x| < ρ} = largeSet δ \ largeSet ρ := by
+    ext x
+    simp only [Set.mem_setOf_eq, Set.mem_diff, mem_largeSet, not_le]
+  -- On the band, `clamp x = x`, hence `g' = g`.
+  have h_clamp_eq : ∀ x ∈ {x | δ ≤ |x| ∧ |x| < ρ}, clamp x = x := by
+    intro x hx
+    have hxρ : |x| < ρ := hx.2
+    obtain ⟨hxl, hxr⟩ := abs_lt.mp hxρ
+    show max (-ρ) (min x ρ) = x
+    rw [min_eq_left (le_of_lt hxr), max_eq_right (le_of_lt hxl)]
+  -- For any finite measure, the band integral of `g` equals the difference of the
+  -- two `largeSet` integrals of `g'`.
+  have h_split : ∀ (m : Measure ℝ) [IsFiniteMeasure m],
+      ∫ x in {x | δ ≤ |x| ∧ |x| < ρ}, g x ∂m =
+        (∫ x in largeSet δ, g' x ∂m) - ∫ x in largeSet ρ, g' x ∂m := by
+    intro m _
+    have hg'_intOn : IntegrableOn g' (largeSet δ) m :=
+      integrableOn_of_bounded hg'_cont (fun x => by simpa [Real.norm_eq_abs] using hg'_bnd x)
+    have h_diff : ∫ x in largeSet δ \ largeSet ρ, g' x ∂m =
+        (∫ x in largeSet δ, g' x ∂m) - ∫ x in largeSet ρ, g' x ∂m :=
+      integral_diff (measurableSet_largeSet ρ) hg'_intOn h_sub
+    have h_congr : ∫ x in {x | δ ≤ |x| ∧ |x| < ρ}, g x ∂m =
+        ∫ x in {x | δ ≤ |x| ∧ |x| < ρ}, g' x ∂m := by
+      refine (setIntegral_congr_fun ?_ (fun x hx => ?_)).symm
+      · rw [h_band_eq]
+        exact (measurableSet_largeSet δ).diff (measurableSet_largeSet ρ)
+      · show g (clamp x) = g x
+        rw [h_clamp_eq x hx]
+    rw [h_congr, h_band_eq, h_diff]
+  -- Two `largeSet` limits for `g'`, then subtract.
+  have h_δ_lim : Tendsto (fun k => (t_seq k).val⁻¹ *
+      ∫ x in largeSet δ, g' x ∂(S.measure (t_seq k) : Measure ℝ))
+      atTop (𝓝 (∫ x in largeSet δ, g' x ∂ν)) :=
+    S.scaled_largeSet_integral_tendsto hδ g' hg'_cont hM_nn hg'_bnd hν_δ h_jump
+  have h_ρ_lim : Tendsto (fun k => (t_seq k).val⁻¹ *
+      ∫ x in largeSet ρ, g' x ∂(S.measure (t_seq k) : Measure ℝ))
+      atTop (𝓝 (∫ x in largeSet ρ, g' x ∂ν)) :=
+    S.scaled_largeSet_integral_tendsto hρ g' hg'_cont hM_nn hg'_bnd hν_ρ h_jump
+  have h_sub_lim := h_δ_lim.sub h_ρ_lim
+  rw [← h_split ν] at h_sub_lim
+  refine h_sub_lim.congr (fun k => ?_)
+  rw [h_split (S.measure (t_seq k) : Measure ℝ), mul_sub]
 
 /-! ### Final assembly of the Lévy-Khintchine triple (finite-ν pivot)
 
