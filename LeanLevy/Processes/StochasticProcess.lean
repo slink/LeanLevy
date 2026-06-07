@@ -118,32 +118,6 @@ section NaturalFiltrationIndependence
 
 variable [Preorder ι] [MeasurableSpace Ω] [MeasurableSpace E] [AddGroup E]
 
-omit [Preorder ι] [MeasurableSpace Ω] [MeasurableSpace E] in
-/-- When `X 0 = 0`, the increment from `0` to `j` equals `X j`. -/
-private theorem increment_zero_eq [Zero ι] {X : ι → Ω → E}
-    (h0 : X 0 = fun _ => 0) (j : ι) : increment X 0 j = X j := by
-  ext ω; show X j ω - X 0 ω = X j ω
-  rw [show X 0 ω = 0 from congr_fun h0 ω, sub_zero]
-
-/-- For a process with independent increments starting at zero, `X j` is independent
-of `increment X s t` whenever `0 ≤ j ≤ s ≤ t`. This follows from the partition
-`[0, j, s, t]`. -/
-private theorem indepFun_X_increment [Zero ι]
-    {X : ι → Ω → E} {μ : Measure Ω}
-    (h : HasIndependentIncrements X μ)
-    (h0 : X 0 = fun _ => 0)
-    {j s t : ι} (h0j : 0 ≤ j) (hjs : j ≤ s) (hst : s ≤ t) :
-    IndepFun (X j) (increment X s t) μ := by
-  -- Use partition [0, j, s, t] : Fin 4 → ι
-  have hmono : Monotone (![0, j, s, t] : Fin 4 → ι) :=
-    Fin.monotone_iff_le_succ.mpr fun i => by fin_cases i <;> assumption
-  -- Get iIndepFun for the 3 consecutive increments from this partition
-  have hind := h 3 ![0, j, s, t] hmono
-  -- Extract IndepFun for indices 0 and 2 (increment 0→j vs increment s→t)
-  have h02 := hind.indepFun (i := (0 : Fin 3)) (j := (2 : Fin 3)) (by decide)
-  change IndepFun (increment X 0 j) (increment X s t) μ at h02
-  rwa [increment_zero_eq h0] at h02
-
 end NaturalFiltrationIndependence
 
 section FiltrationIndependence

@@ -171,11 +171,6 @@ theorem tendsto_ceilApprox_nhdsWithin_Ici (t : ℝ≥0) :
   tendsto_nhdsWithin_iff.mpr
     ⟨tendsto_ceilApprox t, Eventually.of_forall fun m => ceilApprox_ge t m⟩
 
-/-- Each `ceilApprox t m` is a ratio of natural numbers with positive denominator. -/
-theorem ceilApprox_isRat (t : ℝ≥0) (m : ℕ) :
-    ceilApprox t m = (⌈(t : ℝ) * ↑(m + 1)⌉₊ : ℝ≥0) / ((m + 1 : ℕ) : ℝ≥0) :=
-  rfl
-
 set_option maxHeartbeats 800000 in
 /-- If `f` is right-continuous, `g` is continuous, both from `ℝ≥0` to a T₂ space, and
 they agree on all ℕ/ℕ rationals `k/(n+1)`, then `f = g` everywhere. -/

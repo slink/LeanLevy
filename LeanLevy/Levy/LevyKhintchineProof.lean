@@ -3325,48 +3325,7 @@ finite-small-mass hypothesis. The key downstream lemmas are:
 * `exists_drift_variance_jumpMeasure_along_seq` — the diagonal extraction.
 * `psi_eq_levyKhintchine_formula` — given the diagonal tuple, the formula holds for ψ.
 * `psi_decomposition` — packages the tuple + the formula into a `LevyKhintchineTriple`.
-
-The previous `exists_levy_drift` (drift-only extraction) and the placeholder
-`exists_gaussian_variance := ⟨0, trivial⟩` are superseded by the diagonal extraction.
 -/
-
-/-- The scaled second moment `t⁻¹ · ∫_{smallSet} x² dμ_t` converges along a subsequence
-to a finite nonneg limit `σ²`. Mirrors `exists_levy_drift`: a uniformly bounded
-sequence of nonneg reals admits a convergent subsequence by Bolzano-Weierstrass.
-The hypothesis `_h_finite_small_mass` is not used in the proof (boundedness is
-supplied by `scaled_second_moment_bounded_along_seq`) and is retained only to
-match the planned compound-Poisson + Gaussian assembly signature. -/
-theorem exists_gaussian_variance_finite
-    (_h_finite_small_mass : ∃ C : ℝ≥0, ∀ t : {t : ℝ // 0 < t},
-        t.val⁻¹ * (S.measure t : Measure ℝ).real smallSet ≤ C) :
-    ∃ (σ_sq : ℝ≥0) (t_seq : ℕ → {t : ℝ // 0 < t}),
-      Tendsto (fun n => (t_seq n).val) atTop (𝓝 0) ∧
-      Tendsto (fun n =>
-        (t_seq n).val⁻¹ * ∫ x in smallSet, x ^ 2 ∂(S.measure (t_seq n) : Measure ℝ))
-          atTop (𝓝 (σ_sq : ℝ)) := by
-  -- Extract a positive sequence tending to 0 from the large-jump construction.
-  obtain ⟨_, t_seq, ht_seq, _, _, _, _⟩ := S.exists_measure_limit_large 1 one_pos
-  -- The scaled second moment along `t_seq` is eventually bounded by some `C > 0`.
-  obtain ⟨C, _hC_pos, hC⟩ := S.scaled_second_moment_bounded_along_seq ht_seq
-  -- Define the sequence `a n := t_n⁻¹ · ∫_smallSet x² dμ_{t_n}`.
-  set a : ℕ → ℝ := fun n =>
-    (t_seq n).val⁻¹ * ∫ x in smallSet, x ^ 2 ∂(S.measure (t_seq n) : Measure ℝ)
-  -- Each `a n` is nonneg: t⁻¹ ≥ 0 and the integrand x² ≥ 0.
-  have ha_nonneg : ∀ n, 0 ≤ a n := fun n => by
-    have ht_pos : 0 < (t_seq n).val := (t_seq n).prop
-    refine mul_nonneg (inv_nonneg.mpr ht_pos.le) ?_
-    exact setIntegral_nonneg measurableSet_smallSet (fun x _ => sq_nonneg x)
-  -- Eventually `a n ∈ Icc 0 C`.
-  have ha_bdd : ∀ᶠ n in atTop, a n ∈ Set.Icc (0 : ℝ) C := by
-    filter_upwards [hC] with n hCn
-    exact ⟨ha_nonneg n, hCn⟩
-  -- Apply Bolzano-Weierstrass on `Icc 0 C`.
-  obtain ⟨σ, hσ_mem, φ, hφ_mono, hσ⟩ :=
-    isCompact_Icc.tendsto_subseq' ha_bdd.frequently
-  -- Package `σ : ℝ` as `ℝ≥0` via `Real.toNNReal`; coercion identity uses `0 ≤ σ`.
-  refine ⟨Real.toNNReal σ, t_seq ∘ φ, ht_seq.comp hφ_mono.tendsto_atTop, ?_⟩
-  rw [Real.coe_toNNReal σ hσ_mem.1]
-  exact hσ
 
 /-- **Joint extraction of drift, Gaussian variance, and Lévy measure along a single
 subsequence.**

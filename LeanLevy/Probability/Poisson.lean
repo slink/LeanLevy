@@ -120,13 +120,6 @@ theorem poissonVariance (r : ℝ≥0) :
 noncomputable def poissonCharFun (r : ℝ≥0) (ξ : ℝ) : ℂ :=
   ∑' n : ℕ, cexp (↑ξ * ↑(n : ℝ) * I) * ↑(poissonPMFReal r n)
 
-/-- The summand of the Poisson characteristic function is summable. -/
-private lemma summable_poissonCharFun (r : ℝ≥0) (ξ : ℝ) :
-    Summable (fun (n : ℕ) ↦ cexp (↑ξ * ↑(n : ℝ) * I) * ↑(poissonPMFReal r n)) := by
-  refine (summable_poissonPMFReal r).of_norm_bounded fun n ↦ ?_
-  rw [norm_mul, show (↑ξ : ℂ) * ↑(n : ℝ) * I = ↑(ξ * ↑n) * I from by push_cast; ring,
-    norm_exp_ofReal_mul_I, one_mul, Complex.norm_real, norm_of_nonneg poissonPMFReal_nonneg]
-
 /-- Algebraic identity: each term of the characteristic function sum factors through `exp`. -/
 private lemma charFun_term_eq (r : ℝ≥0) (ξ : ℝ) (n : ℕ) :
     cexp (↑ξ * ↑(n : ℝ) * I) * (↑(poissonPMFReal r n) : ℂ) =
