@@ -1605,29 +1605,6 @@ private lemma scaled_mass_bound_real_with_max (ε : ℝ) (hε : 0 < ε)
     _ = ε * (4 * M / ε) := by rw [hint_const]
     _ = 4 * M := by field_simp [hε.ne']
 
-/-- **Uniform boundedness of scaled measures on large sets.** The family
-    `{(1/t)·μ_t|_{|x|≥ε}}` has uniformly bounded mass as `t → 0⁺`.
-
-    Proved from `scaled_mass_bound_real` by converting from `ℝ` to `ℝ≥0∞`. -/
-theorem scaledMeasure_large_bounded (ε : ℝ) (hε : 0 < ε) :
-    ∃ C : ℝ≥0, ∃ δ : ℝ, 0 < δ ∧ ∀ (t : {t : ℝ // 0 < t}),
-      t.val < δ →
-      S.scaledMeasure t (largeSet ε) ≤ ↑C := by
-  obtain ⟨C, hC⟩ := S.scaled_mass_bound_real ε hε
-  refine ⟨C, 1, one_pos, fun t _ht => ?_⟩
-  rw [S.scaledMeasure_apply]
-  have hfin : (S.measure t : Measure ℝ) (largeSet ε) ≠ ⊤ := measure_ne_top _ _
-  have ht_inv_nn : (0 : ℝ) ≤ t.val⁻¹ := le_of_lt (inv_pos.mpr t.prop)
-  calc ENNReal.ofReal t.val⁻¹ * (S.measure t : Measure ℝ) (largeSet ε)
-      = ENNReal.ofReal t.val⁻¹ *
-          ENNReal.ofReal ((S.measure t : Measure ℝ) (largeSet ε)).toReal := by
-        rw [ENNReal.ofReal_toReal hfin]
-    _ = ENNReal.ofReal (t.val⁻¹ *
-          ((S.measure t : Measure ℝ) (largeSet ε)).toReal) := by
-        rw [← ENNReal.ofReal_mul ht_inv_nn]
-    _ ≤ ENNReal.ofReal ↑C := ENNReal.ofReal_le_ofReal (hC t)
-    _ = ↑C := ENNReal.ofReal_coe_nnreal
-
 /-! ### 3.2 — Sequential extraction (Helly-lite) -/
 
 /-- Scaled restricted measure: `(1/t)·μ_t` restricted to `{|x| ≥ ε}`, viewed as a
@@ -1635,20 +1612,6 @@ theorem scaledMeasure_large_bounded (ε : ℝ) (hε : 0 < ε) :
 noncomputable def scaledRestrictedMeasure (t : {t : ℝ // 0 < t}) (ε : ℝ) :
     Measure ℝ :=
   (S.scaledMeasure t).restrict (largeSet ε)
-
-/-- The scaled restricted measure is finite for `ε > 0` and small enough `t`. -/
-lemma isFiniteMeasure_scaledRestrictedMeasure (ε : ℝ) (hε : 0 < ε) :
-    ∃ δ : ℝ, 0 < δ ∧ ∀ (t : {t : ℝ // 0 < t}),
-      t.val < δ → IsFiniteMeasure (S.scaledRestrictedMeasure t ε) := by
-  obtain ⟨C, δ, hδ, hC⟩ := S.scaledMeasure_large_bounded ε hε
-  exact ⟨δ, hδ, fun t ht => by
-    constructor
-    have := hC t ht
-    calc (S.scaledRestrictedMeasure t ε) Set.univ
-        = S.scaledMeasure t (largeSet ε) := by
-          simp [scaledRestrictedMeasure]
-      _ ≤ ↑C := this
-      _ < ⊤ := ENNReal.coe_lt_top⟩
 
 /-- **Sequential extraction.** From the bounded family of scaled restricted measures,
     extract a weak limit along a subsequence `t_n → 0`.
@@ -2385,7 +2348,7 @@ theorem exists_levyMeasure_finite
   rw [h_int_ν_out]
   exact h_int_ν_subseq
 
-/-! ### 3.3 — Consistency of extracted measures -/
+/-! ### 3.3 — Monotonicity of large sets -/
 
 /-- **Monotonicity of large sets.** For `ε₁ ≤ ε₂`, `largeSet ε₂ ⊆ largeSet ε₁`. -/
 lemma largeSet_antitone {ε₁ ε₂ : ℝ} (h : ε₁ ≤ ε₂) :
@@ -2394,223 +2357,18 @@ lemma largeSet_antitone {ε₁ ε₂ : ℝ} (h : ε₁ ≤ ε₂) :
   simp only [mem_largeSet] at hx ⊢
   linarith
 
-/-- For `0 < ε₁ ≤ ε₂`, the restriction of the scaled measure to `{|x| ≥ ε₂}` is
-    obtained by further restricting the `{|x| ≥ ε₁}`-restricted measure. -/
-lemma scaledRestrictedMeasure_restrict (t : {t : ℝ // 0 < t})
-    {ε₁ ε₂ : ℝ} (_hε₁ : 0 < ε₁) (h : ε₁ ≤ ε₂) :
-    (S.scaledRestrictedMeasure t ε₁).restrict (largeSet ε₂) =
-    S.scaledRestrictedMeasure t ε₂ := by
-  simp only [scaledRestrictedMeasure]
-  rw [Measure.restrict_restrict (measurableSet_largeSet ε₂)]
-  congr 1
-  ext x
-  simp only [Set.mem_inter_iff, mem_largeSet]
-  constructor
-  · intro ⟨h1, _⟩; exact h1
-  · intro h1; exact ⟨h1, le_trans h h1⟩
-
 /-! ### 3.4 — Lévy measure construction -/
 
-/-- The Lévy measure associated to a convolution semigroup, defined as the finite measure
-    extracted at ε = 1 via Prokhorov's theorem.
-
-    Specifically, `levyMeasureAux S` is the weak limit `ν₁` of the scaled restricted measures
-    `(1/t)·μ_t|_{|x|≥1}` along a suitable subsequence `t_n → 0`. It is a finite measure
-    supported on `{|x| ≥ 1}`, with `{0}` having zero mass. The full Lévy measure (capturing
-    small jumps too) is identified in `psi_eq_levyKhintchine_formula`. -/
+/-- Auxiliary Lévy measure: the weak limit measure of the scaled restricted measures
+    `(1/t)·μ_t|_{|x|≥1}` along a subsequence `t_n → 0`, extracted at ε = 1 via
+    Prokhorov's theorem. It is a finite measure supported on `{|x| ≥ 1}`, with `{0}`
+    having zero mass. Used only as the definition of `levyMeasure S`. -/
 noncomputable def levyMeasureAux : Measure ℝ :=
   (S.exists_measure_limit_large 1 one_pos).choose
 
-private lemma isFiniteMeasure_levyMeasureAux : IsFiniteMeasure (levyMeasureAux S) :=
-  (S.exists_measure_limit_large 1 one_pos).choose_spec.choose_spec.2.1
-
-/-- The Lévy measure auxiliary has zero mass at the origin. -/
-theorem levyMeasureAux_zero : levyMeasureAux S {0} = 0 :=
-  (S.exists_measure_limit_large 1 one_pos).choose_spec.choose_spec.2.2.1
-
-/-- The Lévy measure auxiliary restricts correctly to large sets.
-    For each `ε > 0`, the restriction of `ν` to `{|x| ≥ ε}` is a finite measure. -/
-theorem levyMeasureAux_restrict_large (ε : ℝ) (_hε : 0 < ε) :
-    IsFiniteMeasure ((levyMeasureAux S).restrict (largeSet ε)) :=
-  haveI := S.isFiniteMeasure_levyMeasureAux; inferInstance
-
-/-- The Lévy measure satisfies the integrability condition `∫ min(1, x²) dν < ∞`.
-    Immediate from `IsFiniteMeasure`: since `min(1, x²) ≤ 1`, the integral is at most
-    the total mass of the finite measure. -/
-theorem levyMeasureAux_lintegral_min_one_sq :
-    ∫⁻ x, ENNReal.ofReal (min 1 (x ^ 2)) ∂(levyMeasureAux S) < ⊤ := by
-  haveI := S.isFiniteMeasure_levyMeasureAux
-  calc ∫⁻ x, ENNReal.ofReal (min 1 (x ^ 2)) ∂(levyMeasureAux S)
-      ≤ ∫⁻ _, (1 : ℝ≥0∞) ∂(levyMeasureAux S) := by
-        apply lintegral_mono
-        intro x
-        calc ENNReal.ofReal (min 1 (x ^ 2))
-            ≤ ENNReal.ofReal 1 := ENNReal.ofReal_le_ofReal (min_le_left _ _)
-          _ = 1 := ENNReal.ofReal_one
-    _ = levyMeasureAux S Set.univ := lintegral_one
-    _ < ⊤ := IsFiniteMeasure.measure_univ_lt_top
-
-/-- The auxiliary Lévy measure is indeed a Lévy measure. -/
-theorem levyMeasureAux_isLevyMeasure : IsLevyMeasure (levyMeasureAux S) :=
-  ⟨levyMeasureAux_zero S, levyMeasureAux_lintegral_min_one_sq S⟩
-
-/-- **Lévy measure of a convolution semigroup.** Packages the auxiliary construction
-    with its proof that it satisfies the Lévy measure conditions. -/
+/-- **Lévy measure of a convolution semigroup.** Defined as the finite measure extracted at
+    ε = 1 via Prokhorov's theorem applied to the scaled restricted measures. -/
 noncomputable def levyMeasure : Measure ℝ := levyMeasureAux S
-
-/-- The Lévy measure is a Lévy measure. -/
-theorem levyMeasure_isLevyMeasure : IsLevyMeasure (levyMeasure S) :=
-  levyMeasureAux_isLevyMeasure S
-
-/-- The Lévy measure has zero mass at the origin. -/
-theorem levyMeasure_zero : levyMeasure S {0} = 0 :=
-  levyMeasureAux_zero S
-
-/-- The Lévy measure has finite mass on `{|x| ≥ ε}` for any `ε > 0`. -/
-theorem levyMeasure_large_finite (ε : ℝ) (hε : 0 < ε) :
-    levyMeasure S (largeSet ε) < ⊤ :=
-  (levyMeasure_isLevyMeasure S).measure_setOf_abs_ge_lt_top hε
-
-/-- The Lévy measure restricted to `{|x| ≥ ε}` is a finite measure. -/
-theorem levyMeasure_restrict_isFiniteMeasure (ε : ℝ) (hε : 0 < ε) :
-    IsFiniteMeasure ((levyMeasure S).restrict (largeSet ε)) := by
-  constructor
-  rw [Measure.restrict_apply_univ]
-  exact levyMeasure_large_finite S ε hε
-
-/-! ### Phase 4 — Fourier identification on large jumps
-
-The large-jump contribution to the Lévy-Khintchine decomposition.
-
-**4.1 — Large jump limit (along subsequence):**
-The scaled integral `(1/t) ∫_{|x|≥ε} (e^{ixξ} − 1) dμ_t` converges along a
-subsequence to `∫_{|x|≥ε} (e^{ixξ} − 1) dν`, where `ν` is the Lévy measure.
-This uses weak convergence from `exists_measure_limit_large`.
-
-**4.2 — Remove truncation ε → 0:**
-As `ε → 0`, the integral over `{|x| ≥ ε}` approaches the integral over
-`ℝ \ {0}`, since the Lévy measure has no mass at the origin. -/
-
-/-- The scaled integral on `{|x| ≥ ε}` converges along a subsequence to the Lévy measure integral.
-
-Uses weak convergence from the extraction lemma (`exists_measure_limit_large`). The function
-`x ↦ exp(ixξ) − 1` is bounded and continuous on `{|x| ≥ ε}`, so weak convergence of the
-scaled restricted measures implies convergence of integrals.
-
-Two extra hypotheses make this provable:
-- `hν_eq`: the extracted measure `ν_ε` equals the restriction of the Lévy measure.
-- `hconv_cx`: the complex Fourier integral against the scaled restricted measure converges. -/
-theorem large_jump_limit (ξ : ℝ) (ε : ℝ) (hε : 0 < ε)
-    {t_seq : ℕ → {t : ℝ // 0 < t}} (ht : Tendsto (fun n => (t_seq n).val) atTop (𝓝 0))
-    {ν_ε : Measure ℝ} (_hν_fin : IsFiniteMeasure ν_ε)
-    (_hν_supp : ν_ε (largeSet ε)ᶜ = 0)
-    (hν_eq : (levyMeasure S).restrict (largeSet ε) = ν_ε)
-    (_hconv : ∀ (f : BoundedContinuousFunction ℝ ℝ), (∀ x, |x| < ε → f x = 0) →
-      Tendsto (fun n => ∫ x, f x ∂(S.scaledRestrictedMeasure (t_seq n) ε))
-        atTop (𝓝 (∫ x, f x ∂ν_ε)))
-    (hconv_cx : Tendsto
-      (fun n => ∫ x, (exp (↑x * ↑ξ * I) - 1) ∂(S.scaledRestrictedMeasure (t_seq n) ε))
-      atTop
-      (𝓝 (∫ x, (exp (↑x * ↑ξ * I) - 1) ∂ν_ε))) :
-    Tendsto (fun n =>
-      ((t_seq n).val⁻¹ : ℂ) *
-      ∫ x in largeSet ε, (exp (↑x * ↑ξ * I) - 1) ∂(S.measure (t_seq n) : Measure ℝ))
-    atTop
-    (𝓝 (∫ x in largeSet ε, (exp (↑x * ↑ξ * I) - 1) ∂(levyMeasure S))) := by
-  -- Step 1: Rewrite the limit target using hν_eq.
-  -- ∫ x in largeSet ε, g ∂(levyMeasure S)
-  --   = ∫ x, g ∂((levyMeasure S).restrict (largeSet ε))  [def of setIntegral]
-  --   = ∫ x, g ∂ν_ε                                      [hν_eq]
-  have hrhs : ∫ x in largeSet ε, (exp (↑x * ↑ξ * I) - 1) ∂(levyMeasure S)
-      = ∫ x, (exp (↑x * ↑ξ * I) - 1) ∂ν_ε := by
-    rw [← hν_eq]
-  rw [hrhs]
-  -- Step 2: Rewrite the LHS sequence.
-  -- (t⁻¹ : ℂ) * ∫ x in largeSet ε, g ∂μ_t
-  --   = t⁻¹ • ∫ x in largeSet ε, g ∂μ_t                  [real_smul_eq_coe_mul]
-  --   = ∫ x in largeSet ε, g ∂(scaledMeasure t)           [integral_smul_measure]
-  --   = ∫ x, g ∂(scaledRestrictedMeasure t ε)             [def of scaledRestrictedMeasure]
-  have hlhs : ∀ n,
-      ((t_seq n).val⁻¹ : ℂ) *
-        ∫ x in largeSet ε, (exp (↑x * ↑ξ * I) - 1) ∂(S.measure (t_seq n) : Measure ℝ)
-      = ∫ x, (exp (↑x * ↑ξ * I) - 1) ∂(S.scaledRestrictedMeasure (t_seq n) ε) := fun n => by
-    have ht_pos := (t_seq n).prop
-    -- Unfold scaledRestrictedMeasure and scaledMeasure, then use Measure.restrict_smul
-    have hmsr : S.scaledRestrictedMeasure (t_seq n) ε =
-        ENNReal.ofReal (t_seq n).val⁻¹ •
-          (S.measure (t_seq n) : Measure ℝ).restrict (largeSet ε) := by
-      rw [show S.scaledRestrictedMeasure (t_seq n) ε =
-              (S.scaledMeasure (t_seq n)).restrict (largeSet ε) from rfl,
-          show S.scaledMeasure (t_seq n) =
-              ENNReal.ofReal (t_seq n).val⁻¹ • (S.measure (t_seq n) : Measure ℝ) from rfl]
-      exact Measure.restrict_smul _ _ _
-    -- Rewrite RHS: ∫ g ∂(scaledRestrictedMeasure) = t⁻¹ • ∫ g in largeSet ε ∂(μ_t)
-    rw [hmsr, integral_smul_measure,
-        ENNReal.toReal_ofReal (le_of_lt (inv_pos.mpr ht_pos))]
-    -- Goal: ((t_seq n).val : ℂ)⁻¹ * ∫ g in largeSet ε ∂μ_t
-    --     = (t_seq n).val⁻¹ • ∫ g in largeSet ε ∂μ_t
-    -- Use: r⁻¹ • z = (r⁻¹ : ℂ) * z and (r : ℂ)⁻¹ = (r⁻¹ : ℂ)
-    set z := ∫ x in largeSet ε, (exp (↑x * ↑ξ * I) - 1) ∂(S.measure (t_seq n) : Measure ℝ)
-    set r := (t_seq n).val
-    change (↑r : ℂ)⁻¹ * z = r⁻¹ • z
-    rw [RCLike.real_smul_eq_coe_mul]
-    congr 1
-    exact (Complex.ofReal_inv r).symm
-  simp_rw [hlhs]
-  exact hconv_cx
-
-/-- The union of `largeSet(1/(n+1))` as `n → ∞` exhausts `ℝ \ {0}`. -/
-private lemma iUnion_largeSet_eq_ne_zero :
-    (⋃ n : ℕ, largeSet (1 / (↑n + 1 : ℝ))) = {x : ℝ | x ≠ 0} := by
-  ext x; simp only [Set.mem_iUnion, mem_largeSet, Set.mem_setOf_eq]
-  constructor
-  · rintro ⟨n, hn⟩ hx
-    simp [hx, abs_zero] at hn
-    linarith [show (0 : ℝ) < 1 / (↑n + 1) from by positivity]
-  · intro hx
-    have hxp : (0 : ℝ) < |x| := abs_pos.mpr hx
-    obtain ⟨n, hn⟩ := exists_nat_gt |x|⁻¹
-    refine ⟨n, ?_⟩
-    have hnp : (0 : ℝ) < ↑n := lt_trans (inv_pos.mpr hxp) hn
-    have h1 : 1 < ↑n * |x| := by
-      calc (1 : ℝ) = |x|⁻¹ * |x| := (inv_mul_cancel₀ hxp.ne').symm
-        _ < ↑n * |x| := by exact mul_lt_mul_of_pos_right hn hxp
-    rw [div_le_iff₀ (show (0 : ℝ) < ↑n + 1 from by linarith)]
-    nlinarith [hxp.le]
-
-/-- The `largeSet` family is monotone (increasing) in `n` when indexed
-    by `n ↦ largeSet(1/(n+1))`. -/
-private lemma largeSet_mono_nat :
-    Monotone (fun n : ℕ => largeSet (1 / (↑n + 1 : ℝ))) := by
-  intro m n hmn
-  apply largeSet_antitone
-  apply div_le_div_of_nonneg_left one_pos.le (by positivity : (0 : ℝ) < ↑m + 1)
-  exact_mod_cast Nat.add_le_add_right hmn 1
-
-/-- The compensated integrand is integrable against the Lévy measure on `{x ≠ 0}`.
-    Follows from `|exp(ixξ)-1-ixξ·1_{|x|<1}| ≤ min(2, (xξ)²/2)` and `∫ min(1,x²) dν < ∞`. -/
-private lemma integrableOn_levyCompensatedIntegrand (ξ : ℝ) :
-    IntegrableOn (levyCompensatedIntegrand ξ) {x : ℝ | x ≠ 0} (levyMeasure S) :=
-  (integrable_levyCompensatedIntegrand (levyMeasure_isLevyMeasure S) ξ).integrableOn
-
-/-- The compensated integral converges as `ε → 0` to the full integral on `ℝ \ {0}`.
-
-Since the Lévy measure satisfies `ν {0} = 0` and `∫ min(1,x²) dν < ∞`,
-the sets `{|x| ≥ 1/(n+1)}` monotonically exhaust `ℝ \ {0}`.
-The compensated integrand `exp(ixξ) − 1 − ixξ·1_{|x|<1}` is integrable against
-the Lévy measure, so `tendsto_setIntegral_of_monotone` gives convergence. -/
-theorem large_jump_exhaustion (ξ : ℝ) :
-    Tendsto (fun n : ℕ =>
-      ∫ x in largeSet (1 / (↑n + 1 : ℝ)),
-        levyCompensatedIntegrand ξ x ∂(levyMeasure S))
-    atTop
-    (𝓝 (∫ x in {x : ℝ | x ≠ 0},
-        levyCompensatedIntegrand ξ x ∂(levyMeasure S))) := by
-  rw [← iUnion_largeSet_eq_ne_zero]
-  exact tendsto_setIntegral_of_monotone
-    (fun n => measurableSet_largeSet _)
-    largeSet_mono_nat
-    (iUnion_largeSet_eq_ne_zero ▸ S.integrableOn_levyCompensatedIntegrand ξ)
 
 /-- On `{|x| ≥ 1}`, the compensated integrand equals `exp(ixξ) − 1` (indicator vanishes). -/
 theorem levyCompensatedIntegrand_eq_on_large {ξ x : ℝ} (hx : 1 ≤ |x|) :
@@ -2627,11 +2385,11 @@ theorem integral_large_eq_compensated (ξ : ℝ) :
   intro x hx
   exact (levyCompensatedIntegrand_eq_on_large (mem_largeSet.mp hx)).symm
 
-/-! ### Phase 5 — Small jump analysis (second moment + quadratic expansion)
+/-! ### Phase 4 — Small jump analysis (second moment + quadratic expansion)
 
 The key estimates for the "small jump" part `{|x| < 1}` of the Lévy-Khintchine formula.
 
-**5.1 — Second moment bound:** From `charFun(μ_t)(ξ) = exp(tψ(ξ))`:
+**4.1 — Second moment bound:** From `charFun(μ_t)(ξ) = exp(tψ(ξ))`:
 ```
 Re(1 - exp(tψ(ξ))) = ∫ (1 - cos(xξ)) dμ_t
 ```
@@ -2641,7 +2399,7 @@ On `{|x| < 1}` with `ξ = 1`: `1 - cos(x) ≥ (2/π²) x²` (Jordan's inequality
 ```
 Dividing by `t`: `(2/(π²t)) ∫_{|x|<1} x² dμ_t ≤ Re(-ψ(1)) + o(1)`.
 
-**5.2 — Quadratic expansion:** The integrand `exp(ixξ) - 1 - ixξ` satisfies
+**4.2 — Quadratic expansion:** The integrand `exp(ixξ) - 1 - ixξ` satisfies
 `|exp(iz)-1-iz| ≤ z²/2`, so the scaled integral on `{|x| < 1}` is controlled by
 the second moment, giving convergence of a subsequence. -/
 
@@ -2770,13 +2528,13 @@ theorem scaled_second_moment_bounded_along_seq
     exact Filter.Eventually.of_forall (fun n => (t_seq n).prop)
   exact htseq_filter.eventually hC
 
-/-! ### Phase 6: Drift extraction (first moment limit + drift contribution)
+/-! ### Phase 5: Drift extraction (first moment limit + drift contribution)
 
-**6.1 — Drift limit:** The scaled first moment on `{|x| < 1}` converges along `t_n → 0`,
+**5.1 — Drift limit:** The scaled first moment on `{|x| < 1}` converges along `t_n → 0`,
 defining the drift `b`. This follows by subtracting the large-jump, quadratic, and remainder
 contributions from the total limit `ψ(ξ)`.
 
-**6.2 — Drift contribution:** The linear term `∫ (x · ξ · I) dμ_t` factors as
+**5.2 — Drift contribution:** The linear term `∫ (x · ξ · I) dμ_t` factors as
 `ξ · I · ∫ x dμ_t`, so after scaling by `1/t` and taking the limit, contributes `b · ξ · I`
 to the decomposition. -/
 
