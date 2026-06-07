@@ -3681,6 +3681,70 @@ private lemma smallBall_second_moment_nu_le
   rw [h_ball_int]
   exact le_of_tendsto' (h_lim.congr (fun m => (h_band_int m).symm)) h_band_le
 
+/-! ### Phase 4b — Small-jump identification (cubic-remainder / δ-truncation)
+
+The "small jump" analogue of `scaled_largeSet_charFun_tendsto`. The third-order Taylor
+remainder `R ξ x = exp(ixξ) − 1 − ixξ + (ixξ)²/2` is `O(|x|³)` near `0`, so the scaled
+inner-ball contribution is controlled uniformly by the second moment. The band is handled
+by `scaled_band_integral_tendsto` (via the Re/Im split), and the `ν`-tail vanishes as the
+inner radius shrinks. -/
+
+/-- The cubic Taylor remainder `R ξ x = exp(ixξ) − 1 − ixξ + (ixξ)²/2` is continuous in `x`. -/
+private lemma smallBall_remainder_continuous (ξ : ℝ) :
+    Continuous (fun x : ℝ =>
+      exp ((↑x : ℂ) * ↑ξ * I) - 1 - (↑x : ℂ) * ↑ξ * I + ((↑x : ℂ) * ↑ξ) ^ 2 / 2) := by
+  have h1 : Continuous (fun x : ℝ => (↑x : ℂ) * ↑ξ * I) :=
+    (Complex.continuous_ofReal.mul continuous_const).mul continuous_const
+  have h2 : Continuous (fun x : ℝ => ((↑x : ℂ) * ↑ξ) ^ 2 / 2) :=
+    (((Complex.continuous_ofReal.mul continuous_const).pow 2)).div_const 2
+  exact (((Complex.continuous_exp.comp h1).sub continuous_const).sub h1).add h2
+
+/-- **Crude bound on the cubic remainder on the unit ball.** For `|x| ≤ 1`,
+`‖R ξ x‖ ≤ 2 + |ξ| + ξ²/2`. (Triangle inequality; `‖exp(ixξ)‖ = 1`.) -/
+private lemma smallBall_remainder_norm_le_crude {ξ x : ℝ} (hx : |x| ≤ 1) :
+    ‖exp ((↑x : ℂ) * ↑ξ * I) - 1 - (↑x : ℂ) * ↑ξ * I + ((↑x : ℂ) * ↑ξ) ^ 2 / 2‖ ≤
+      2 + |ξ| + ξ ^ 2 / 2 := by
+  have harg : (↑x : ℂ) * ↑ξ * I = (↑(x * ξ) : ℂ) * I := by push_cast; ring
+  have hexp_norm : ‖exp ((↑x : ℂ) * ↑ξ * I)‖ = 1 := by
+    rw [harg, Complex.norm_exp_ofReal_mul_I]
+  have hxξ : ‖(↑x : ℂ) * ↑ξ * I‖ = |x| * |ξ| := by
+    rw [norm_mul, norm_mul, Complex.norm_I, mul_one, Complex.norm_real, Complex.norm_real,
+      Real.norm_eq_abs, Real.norm_eq_abs]
+  have hsq : ‖((↑x : ℂ) * ↑ξ) ^ 2 / 2‖ = (|x| * |ξ|) ^ 2 / 2 := by
+    rw [norm_div, norm_pow, norm_mul, Complex.norm_real, Complex.norm_real,
+      Real.norm_eq_abs, Real.norm_eq_abs]
+    norm_num
+  calc ‖exp ((↑x : ℂ) * ↑ξ * I) - 1 - (↑x : ℂ) * ↑ξ * I + ((↑x : ℂ) * ↑ξ) ^ 2 / 2‖
+      ≤ ‖exp ((↑x : ℂ) * ↑ξ * I) - 1 - (↑x : ℂ) * ↑ξ * I‖ + ‖((↑x : ℂ) * ↑ξ) ^ 2 / 2‖ :=
+        norm_add_le _ _
+    _ ≤ (‖exp ((↑x : ℂ) * ↑ξ * I) - 1‖ + ‖(↑x : ℂ) * ↑ξ * I‖) + ‖((↑x : ℂ) * ↑ξ) ^ 2 / 2‖ := by
+        gcongr; exact norm_sub_le _ _
+    _ ≤ ((‖exp ((↑x : ℂ) * ↑ξ * I)‖ + ‖(1 : ℂ)‖) + ‖(↑x : ℂ) * ↑ξ * I‖) +
+          ‖((↑x : ℂ) * ↑ξ) ^ 2 / 2‖ := by gcongr; exact norm_sub_le _ _
+    _ = 2 + |x| * |ξ| + (|x| * |ξ|) ^ 2 / 2 := by
+        rw [hexp_norm, hxξ, hsq, norm_one]; ring
+    _ ≤ 2 + |ξ| + ξ ^ 2 / 2 := by
+        have hxξ_le : |x| * |ξ| ≤ |ξ| := by
+          calc |x| * |ξ| ≤ 1 * |ξ| := by gcongr
+            _ = |ξ| := one_mul _
+        have hsq_le : (|x| * |ξ|) ^ 2 / 2 ≤ ξ ^ 2 / 2 := by
+          have hnn : (0 : ℝ) ≤ |x| * |ξ| := by positivity
+          have : (|x| * |ξ|) ^ 2 ≤ |ξ| ^ 2 := by gcongr
+          rw [sq_abs] at this; linarith
+        linarith
+
+/-- **Cubic bound on the remainder.** For `|x·ξ| ≤ 1`, `‖R ξ x‖ ≤ (2/9)|ξ|³|x|³`. -/
+private lemma smallBall_remainder_norm_le_cube {ξ x : ℝ} (hxξ : |x * ξ| ≤ 1) :
+    ‖exp ((↑x : ℂ) * ↑ξ * I) - 1 - (↑x : ℂ) * ↑ξ * I + ((↑x : ℂ) * ↑ξ) ^ 2 / 2‖ ≤
+      (2 / 9 : ℝ) * |ξ| ^ 3 * |x| ^ 3 := by
+  have h := norm_exp_I_mul_real_sub_taylor3_le (z := x * ξ) hxξ
+  have heq : exp ((↑x : ℂ) * ↑ξ * I) - 1 - (↑x : ℂ) * ↑ξ * I + ((↑x : ℂ) * ↑ξ) ^ 2 / 2 =
+      Complex.exp ((↑(x * ξ) : ℂ) * I) - 1 - (↑(x * ξ) : ℂ) * I + (↑(x * ξ) : ℂ) ^ 2 / 2 := by
+    push_cast; ring
+  rw [heq]
+  refine h.trans (le_of_eq ?_)
+  rw [abs_mul, mul_pow]; ring
+
 /-! ### Final assembly of the Lévy-Khintchine triple (finite-ν pivot)
 
 Following the 2026-05-20 pivot to the compound-Poisson + Gaussian intermediate, the
