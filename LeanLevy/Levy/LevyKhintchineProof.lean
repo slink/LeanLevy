@@ -31,9 +31,11 @@ An infinitely divisible characteristic function has a unique continuous logarith
 The logarithm of an infinitely divisible char function is conditionally negative definite.
 
 ## Sub-lemma 4: Integral representation
-A continuous, conditionally negative definite function with ψ(0)=0 has the
-Lévy-Khintchine integral representation. Uses Schoenberg + Bochner to extract
-probability measures, then (sorry) differentiates the convolution semigroup.
+**Lévy-Khintchine assembly (finite-ν pivot)**: under the finite-small-mass
+hypothesis, extract `(b, σ², ν)` along a single subsequence
+(`exists_drift_variance_jumpMeasure_along_seq`) and identify the limit of
+`t⁻¹(charFun μ_t − 1)` with the canonical formula
+(`psi_eq_levyKhintchine_formula`, the single remaining sorry).
 -/
 
 open MeasureTheory MeasureTheory.Measure ProbabilityTheory Complex Filter Topology
@@ -676,12 +678,7 @@ the matrix `Aᵢⱼ = ψ(xᵢ) + conj(ψ(xⱼ)) - ψ(xᵢ - xⱼ)` is positive s
 Then `exp(-tA)` (entrywise) is PSD by the Schur product theorem applied to the
 power series, giving PD of `exp(tψ)` after factoring out `exp(tψ(xᵢ)) · exp(t·conj(ψ(xⱼ)))`.
 This requires the Schur product theorem for PSD matrices (not just PD functions),
-which is `IsPositiveDefinite.mul` (currently sorry'd in PositiveDefinite.lean).
-
-## Sorry audit
-
-* Requires `IsPositiveDefinite.mul` (Schur product) and PSD matrix infrastructure
-  not yet available in this project. -/
+which is `IsPositiveDefinite.mul` (proved in PositiveDefinite.lean). -/
 -- Helper: The CND kernel M_{ij} = ψ(ξᵢ-ξⱼ) - ψ(ξᵢ) - conj(ψ(ξⱼ)) is PD.
 -- Proved by instantiating CND at n+1 points [0, ξ₁, ..., ξₙ] with weight c₀ = -∑ cᵢ.
 -- Requires Hermitian symmetry ψ(-ξ) = conj(ψ(ξ)) to relate ψ(-ξⱼ) → conj(ψ(ξⱼ)).
@@ -1284,13 +1281,17 @@ lemma integral_exp_sub_one_split (μ : Measure ℝ) [IsProbabilityMeasure μ] (�
 /-! ## Phase 3: Compactness on large jumps + Lévy measure construction
 
 This section develops the compactness machinery for extracting the Lévy measure
-from the convolution semigroup `{μ_t}_{t>0}`.
+from the convolution semigroup `{μ_t}_{t>0}`, using the finite-ν pivot approach.
 
 **Overview:**
-1. The scaled measures `(1/t)·μ_t` restricted to `{|x| ≥ ε}` have uniformly bounded mass.
-2. By Prokhorov's theorem, a subsequential weak limit `ν_ε` exists.
-3. For `ε₁ ≤ ε₂`, the measures are consistent: `ν_{ε₂}` is a restriction of `ν_{ε₁}`.
-4. The Lévy measure is constructed as the monotone limit `ν = sup_ε ν_ε`.
+1. The scaled measures `(1/t)·μ_t` restricted to `{|x| ≥ ε}` have uniformly bounded mass
+   (`scaled_mass_bound_real`).
+2. By a single Prokhorov extraction on all of ℝ followed by restriction to `{0}ᶜ`,
+   a subsequential weak limit ν is obtained directly as a finite measure on ℝ\{0}
+   (`exists_levyMeasure_finite`). No per-cutoff extractions, no cross-cutoff
+   consistency, no shell gluing.
+3. The `smallSet`/`largeSet` partition and the scaled-measure infrastructure support
+   both the mass bound argument and the single-extraction route.
 -/
 
 private lemma abs_sub_sin_le_sq_div_two {x : ℝ} (hx : |x| ≤ 1) :
@@ -1471,7 +1472,7 @@ private lemma one_sub_cos_integral_lower_bound
 /-- **Real-valued scaled mass bound.** The quantity `t⁻¹ · μ_t({|x| ≥ ε})` is
     uniformly bounded over all `t > 0`.
 
-    **Proof sketch (sorry'd — requires Fubini + charFun integral identity):**
+    **Proof sketch:**
     1. For `|x| ≥ ε`: `∫₀^{2/ε} (1-cos(xξ)) dξ = 2/ε - sin(2x/ε)/x ≥ 1/ε`.
     2. By Fubini: `ε⁻¹ · μ({|x| ≥ ε}) ≤ ∫₀^{2/ε} (1 - Re(charFun μ ξ)) dξ`.
     3. Using `charFun(μ_t)(ξ) = exp(tψ(ξ))` and the bound

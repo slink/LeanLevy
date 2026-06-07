@@ -88,21 +88,14 @@ A Lean 4 formalization of Lévy processes, built on top of mathlib.
 - Sub-lemmas 1–3 fully proved: non-vanishing, continuous logarithm, conditional negative definiteness
 - Schoenberg helper lemmas, convolution semigroup structure
 - Sub-lemma 4: Schoenberg's theorem proved via kernel factorization + spectral decomposition; convolution semigroup construction complete
-- Measure differentiation at `t = 0` remains for extracting the Lévy-Khintchine triple
+- Lévy–Khintchine assembly uses the finite-ν pivot: `(b, σ², ν)` extracted along a single subsequence via `exists_drift_variance_jumpMeasure_along_seq`; one sorry remains
 
 ## Incomplete
 
-Six sorry keywords remain across six private declarations in two files:
-
-**`LeanLevy/Fourier/Bochner.lean`** (5 sorries, all private helpers feeding into `bochner`):
-- **`re_nonneg_double_integral`** — The PD quadratic form `∫∫ ψ(s-t) e^{-ix(s-t)} ds dt` has non-negative real part. Requires a Riemann-sum argument approximating `∑ᵢ ∑ⱼ c̄ᵢ cⱼ ψ(sᵢ-sⱼ) ≥ 0`.
-- **`fejerApproximant_eq_double_integral`** — The Fejér integral equals `(1/N)` times the double integral over `[0,N]²`. Requires change of variables `u = s-t` and Fubini.
-- **`fourierTransform_rescaled_eq`** — Convention bridge: `𝓕(ψ(2π·))(y) = ↑(ρ(y))`. Change of variables + Hermitian symmetry.
-- **`integrable_inverseFourierDensity`** — The inverse Fourier density `ρ ∈ L¹`. Follows from `ρ ≥ 0` + Gaussian regularization.
-- **`charFun_inverseFourierDensity`** — Inner product convention bridge in the Fourier inversion identity.
+Exactly one sorry remains across the entire codebase:
 
 **`LeanLevy/Levy/LevyKhintchineProof.lean`** (1 sorry):
-- **`levyKhintchine_of_cnd`** — Extracting the Lévy-Khintchine triple `(b, σ², ν)` from the convolution semigroup by differentiating at `t = 0`.
+- **`psi_eq_levyKhintchine_formula`** — Analytic limit identification: chain the scalar large-jump limit, drift term, small-jump 3rd-order Taylor remainder (via δ-truncation), and large-jump cutoff approximations to conclude `t⁻¹(charFun μ_t − 1) → Ψ(ξ)`. Uses the finite-ν pivot: `(b, σ², ν)` are extracted from a single diagonal subsequence, so no per-cutoff consistency or shell gluing is required.
 
 ## Building
 

@@ -26,9 +26,6 @@ A function `φ : ℝ → ℂ` is **positive definite** if for every finite seque
 * `IsPositiveDefinite.of_charFun` — characteristic function of a probability measure is PD.
 * `IsPositiveDefinite.closure_pointwise` — pointwise limit of PD functions is PD.
 
-## Sorry audit
-
-* `norm_le_one` — PD bound `‖φ(ξ)‖ ≤ 1` when `φ(0) = 1` (2x2 PSD + Hermitian symmetry).
 -/
 
 open MeasureTheory Complex ComplexConjugate Finset Filter Topology Matrix
