@@ -2348,6 +2348,52 @@ theorem exists_levyMeasure_finite
   rw [h_int_ν_out]
   exact h_int_ν_subseq
 
+end ConvolutionSemigroup
+
+/-! ### 3.2c — Atom-free radius selection for finite measures
+
+A finite measure on `ℝ` charges at most countably many spheres `{|x| = ρ}`, so atom-free
+radii are abundant. These measure-generic helpers (independent of any `ConvolutionSemigroup`)
+support choosing a split radius `r` with `ν {|x| = r} = 0` and a null-sphere sequence `δ_m → 0`. -/
+
+/-- A finite measure on `ℝ` charges at most countably many spheres `{|x| = ρ}`, so every
+nonempty interval contains an atom-free radius. -/
+lemma exists_atomFree_radius (ν : Measure ℝ) [IsFiniteMeasure ν] {a b : ℝ} (hab : a < b) :
+    ∃ r, r ∈ Set.Ioc a b ∧ ν {x | |x| = r} = 0 := by
+  -- Only countably many spheres `{|x| = t}` carry positive `ν`-mass (level sets of `|·|`).
+  have key : Set.Countable {t : ℝ | 0 < ν {x : ℝ | |x| = t}} :=
+    countable_meas_level_set_pos continuous_abs.measurable
+  -- A countable set has Lebesgue measure zero, so removing it preserves the volume of `Ioc a b`.
+  have aux : volume (Set.Ioc a b \ {t : ℝ | 0 < ν {x : ℝ | |x| = t}}) = volume (Set.Ioc a b) :=
+    measure_diff_null (key.measure_zero volume)
+  have len_pos : 0 < volume (Set.Ioc a b) := by
+    rw [Real.volume_Ioc]; simp only [ENNReal.ofReal_pos, sub_pos]; exact hab
+  rw [← aux] at len_pos
+  obtain ⟨r, hr⟩ := nonempty_of_measure_ne_zero len_pos.ne'
+  refine ⟨r, hr.1, ?_⟩
+  exact le_antisymm (not_lt.mp hr.2) (zero_le _)
+
+/-- Atom-free radii accumulating at `0`, each below the bound `c`. -/
+lemma exists_atomFree_seq_tendsto_zero (ν : Measure ℝ) [IsFiniteMeasure ν] {c : ℝ} (hc : 0 < c) :
+    ∃ δ : ℕ → ℝ, (∀ m, 0 < δ m) ∧ (∀ m, δ m < c) ∧ (∀ m, ν {x | |x| = δ m} = 0) ∧
+      Tendsto δ atTop (𝓝 0) := by
+  -- For each `m`, choose an atom-free radius in `(0, min (c/2) (1/(m+1))]`.
+  have hb : ∀ m : ℕ, (0 : ℝ) < min (c / 2) (1 / ((m : ℝ) + 1)) := fun m => by positivity
+  choose δ hδ_mem hδ_null using fun m => exists_atomFree_radius ν (hb m)
+  refine ⟨δ, fun m => (hδ_mem m).1, fun m => ?_, hδ_null, ?_⟩
+  · -- `δ m ≤ min (c/2) (1/(m+1)) ≤ c/2 < c`.
+    calc δ m ≤ min (c / 2) (1 / ((m : ℝ) + 1)) := (hδ_mem m).2
+      _ ≤ c / 2 := min_le_left _ _
+      _ < c := by linarith
+  · -- `0 < δ m ≤ 1/(m+1) → 0` squeezes `δ` to `0`.
+    refine tendsto_of_tendsto_of_tendsto_of_le_of_le tendsto_const_nhds
+      tendsto_one_div_add_atTop_nhds_zero_nat (fun m => (hδ_mem m).1.le) (fun m => ?_)
+    exact (hδ_mem m).2.trans (min_le_right _ _)
+
+namespace ConvolutionSemigroup
+
+variable (S : ConvolutionSemigroup)
+
 /-! ### 3.3 — Monotonicity of large sets -/
 
 /-- **Monotonicity of large sets.** For `ε₁ ≤ ε₂`, `largeSet ε₂ ⊆ largeSet ε₁`. -/
