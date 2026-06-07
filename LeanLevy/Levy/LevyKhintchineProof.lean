@@ -2876,108 +2876,116 @@ To identify the small- and large-jump limit pieces in `psi_eq_levyKhintchine_for
 we need to approximate the indicator `1_{|x| ≥ 1}` (and the related annulus indicator
 near `|x| = 1`) by bounded continuous functions, then apply `h_jump`. -/
 
-/-- Bounded continuous "upper" cutoff approximating `1_{|x| ≥ 1}` from above.
+/-- Bounded continuous "upper" cutoff approximating `1_{|x| ≥ ρ}` from above.
 
-* `largeUpperBCF n x = 1` for `|x| ≥ 1`
-* `largeUpperBCF n x = 0` for `|x| ≤ 1 - 1/(n+1)`
-* linear ramp from `0` to `1` on `[1 - 1/(n+1), 1]`. -/
-private noncomputable def largeUpperBCF (n : ℕ) : BoundedContinuousFunction ℝ ℝ :=
+* `largeUpperBCF ρ n x = 1` for `|x| ≥ ρ`
+* `largeUpperBCF ρ n x = 0` for `|x| ≤ ρ - ρ/(n+1) = ρ(1 - 1/(n+1))`
+* linear ramp from `0` to `1` on `[ρ(1 - 1/(n+1)), ρ]`. -/
+private noncomputable def largeUpperBCF (ρ : ℝ) (_hρ : 0 < ρ) (n : ℕ) :
+    BoundedContinuousFunction ℝ ℝ :=
   BoundedContinuousFunction.mkOfBound
-    ⟨fun x => min 1 (max 0 ((|x| - 1) * (n + 1 : ℝ) + 1)),
+    ⟨fun x => min 1 (max 0 ((|x| - ρ) * ((n + 1 : ℝ) / ρ) + 1)),
       Continuous.min continuous_const
         (Continuous.max continuous_const
           (((continuous_abs.sub continuous_const).mul continuous_const).add continuous_const))⟩
     1
     (fun x y => by
       have hbnd : ∀ z : ℝ,
-          0 ≤ min 1 (max 0 ((|z| - 1) * (n + 1 : ℝ) + 1)) ∧
-          min 1 (max 0 ((|z| - 1) * (n + 1 : ℝ) + 1)) ≤ 1 := fun z =>
+          0 ≤ min 1 (max 0 ((|z| - ρ) * ((n + 1 : ℝ) / ρ) + 1)) ∧
+          min 1 (max 0 ((|z| - ρ) * ((n + 1 : ℝ) / ρ) + 1)) ≤ 1 := fun z =>
         ⟨le_min zero_le_one (le_max_left _ _), min_le_left _ _⟩
       rw [Real.dist_eq]
       simp only [ContinuousMap.coe_mk]
       have hx := hbnd x; have hy := hbnd y
       refine abs_sub_le_iff.mpr ⟨?_, ?_⟩ <;> linarith)
 
-private lemma largeUpperBCF_apply (n : ℕ) (x : ℝ) :
-    largeUpperBCF n x = min 1 (max 0 ((|x| - 1) * (n + 1 : ℝ) + 1)) := rfl
+private lemma largeUpperBCF_apply (ρ : ℝ) (hρ : 0 < ρ) (n : ℕ) (x : ℝ) :
+    largeUpperBCF ρ hρ n x = min 1 (max 0 ((|x| - ρ) * ((n + 1 : ℝ) / ρ) + 1)) := rfl
 
-private lemma largeUpperBCF_nonneg (n : ℕ) (x : ℝ) : 0 ≤ largeUpperBCF n x := by
+private lemma largeUpperBCF_nonneg (ρ : ℝ) (hρ : 0 < ρ) (n : ℕ) (x : ℝ) :
+    0 ≤ largeUpperBCF ρ hρ n x := by
   rw [largeUpperBCF_apply]; exact le_min zero_le_one (le_max_left _ _)
 
-private lemma largeUpperBCF_le_one (n : ℕ) (x : ℝ) : largeUpperBCF n x ≤ 1 := by
+private lemma largeUpperBCF_le_one (ρ : ℝ) (hρ : 0 < ρ) (n : ℕ) (x : ℝ) :
+    largeUpperBCF ρ hρ n x ≤ 1 := by
   rw [largeUpperBCF_apply]; exact min_le_left _ _
 
-private lemma largeUpperBCF_eq_one (n : ℕ) {x : ℝ} (hx : 1 ≤ |x|) :
-    largeUpperBCF n x = 1 := by
+private lemma largeUpperBCF_eq_one (ρ : ℝ) (hρ : 0 < ρ) (n : ℕ) {x : ℝ} (hx : ρ ≤ |x|) :
+    largeUpperBCF ρ hρ n x = 1 := by
   rw [largeUpperBCF_apply]
-  have hnn : (0 : ℝ) ≤ (n + 1 : ℝ) := by positivity
-  have h1 : 0 ≤ (|x| - 1) * (n + 1 : ℝ) := mul_nonneg (by linarith) hnn
-  have h2 : 1 ≤ (|x| - 1) * (n + 1 : ℝ) + 1 := by linarith
-  rw [show max 0 ((|x| - 1) * (n + 1 : ℝ) + 1) = (|x| - 1) * (n + 1 : ℝ) + 1 from
+  have hnn : (0 : ℝ) ≤ (n + 1 : ℝ) / ρ := by positivity
+  have h1 : 0 ≤ (|x| - ρ) * ((n + 1 : ℝ) / ρ) := mul_nonneg (by linarith) hnn
+  have h2 : 1 ≤ (|x| - ρ) * ((n + 1 : ℝ) / ρ) + 1 := by linarith
+  rw [show max 0 ((|x| - ρ) * ((n + 1 : ℝ) / ρ) + 1) = (|x| - ρ) * ((n + 1 : ℝ) / ρ) + 1 from
       max_eq_right (by linarith)]
   exact min_eq_left h2
 
-private lemma largeUpperBCF_eq_zero (n : ℕ) {x : ℝ}
-    (hx : |x| ≤ 1 - 1/(n + 1 : ℝ)) : largeUpperBCF n x = 0 := by
+private lemma largeUpperBCF_eq_zero (ρ : ℝ) (hρ : 0 < ρ) (n : ℕ) {x : ℝ}
+    (hx : |x| ≤ ρ - ρ/(n + 1 : ℝ)) : largeUpperBCF ρ hρ n x = 0 := by
   rw [largeUpperBCF_apply]
   have hn1 : (0 : ℝ) < n + 1 := by positivity
-  have hbnd : (|x| - 1) * (n + 1 : ℝ) + 1 ≤ 0 := by
-    have h1 : |x| - 1 ≤ -(1/(n + 1 : ℝ)) := by linarith
-    have h2 : (|x| - 1) * (n + 1 : ℝ) ≤ -(1/(n + 1 : ℝ)) * (n + 1 : ℝ) :=
-      mul_le_mul_of_nonneg_right h1 hn1.le
-    rw [show -(1/(n + 1 : ℝ)) * (n + 1 : ℝ) = -1 from by field_simp] at h2
+  have hslope : (0 : ℝ) < (n + 1 : ℝ) / ρ := by positivity
+  have hbnd : (|x| - ρ) * ((n + 1 : ℝ) / ρ) + 1 ≤ 0 := by
+    have h1 : |x| - ρ ≤ -(ρ/(n + 1 : ℝ)) := by linarith
+    have h2 : (|x| - ρ) * ((n + 1 : ℝ) / ρ) ≤ -(ρ/(n + 1 : ℝ)) * ((n + 1 : ℝ) / ρ) :=
+      mul_le_mul_of_nonneg_right h1 hslope.le
+    rw [show -(ρ/(n + 1 : ℝ)) * ((n + 1 : ℝ) / ρ) = -1 from by field_simp] at h2
     linarith
-  rw [show max 0 ((|x| - 1) * (n + 1 : ℝ) + 1) = 0 from max_eq_left hbnd]
+  rw [show max 0 ((|x| - ρ) * ((n + 1 : ℝ) / ρ) + 1) = 0 from max_eq_left hbnd]
   exact min_eq_right zero_le_one
 
-/-- `largeUpperBCF n` vanishes on a neighborhood of `0` for `n ≥ 1`, hence it
+/-- `largeUpperBCF ρ n` vanishes on a neighborhood of `0` for `n ≥ 1`, hence it
 lies in the test class of `h_jump`. -/
-private lemma largeUpperBCF_vanishes_near_zero (n : ℕ) (hn : 1 ≤ n) :
-    ∃ r > (0 : ℝ), ∀ x, |x| < r → largeUpperBCF n x = 0 := by
-  refine ⟨1/(n + 2 : ℝ), by positivity, fun x hx => ?_⟩
+private lemma largeUpperBCF_vanishes_near_zero (ρ : ℝ) (hρ : 0 < ρ) (n : ℕ) (hn : 1 ≤ n) :
+    ∃ r > (0 : ℝ), ∀ x, |x| < r → largeUpperBCF ρ hρ n x = 0 := by
+  refine ⟨ρ/(n + 2 : ℝ), by positivity, fun x hx => ?_⟩
   apply largeUpperBCF_eq_zero
   have hn1 : (0 : ℝ) < n + 1 := by positivity
   have hn2 : (0 : ℝ) < n + 2 := by positivity
   have hn_cast : (1 : ℝ) ≤ n := by exact_mod_cast hn
-  have h_ineq : 1/(n + 2 : ℝ) ≤ 1 - 1/(n + 1 : ℝ) := by
-    rw [le_sub_iff_add_le, div_add_div _ _ hn2.ne' hn1.ne', div_le_one (by positivity)]
-    nlinarith
+  have h_ineq : ρ/(n + 2 : ℝ) ≤ ρ - ρ/(n + 1 : ℝ) := by
+    rw [sub_eq_add_neg, ← sub_eq_add_neg, le_sub_iff_add_le, div_add_div _ _ hn2.ne' hn1.ne',
+        div_le_iff₀ (by positivity)]
+    have hn_poly : (n+1:ℝ) + (n+2) ≤ (n+2)*(n+1) := by nlinarith [hn_cast]
+    calc ρ*(n+1) + (n+2)*ρ = ρ*((n+1)+(n+2)) := by ring
+      _ ≤ ρ*((n+2)*(n+1)) := mul_le_mul_of_nonneg_left hn_poly hρ.le
   linarith [le_of_lt hx]
 
-/-- As `n → ∞`, `largeUpperBCF n x → 1_{|x| ≥ 1}` pointwise. -/
-private lemma largeUpperBCF_tendsto_indicator (x : ℝ) :
-    Tendsto (fun n : ℕ => largeUpperBCF n x) atTop
-      (𝓝 (Set.indicator {y : ℝ | 1 ≤ |y|} (fun _ => (1 : ℝ)) x)) := by
-  by_cases hx : 1 ≤ |x|
-  · rw [Set.indicator_of_mem (show x ∈ {y | 1 ≤ |y|} from hx)]
+/-- As `n → ∞`, `largeUpperBCF ρ n x → 1_{|x| ≥ ρ}` pointwise. -/
+private lemma largeUpperBCF_tendsto_indicator (ρ : ℝ) (hρ : 0 < ρ) (x : ℝ) :
+    Tendsto (fun n : ℕ => largeUpperBCF ρ hρ n x) atTop
+      (𝓝 (Set.indicator {y : ℝ | ρ ≤ |y|} (fun _ => (1 : ℝ)) x)) := by
+  by_cases hx : ρ ≤ |x|
+  · rw [Set.indicator_of_mem (show x ∈ {y | ρ ≤ |y|} from hx)]
     refine tendsto_atTop_of_eventually_const (i₀ := 0) (fun n _ => ?_)
-    exact largeUpperBCF_eq_one n hx
+    exact largeUpperBCF_eq_one ρ hρ n hx
   · push_neg at hx
-    rw [Set.indicator_of_notMem (show x ∉ {y | 1 ≤ |y|} from not_le.mpr hx)]
-    have h_pos : 0 < 1 - |x| := by linarith
-    obtain ⟨N, hN⟩ := exists_nat_gt (1/(1 - |x|))
-    rw [div_lt_iff₀ h_pos] at hN  -- hN : 1 < ↑N * (1 - |x|)
+    rw [Set.indicator_of_notMem (show x ∉ {y | ρ ≤ |y|} from not_le.mpr hx)]
+    have h_pos : 0 < ρ - |x| := by linarith
+    obtain ⟨N, hN⟩ := exists_nat_gt (ρ/(ρ - |x|))
+    rw [div_lt_iff₀ h_pos] at hN  -- hN : ρ < ↑N * (ρ - |x|)
     refine tendsto_atTop_of_eventually_const (i₀ := N) (fun n hn => ?_)
     apply largeUpperBCF_eq_zero
     have hn1_pos : (0 : ℝ) < n + 1 := by positivity
     have hN_le : (N : ℝ) ≤ (n : ℝ) := by exact_mod_cast hn
-    have h1 : 1 ≤ (1 - |x|) * (n + 1 : ℝ) := by
-      calc (1 : ℝ) ≤ (N : ℝ) * (1 - |x|) := le_of_lt hN
-        _ ≤ (n : ℝ) * (1 - |x|) := mul_le_mul_of_nonneg_right hN_le h_pos.le
-        _ ≤ (n + 1 : ℝ) * (1 - |x|) :=
+    have h1 : ρ ≤ (ρ - |x|) * (n + 1 : ℝ) := by
+      calc ρ ≤ (N : ℝ) * (ρ - |x|) := le_of_lt hN
+        _ ≤ (n : ℝ) * (ρ - |x|) := mul_le_mul_of_nonneg_right hN_le h_pos.le
+        _ ≤ (n + 1 : ℝ) * (ρ - |x|) :=
             mul_le_mul_of_nonneg_right (by linarith) h_pos.le
-        _ = (1 - |x|) * (n + 1 : ℝ) := by ring
+        _ = (ρ - |x|) * (n + 1 : ℝ) := by ring
     rw [← div_le_iff₀ hn1_pos] at h1
     linarith
 
-/-- Bounded continuous "annulus" cutoff centered at `|x| = 1`.
+/-- Bounded continuous "annulus" cutoff centered at `|x| = ρ`.
 
-* `largeAnnulusBCF n x = 1` for `||x| - 1| ≤ 1/(n+1)` (plateau on the annulus)
-* `largeAnnulusBCF n x = 0` for `||x| - 1| ≥ 2/(n+1)` (outside a slightly wider annulus)
+* `largeAnnulusBCF ρ n x = 1` for `||x| - ρ| ≤ ρ/(n+1)` (plateau on the annulus)
+* `largeAnnulusBCF ρ n x = 0` for `||x| - ρ| ≥ 2ρ/(n+1)` (outside a slightly wider annulus)
 * linear ramp on the transition bands. -/
-private noncomputable def largeAnnulusBCF (n : ℕ) : BoundedContinuousFunction ℝ ℝ :=
+private noncomputable def largeAnnulusBCF (ρ : ℝ) (_hρ : 0 < ρ) (n : ℕ) :
+    BoundedContinuousFunction ℝ ℝ :=
   BoundedContinuousFunction.mkOfBound
-    ⟨fun x => max 0 (1 - (n + 1 : ℝ) * max 0 (|(|x| - 1)| - 1/(n + 1 : ℝ))),
+    ⟨fun x => max 0 (1 - ((n + 1 : ℝ) / ρ) * max 0 (|(|x| - ρ)| - ρ/(n + 1 : ℝ))),
       Continuous.max continuous_const
         (continuous_const.sub (continuous_const.mul
           (Continuous.max continuous_const
@@ -2985,119 +2993,126 @@ private noncomputable def largeAnnulusBCF (n : ℕ) : BoundedContinuousFunction 
     1
     (fun x y => by
       have hbnd : ∀ z : ℝ,
-          0 ≤ max 0 (1 - (n + 1 : ℝ) * max 0 (|(|z| - 1)| - 1/(n + 1 : ℝ))) ∧
-          max 0 (1 - (n + 1 : ℝ) * max 0 (|(|z| - 1)| - 1/(n + 1 : ℝ))) ≤ 1 := fun z => by
+          0 ≤ max 0 (1 - ((n + 1 : ℝ) / ρ) * max 0 (|(|z| - ρ)| - ρ/(n + 1 : ℝ))) ∧
+          max 0 (1 - ((n + 1 : ℝ) / ρ) * max 0 (|(|z| - ρ)| - ρ/(n + 1 : ℝ))) ≤ 1 := fun z => by
         refine ⟨le_max_left _ _, max_le zero_le_one ?_⟩
-        have h1 : 0 ≤ (n + 1 : ℝ) * max 0 (|(|z| - 1)| - 1/(n + 1 : ℝ)) := by positivity
+        have h1 : 0 ≤ ((n + 1 : ℝ) / ρ) * max 0 (|(|z| - ρ)| - ρ/(n + 1 : ℝ)) := by positivity
         linarith
       rw [Real.dist_eq]
       simp only [ContinuousMap.coe_mk]
       have hx := hbnd x; have hy := hbnd y
       refine abs_sub_le_iff.mpr ⟨?_, ?_⟩ <;> linarith)
 
-private lemma largeAnnulusBCF_apply (n : ℕ) (x : ℝ) :
-    largeAnnulusBCF n x =
-      max 0 (1 - (n + 1 : ℝ) * max 0 (|(|x| - 1)| - 1/(n + 1 : ℝ))) := rfl
+private lemma largeAnnulusBCF_apply (ρ : ℝ) (hρ : 0 < ρ) (n : ℕ) (x : ℝ) :
+    largeAnnulusBCF ρ hρ n x =
+      max 0 (1 - ((n + 1 : ℝ) / ρ) * max 0 (|(|x| - ρ)| - ρ/(n + 1 : ℝ))) := rfl
 
-private lemma largeAnnulusBCF_nonneg (n : ℕ) (x : ℝ) : 0 ≤ largeAnnulusBCF n x := by
+private lemma largeAnnulusBCF_nonneg (ρ : ℝ) (hρ : 0 < ρ) (n : ℕ) (x : ℝ) :
+    0 ≤ largeAnnulusBCF ρ hρ n x := by
   rw [largeAnnulusBCF_apply]; exact le_max_left _ _
 
-private lemma largeAnnulusBCF_le_one (n : ℕ) (x : ℝ) : largeAnnulusBCF n x ≤ 1 := by
+private lemma largeAnnulusBCF_le_one (ρ : ℝ) (hρ : 0 < ρ) (n : ℕ) (x : ℝ) :
+    largeAnnulusBCF ρ hρ n x ≤ 1 := by
   rw [largeAnnulusBCF_apply]
   refine max_le zero_le_one ?_
-  have h1 : 0 ≤ (n + 1 : ℝ) * max 0 (|(|x| - 1)| - 1/(n + 1 : ℝ)) := by positivity
+  have h1 : 0 ≤ ((n + 1 : ℝ) / ρ) * max 0 (|(|x| - ρ)| - ρ/(n + 1 : ℝ)) := by positivity
   linarith
 
-private lemma largeAnnulusBCF_eq_one (n : ℕ) {x : ℝ}
-    (hx : |(|x| - 1)| ≤ 1/(n + 1 : ℝ)) : largeAnnulusBCF n x = 1 := by
+private lemma largeAnnulusBCF_eq_one (ρ : ℝ) (hρ : 0 < ρ) (n : ℕ) {x : ℝ}
+    (hx : |(|x| - ρ)| ≤ ρ/(n + 1 : ℝ)) : largeAnnulusBCF ρ hρ n x = 1 := by
   rw [largeAnnulusBCF_apply]
-  have hsub : |(|x| - 1)| - 1/(n + 1 : ℝ) ≤ 0 := by linarith
-  rw [show max 0 (|(|x| - 1)| - 1/(n + 1 : ℝ)) = 0 from max_eq_left hsub,
+  have hsub : |(|x| - ρ)| - ρ/(n + 1 : ℝ) ≤ 0 := by linarith
+  rw [show max 0 (|(|x| - ρ)| - ρ/(n + 1 : ℝ)) = 0 from max_eq_left hsub,
       mul_zero, sub_zero, max_eq_right zero_le_one]
 
-private lemma largeAnnulusBCF_eq_zero (n : ℕ) {x : ℝ}
-    (hx : 2/(n + 1 : ℝ) ≤ |(|x| - 1)|) : largeAnnulusBCF n x = 0 := by
+private lemma largeAnnulusBCF_eq_zero (ρ : ℝ) (hρ : 0 < ρ) (n : ℕ) {x : ℝ}
+    (hx : 2 * ρ/(n + 1 : ℝ) ≤ |(|x| - ρ)|) : largeAnnulusBCF ρ hρ n x = 0 := by
   rw [largeAnnulusBCF_apply]
   have hn1 : (0 : ℝ) < n + 1 := by positivity
-  have h_diff : 1/(n + 1 : ℝ) ≤ |(|x| - 1)| - 1/(n + 1 : ℝ) := by
-    have : 2/(n + 1 : ℝ) = 1/(n + 1 : ℝ) + 1/(n + 1 : ℝ) := by ring
+  have h_diff : ρ/(n + 1 : ℝ) ≤ |(|x| - ρ)| - ρ/(n + 1 : ℝ) := by
+    have : 2 * ρ/(n + 1 : ℝ) = ρ/(n + 1 : ℝ) + ρ/(n + 1 : ℝ) := by ring
     linarith [this ▸ hx]
-  have h_nn : 0 ≤ |(|x| - 1)| - 1/(n + 1 : ℝ) := le_trans (by positivity) h_diff
+  have h_nn : 0 ≤ |(|x| - ρ)| - ρ/(n + 1 : ℝ) := le_trans (by positivity) h_diff
   rw [max_eq_right h_nn]
-  have h_prod : 1 ≤ (n + 1 : ℝ) * (|(|x| - 1)| - 1/(n + 1 : ℝ)) := by
-    have := mul_le_mul_of_nonneg_left h_diff hn1.le
-    rw [show (n + 1 : ℝ) * (1/(n + 1 : ℝ)) = 1 from by field_simp] at this
+  have h_prod : 1 ≤ ((n + 1 : ℝ) / ρ) * (|(|x| - ρ)| - ρ/(n + 1 : ℝ)) := by
+    have := mul_le_mul_of_nonneg_left h_diff (by positivity : (0 : ℝ) ≤ (n + 1 : ℝ) / ρ)
+    rw [show ((n + 1 : ℝ) / ρ) * (ρ/(n + 1 : ℝ)) = 1 from by field_simp] at this
     exact this
-  have : 1 - (n + 1 : ℝ) * (|(|x| - 1)| - 1/(n + 1 : ℝ)) ≤ 0 := by linarith
+  have : 1 - ((n + 1 : ℝ) / ρ) * (|(|x| - ρ)| - ρ/(n + 1 : ℝ)) ≤ 0 := by linarith
   exact max_eq_left this
 
-/-- `largeAnnulusBCF n` vanishes on a neighborhood of `0` for `n ≥ 2`. -/
-private lemma largeAnnulusBCF_vanishes_near_zero (n : ℕ) (hn : 2 ≤ n) :
-    ∃ r > (0 : ℝ), ∀ x, |x| < r → largeAnnulusBCF n x = 0 := by
-  refine ⟨1/(n + 1 : ℝ), by positivity, fun x hx => ?_⟩
+/-- `largeAnnulusBCF ρ n` vanishes on a neighborhood of `0` for `n ≥ 2`. -/
+private lemma largeAnnulusBCF_vanishes_near_zero (ρ : ℝ) (hρ : 0 < ρ) (n : ℕ) (hn : 2 ≤ n) :
+    ∃ r > (0 : ℝ), ∀ x, |x| < r → largeAnnulusBCF ρ hρ n x = 0 := by
+  refine ⟨ρ/(n + 1 : ℝ), by positivity, fun x hx => ?_⟩
   apply largeAnnulusBCF_eq_zero
-  -- |x| < 1/(n+1), so |x| - 1 < 1/(n+1) - 1 ≤ 0 (since n+1 ≥ 3), hence ||x| - 1| = 1 - |x| ≥ 1 - 1/(n+1) ≥ 2/(n+1) when n ≥ 2.
+  -- |x| < ρ/(n+1), so |x| - ρ < ρ/(n+1) - ρ ≤ 0 (since n+1 ≥ 3), hence
+  -- ||x| - ρ| = ρ - |x| ≥ ρ - ρ/(n+1) ≥ 2ρ/(n+1) when n ≥ 2.
   have hn1 : (0 : ℝ) < n + 1 := by positivity
   have hx_nn : 0 ≤ |x| := abs_nonneg _
-  have hx_lt : |x| < 1/(n + 1 : ℝ) := hx
-  have h_ratio : 1/(n + 1 : ℝ) ≤ 1/3 := by
+  have hx_lt : |x| < ρ/(n + 1 : ℝ) := hx
+  have h_ratio : ρ/(n + 1 : ℝ) ≤ ρ/3 := by
     rw [div_le_div_iff₀ hn1 (by norm_num : (0 : ℝ) < 3)]
-    have : (3 : ℝ) ≤ n + 1 := by exact_mod_cast Nat.add_le_add_right hn 1
+    have h3 : (3 : ℝ) ≤ n + 1 := by exact_mod_cast Nat.add_le_add_right hn 1
+    exact mul_le_mul_of_nonneg_left h3 hρ.le
+  have hx_lt_1 : |x| < ρ := by
+    have : ρ/3 < ρ := by linarith [div_lt_self hρ (by norm_num : (1 : ℝ) < 3)]
     linarith
-  have hx_lt_1 : |x| < 1 := by linarith
-  have h_neg : |x| - 1 < 0 := by linarith
+  have h_neg : |x| - ρ < 0 := by linarith
   rw [abs_of_neg h_neg, neg_sub]
-  -- goal: 2/(n+1) ≤ 1 - |x|
-  have h_bound : 2/(n + 1 : ℝ) + 1/(n + 1 : ℝ) ≤ 1 := by
-    rw [← add_div, show (2 : ℝ) + 1 = 3 from by norm_num, div_le_one hn1]
-    have : (3 : ℝ) ≤ n + 1 := by exact_mod_cast Nat.add_le_add_right hn 1
-    linarith
+  -- goal: 2ρ/(n+1) ≤ ρ - |x|
+  have h_bound : 2 * ρ/(n + 1 : ℝ) + ρ/(n + 1 : ℝ) ≤ ρ := by
+    rw [← add_div, show (2 : ℝ) * ρ + ρ = 3 * ρ from by ring, div_le_iff₀ hn1]
+    have h3 : (3 : ℝ) ≤ n + 1 := by exact_mod_cast Nat.add_le_add_right hn 1
+    calc 3*ρ = ρ*3 := by ring
+      _ ≤ ρ*(n+1) := mul_le_mul_of_nonneg_left h3 hρ.le
   linarith
 
-/-- As `n → ∞`, `largeAnnulusBCF n x → 1_{|x| = 1}` pointwise. -/
-private lemma largeAnnulusBCF_tendsto_indicator (x : ℝ) :
-    Tendsto (fun n : ℕ => largeAnnulusBCF n x) atTop
-      (𝓝 (Set.indicator {y : ℝ | |y| = 1} (fun _ => (1 : ℝ)) x)) := by
-  by_cases hx : |x| = 1
-  · -- At |x| = 1, χ_n x = 1 always.
-    rw [Set.indicator_of_mem (show x ∈ {y | |y| = 1} from hx)]
+/-- As `n → ∞`, `largeAnnulusBCF ρ n x → 1_{|x| = ρ}` pointwise. -/
+private lemma largeAnnulusBCF_tendsto_indicator (ρ : ℝ) (hρ : 0 < ρ) (x : ℝ) :
+    Tendsto (fun n : ℕ => largeAnnulusBCF ρ hρ n x) atTop
+      (𝓝 (Set.indicator {y : ℝ | |y| = ρ} (fun _ => (1 : ℝ)) x)) := by
+  by_cases hx : |x| = ρ
+  · -- At |x| = ρ, χ_n x = 1 always.
+    rw [Set.indicator_of_mem (show x ∈ {y | |y| = ρ} from hx)]
     refine tendsto_atTop_of_eventually_const (i₀ := 0) (fun n _ => ?_)
     apply largeAnnulusBCF_eq_one
     rw [hx]
-    rw [show (1 : ℝ) - 1 = 0 from sub_self 1, abs_zero]
+    rw [show ρ - ρ = 0 from sub_self ρ, abs_zero]
     positivity
-  · -- |x| ≠ 1: eventually χ_n x = 0.
-    rw [Set.indicator_of_notMem (show x ∉ {y | |y| = 1} from hx)]
-    have h_pos : 0 < |(|x| - 1)| := abs_pos.mpr (sub_ne_zero.mpr hx)
-    obtain ⟨N, hN⟩ := exists_nat_gt (2/|(|x| - 1)|)
-    rw [div_lt_iff₀ h_pos] at hN  -- hN : 2 < ↑N * |(|x| - 1)|
+  · -- |x| ≠ ρ: eventually χ_n x = 0.
+    rw [Set.indicator_of_notMem (show x ∉ {y | |y| = ρ} from hx)]
+    have h_pos : 0 < |(|x| - ρ)| := abs_pos.mpr (sub_ne_zero.mpr hx)
+    obtain ⟨N, hN⟩ := exists_nat_gt (2 * ρ/|(|x| - ρ)|)
+    rw [div_lt_iff₀ h_pos] at hN  -- hN : 2ρ < ↑N * |(|x| - ρ)|
     refine tendsto_atTop_of_eventually_const (i₀ := N) (fun n hn => ?_)
     apply largeAnnulusBCF_eq_zero
-    -- Goal: 2/(n+1) ≤ |(|x| - 1)|
+    -- Goal: 2ρ/(n+1) ≤ |(|x| - ρ)|
     have hn1_pos : (0 : ℝ) < n + 1 := by positivity
     have hN_le : (N : ℝ) ≤ (n : ℝ) := by exact_mod_cast hn
-    have h2 : 2 ≤ (n + 1 : ℝ) * |(|x| - 1)| :=
-      calc (2 : ℝ) ≤ (N : ℝ) * |(|x| - 1)| := le_of_lt hN
-        _ ≤ (n : ℝ) * |(|x| - 1)| := mul_le_mul_of_nonneg_right hN_le h_pos.le
-        _ ≤ (n + 1 : ℝ) * |(|x| - 1)| :=
+    have h2 : 2 * ρ ≤ (n + 1 : ℝ) * |(|x| - ρ)| :=
+      calc (2 : ℝ) * ρ ≤ (N : ℝ) * |(|x| - ρ)| := le_of_lt hN
+        _ ≤ (n : ℝ) * |(|x| - ρ)| := mul_le_mul_of_nonneg_right hN_le h_pos.le
+        _ ≤ (n + 1 : ℝ) * |(|x| - ρ)| :=
             mul_le_mul_of_nonneg_right (by linarith) h_pos.le
     rw [div_le_iff₀ hn1_pos]; linarith
 
-/-- BCF representing `largeUpperBCF n · g` for a bounded continuous `g`. -/
-private noncomputable def largeUpperMulBCF (n : ℕ) (g : ℝ → ℝ) (hg_cont : Continuous g)
+/-- BCF representing `largeUpperBCF ρ n · g` for a bounded continuous `g`. -/
+private noncomputable def largeUpperMulBCF (ρ : ℝ) (hρ : 0 < ρ) (n : ℕ)
+    (g : ℝ → ℝ) (hg_cont : Continuous g)
     (M : ℝ) (hg_bnd : ∀ x, |g x| ≤ M) : BoundedContinuousFunction ℝ ℝ :=
   BoundedContinuousFunction.mkOfBound
-    ⟨fun x => largeUpperBCF n x * g x,
-      (largeUpperBCF n).continuous.mul hg_cont⟩
+    ⟨fun x => largeUpperBCF ρ hρ n x * g x,
+      (largeUpperBCF ρ hρ n).continuous.mul hg_cont⟩
     (2 * M)
     (fun x y => by
       simp only [ContinuousMap.coe_mk]
       rw [Real.dist_eq]
-      have hbnd : ∀ z, |largeUpperBCF n z * g z| ≤ M := fun z => by
-        rw [abs_mul, abs_of_nonneg (largeUpperBCF_nonneg n z)]
-        calc largeUpperBCF n z * |g z|
+      have hbnd : ∀ z, |largeUpperBCF ρ hρ n z * g z| ≤ M := fun z => by
+        rw [abs_mul, abs_of_nonneg (largeUpperBCF_nonneg ρ hρ n z)]
+        calc largeUpperBCF ρ hρ n z * |g z|
             ≤ 1 * |g z| :=
-              mul_le_mul_of_nonneg_right (largeUpperBCF_le_one n z) (abs_nonneg _)
+              mul_le_mul_of_nonneg_right (largeUpperBCF_le_one ρ hρ n z) (abs_nonneg _)
           _ ≤ 1 * M := mul_le_mul_of_nonneg_left (hg_bnd z) zero_le_one
           _ = M := one_mul _
       have hx := hbnd x; have hy := hbnd y
@@ -3105,129 +3120,131 @@ private noncomputable def largeUpperMulBCF (n : ℕ) (g : ℝ → ℝ) (hg_cont 
       refine abs_sub_le_iff.mpr ⟨?_, ?_⟩ <;> linarith)
 
 @[simp]
-private lemma largeUpperMulBCF_apply (n : ℕ) (g : ℝ → ℝ) (hg_cont : Continuous g)
-    (M : ℝ) (hg_bnd : ∀ x, |g x| ≤ M) (x : ℝ) :
-    largeUpperMulBCF n g hg_cont M hg_bnd x = largeUpperBCF n x * g x := rfl
+private lemma largeUpperMulBCF_apply (ρ : ℝ) (hρ : 0 < ρ) (n : ℕ) (g : ℝ → ℝ)
+    (hg_cont : Continuous g) (M : ℝ) (hg_bnd : ∀ x, |g x| ≤ M) (x : ℝ) :
+    largeUpperMulBCF ρ hρ n g hg_cont M hg_bnd x = largeUpperBCF ρ hρ n x * g x := rfl
 
-private lemma largeUpperMulBCF_abs_le (n : ℕ) (g : ℝ → ℝ) (hg_cont : Continuous g)
-    (M : ℝ) (hg_bnd : ∀ x, |g x| ≤ M) (x : ℝ) :
-    |largeUpperMulBCF n g hg_cont M hg_bnd x| ≤ M := by
-  rw [largeUpperMulBCF_apply, abs_mul, abs_of_nonneg (largeUpperBCF_nonneg n x)]
-  calc largeUpperBCF n x * |g x|
+private lemma largeUpperMulBCF_abs_le (ρ : ℝ) (hρ : 0 < ρ) (n : ℕ) (g : ℝ → ℝ)
+    (hg_cont : Continuous g) (M : ℝ) (hg_bnd : ∀ x, |g x| ≤ M) (x : ℝ) :
+    |largeUpperMulBCF ρ hρ n g hg_cont M hg_bnd x| ≤ M := by
+  rw [largeUpperMulBCF_apply, abs_mul, abs_of_nonneg (largeUpperBCF_nonneg ρ hρ n x)]
+  calc largeUpperBCF ρ hρ n x * |g x|
       ≤ 1 * M :=
-        mul_le_mul (largeUpperBCF_le_one n x) (hg_bnd x) (abs_nonneg _) zero_le_one
+        mul_le_mul (largeUpperBCF_le_one ρ hρ n x) (hg_bnd x) (abs_nonneg _) zero_le_one
     _ = M := one_mul _
 
-private lemma largeUpperMulBCF_vanishes_near_zero (n : ℕ) (hn : 1 ≤ n)
+private lemma largeUpperMulBCF_vanishes_near_zero (ρ : ℝ) (hρ : 0 < ρ) (n : ℕ) (hn : 1 ≤ n)
     (g : ℝ → ℝ) (hg_cont : Continuous g) (M : ℝ) (hg_bnd : ∀ x, |g x| ≤ M) :
-    ∃ r > (0 : ℝ), ∀ x, |x| < r → largeUpperMulBCF n g hg_cont M hg_bnd x = 0 := by
-  obtain ⟨r, hr_pos, hr_zero⟩ := largeUpperBCF_vanishes_near_zero n hn
+    ∃ r > (0 : ℝ), ∀ x, |x| < r → largeUpperMulBCF ρ hρ n g hg_cont M hg_bnd x = 0 := by
+  obtain ⟨r, hr_pos, hr_zero⟩ := largeUpperBCF_vanishes_near_zero ρ hρ n hn
   refine ⟨r, hr_pos, fun x hx => ?_⟩
   rw [largeUpperMulBCF_apply, hr_zero x hx, zero_mul]
 
 private lemma largeUpperMulBCF_tendsto_indicator
-    (g : ℝ → ℝ) (hg_cont : Continuous g) (M : ℝ) (hg_bnd : ∀ x, |g x| ≤ M) (x : ℝ) :
-    Tendsto (fun n => largeUpperMulBCF n g hg_cont M hg_bnd x) atTop
-      (𝓝 (Set.indicator (largeSet 1) g x)) := by
-  have h1 := (largeUpperBCF_tendsto_indicator x).mul
+    (ρ : ℝ) (hρ : 0 < ρ) (g : ℝ → ℝ) (hg_cont : Continuous g) (M : ℝ)
+    (hg_bnd : ∀ x, |g x| ≤ M) (x : ℝ) :
+    Tendsto (fun n => largeUpperMulBCF ρ hρ n g hg_cont M hg_bnd x) atTop
+      (𝓝 (Set.indicator (largeSet ρ) g x)) := by
+  have h1 := (largeUpperBCF_tendsto_indicator ρ hρ x).mul
       (tendsto_const_nhds : Tendsto (fun _ : ℕ => g x) atTop (𝓝 (g x)))
   have h_eq :
-      Set.indicator {y : ℝ | 1 ≤ |y|} (fun _ => (1 : ℝ)) x * g x =
-        Set.indicator (largeSet 1) g x := by
-    by_cases hx : 1 ≤ |x|
-    · rw [Set.indicator_of_mem (show x ∈ {y : ℝ | 1 ≤ |y|} from hx),
-          Set.indicator_of_mem (show x ∈ largeSet 1 from hx), one_mul]
+      Set.indicator {y : ℝ | ρ ≤ |y|} (fun _ => (1 : ℝ)) x * g x =
+        Set.indicator (largeSet ρ) g x := by
+    by_cases hx : ρ ≤ |x|
+    · rw [Set.indicator_of_mem (show x ∈ {y : ℝ | ρ ≤ |y|} from hx),
+          Set.indicator_of_mem (show x ∈ largeSet ρ from hx), one_mul]
     · push_neg at hx
-      rw [Set.indicator_of_notMem (show x ∉ {y : ℝ | 1 ≤ |y|} from not_le.mpr hx),
-          Set.indicator_of_notMem (show x ∉ largeSet 1 from not_le.mpr hx), zero_mul]
+      rw [Set.indicator_of_notMem (show x ∉ {y : ℝ | ρ ≤ |y|} from not_le.mpr hx),
+          Set.indicator_of_notMem (show x ∉ largeSet ρ from not_le.mpr hx), zero_mul]
   rw [← h_eq]
-  exact h1.congr (fun n => (largeUpperMulBCF_apply n g hg_cont M hg_bnd x).symm)
+  exact h1.congr (fun n => (largeUpperMulBCF_apply ρ hρ n g hg_cont M hg_bnd x).symm)
 
-/-- Pointwise bound `|largeUpperMulBCF n g x − Set.indicator (largeSet 1) g x| ≤
-M · largeAnnulusBCF n x`, the key inequality controlling the discrepancy between
+/-- Pointwise bound `|largeUpperMulBCF ρ n g x − Set.indicator (largeSet ρ) g x| ≤
+M · largeAnnulusBCF ρ n x`, the key inequality controlling the discrepancy between
 the smooth cutoff product and the true indicator product. -/
 private lemma largeUpperMulBCF_sub_indicator_abs_le
-    (n : ℕ) (g : ℝ → ℝ) (hg_cont : Continuous g) (M : ℝ) (hM_nn : 0 ≤ M)
+    (ρ : ℝ) (hρ : 0 < ρ) (n : ℕ) (g : ℝ → ℝ) (hg_cont : Continuous g) (M : ℝ) (hM_nn : 0 ≤ M)
     (hg_bnd : ∀ x, |g x| ≤ M) (x : ℝ) :
-    |largeUpperMulBCF n g hg_cont M hg_bnd x - Set.indicator (largeSet 1) g x| ≤
-      M * largeAnnulusBCF n x := by
+    |largeUpperMulBCF ρ hρ n g hg_cont M hg_bnd x - Set.indicator (largeSet ρ) g x| ≤
+      M * largeAnnulusBCF ρ hρ n x := by
   rw [largeUpperMulBCF_apply]
-  by_cases hx : 1 ≤ |x|
-  · -- |x| ≥ 1: both = g(x), difference 0.
-    rw [Set.indicator_of_mem (show x ∈ largeSet 1 from hx),
-        largeUpperBCF_eq_one n hx, one_mul]
+  by_cases hx : ρ ≤ |x|
+  · -- |x| ≥ ρ: both = g(x), difference 0.
+    rw [Set.indicator_of_mem (show x ∈ largeSet ρ from hx),
+        largeUpperBCF_eq_one ρ hρ n hx, one_mul]
     rw [show g x - g x = 0 from sub_self (g x), abs_zero]
-    exact mul_nonneg hM_nn (largeAnnulusBCF_nonneg n x)
+    exact mul_nonneg hM_nn (largeAnnulusBCF_nonneg ρ hρ n x)
   · push_neg at hx
-    rw [Set.indicator_of_notMem (show x ∉ largeSet 1 from not_le.mpr hx), sub_zero,
-        abs_mul, abs_of_nonneg (largeUpperBCF_nonneg n x)]
-    by_cases hx' : |x| ≤ 1 - 1/(n + 1 : ℝ)
-    · rw [largeUpperBCF_eq_zero n hx', zero_mul]
-      exact mul_nonneg hM_nn (largeAnnulusBCF_nonneg n x)
+    rw [Set.indicator_of_notMem (show x ∉ largeSet ρ from not_le.mpr hx), sub_zero,
+        abs_mul, abs_of_nonneg (largeUpperBCF_nonneg ρ hρ n x)]
+    by_cases hx' : |x| ≤ ρ - ρ/(n + 1 : ℝ)
+    · rw [largeUpperBCF_eq_zero ρ hρ n hx', zero_mul]
+      exact mul_nonneg hM_nn (largeAnnulusBCF_nonneg ρ hρ n x)
     · push_neg at hx'
-      have h_in_annulus : |(|x| - 1)| ≤ 1/(n + 1 : ℝ) := by
-        rw [abs_of_nonpos (by linarith : |x| - 1 ≤ 0), neg_sub]; linarith
-      rw [largeAnnulusBCF_eq_one n h_in_annulus, mul_one]
-      calc largeUpperBCF n x * |g x|
+      have h_in_annulus : |(|x| - ρ)| ≤ ρ/(n + 1 : ℝ) := by
+        rw [abs_of_nonpos (by linarith : |x| - ρ ≤ 0), neg_sub]; linarith
+      rw [largeAnnulusBCF_eq_one ρ hρ n h_in_annulus, mul_one]
+      calc largeUpperBCF ρ hρ n x * |g x|
           ≤ 1 * M :=
-            mul_le_mul (largeUpperBCF_le_one n x) (hg_bnd x) (abs_nonneg _) zero_le_one
+            mul_le_mul (largeUpperBCF_le_one ρ hρ n x) (hg_bnd x) (abs_nonneg _) zero_le_one
         _ = M := one_mul _
 
 /-- **Scalar large-jump limit identification.** For any continuous bounded `g : ℝ → ℝ`,
-under the hypothesis that `ν` has no atom at `|x| = 1`, the scaled set integral over
-`largeSet 1` of `g` against `μ_t` converges to the corresponding ν-integral.
+under the hypothesis that `ν` has no atom at `|x| = ρ`, the scaled set integral over
+`largeSet ρ` of `g` against `μ_t` converges to the corresponding ν-integral.
 
-The proof is an ε/3 sandwich: approximate `1_{|x| ≥ 1}` from above by the smooth cutoff
-`largeUpperBCF n`, bound the discrepancy by `largeAnnulusBCF n` (whose ν-integral
+The proof is an ε/3 sandwich: approximate `1_{|x| ≥ ρ}` from above by the smooth cutoff
+`largeUpperBCF ρ n`, bound the discrepancy by `largeAnnulusBCF ρ n` (whose ν-integral
 vanishes as `n → ∞` by `hν_atom`), and apply `h_jump` for each fixed `n`. -/
 private lemma scaled_largeSet_integral_tendsto
+    {ρ : ℝ} (hρ : 0 < ρ)
     (g : ℝ → ℝ) (hg_cont : Continuous g) {M : ℝ} (hM_nn : 0 ≤ M)
     (hg_bnd : ∀ x, |g x| ≤ M)
-    {ν : Measure ℝ} [IsFiniteMeasure ν] (hν_atom : ν {x | |x| = 1} = 0)
+    {ν : Measure ℝ} [IsFiniteMeasure ν] (hν_atom : ν {x | |x| = ρ} = 0)
     {t_seq : ℕ → {t : ℝ // 0 < t}}
     (h_jump : ∀ (f : BoundedContinuousFunction ℝ ℝ),
         (∃ r > 0, ∀ x, |x| < r → f x = 0) →
         Tendsto (fun k => (t_seq k).val⁻¹ * ∫ x, f x ∂(S.measure (t_seq k) : Measure ℝ))
           atTop (𝓝 (∫ x, f x ∂ν))) :
     Tendsto (fun k =>
-      (t_seq k).val⁻¹ * ∫ x in largeSet 1, g x ∂(S.measure (t_seq k) : Measure ℝ))
-    atTop (𝓝 (∫ x in largeSet 1, g x ∂ν)) := by
-  -- Composite BCFs `largeUpperBCF n · g` for each n.
+      (t_seq k).val⁻¹ * ∫ x in largeSet ρ, g x ∂(S.measure (t_seq k) : Measure ℝ))
+    atTop (𝓝 (∫ x in largeSet ρ, g x ∂ν)) := by
+  -- Composite BCFs `largeUpperBCF ρ n · g` for each n.
   set φg : ℕ → BoundedContinuousFunction ℝ ℝ :=
-    fun n => largeUpperMulBCF n g hg_cont M hg_bnd with hφg_def
-  -- DCT on ν for the BCFs: ∫ φg n dν → ∫_{largeSet 1} g dν.
+    fun n => largeUpperMulBCF ρ hρ n g hg_cont M hg_bnd with hφg_def
+  -- DCT on ν for the BCFs: ∫ φg n dν → ∫_{largeSet ρ} g dν.
   have h_dct_φg : Tendsto (fun n => ∫ x, φg n x ∂ν) atTop
-      (𝓝 (∫ x in largeSet 1, g x ∂ν)) := by
+      (𝓝 (∫ x in largeSet ρ, g x ∂ν)) := by
     have h_lim : Tendsto (fun n => ∫ x, φg n x ∂ν) atTop
-        (𝓝 (∫ x, Set.indicator (largeSet 1) g x ∂ν)) := by
+        (𝓝 (∫ x, Set.indicator (largeSet ρ) g x ∂ν)) := by
       refine MeasureTheory.tendsto_integral_of_dominated_convergence (bound := fun _ => M)
         (fun n => (φg n).continuous.aestronglyMeasurable)
         (integrable_const M)
         (fun n => Filter.Eventually.of_forall (fun x => by
           rw [Real.norm_eq_abs]
-          exact largeUpperMulBCF_abs_le n g hg_cont M hg_bnd x))
+          exact largeUpperMulBCF_abs_le ρ hρ n g hg_cont M hg_bnd x))
         (Filter.Eventually.of_forall
-          (fun x => largeUpperMulBCF_tendsto_indicator g hg_cont M hg_bnd x))
-    rwa [integral_indicator (measurableSet_largeSet 1)] at h_lim
+          (fun x => largeUpperMulBCF_tendsto_indicator ρ hρ g hg_cont M hg_bnd x))
+    rwa [integral_indicator (measurableSet_largeSet ρ)] at h_lim
   -- DCT on ν for χ_n: ∫ χ_n dν → 0, using hν_atom.
-  have h_dct_χ : Tendsto (fun n => ∫ x, largeAnnulusBCF n x ∂ν) atTop (𝓝 0) := by
-    have h_lim : Tendsto (fun n => ∫ x, largeAnnulusBCF n x ∂ν) atTop
-        (𝓝 (∫ x, Set.indicator {y : ℝ | |y| = 1} (fun _ => (1 : ℝ)) x ∂ν)) := by
+  have h_dct_χ : Tendsto (fun n => ∫ x, largeAnnulusBCF ρ hρ n x ∂ν) atTop (𝓝 0) := by
+    have h_lim : Tendsto (fun n => ∫ x, largeAnnulusBCF ρ hρ n x ∂ν) atTop
+        (𝓝 (∫ x, Set.indicator {y : ℝ | |y| = ρ} (fun _ => (1 : ℝ)) x ∂ν)) := by
       refine MeasureTheory.tendsto_integral_of_dominated_convergence (bound := fun _ => 1)
-        (fun n => (largeAnnulusBCF n).continuous.aestronglyMeasurable)
+        (fun n => (largeAnnulusBCF ρ hρ n).continuous.aestronglyMeasurable)
         (integrable_const 1)
         (fun n => Filter.Eventually.of_forall (fun x => by
-          rw [Real.norm_eq_abs, abs_of_nonneg (largeAnnulusBCF_nonneg n x)]
-          exact largeAnnulusBCF_le_one n x))
-        (Filter.Eventually.of_forall (fun x => largeAnnulusBCF_tendsto_indicator x))
-    have h_meas_singleton : MeasurableSet {y : ℝ | |y| = 1} :=
+          rw [Real.norm_eq_abs, abs_of_nonneg (largeAnnulusBCF_nonneg ρ hρ n x)]
+          exact largeAnnulusBCF_le_one ρ hρ n x))
+        (Filter.Eventually.of_forall (fun x => largeAnnulusBCF_tendsto_indicator ρ hρ x))
+    have h_meas_singleton : MeasurableSet {y : ℝ | |y| = ρ} :=
       (isClosed_singleton.preimage continuous_abs).measurableSet
     rw [integral_indicator h_meas_singleton] at h_lim
-    have h_zero : ∫ _ in {y : ℝ | |y| = 1}, (1 : ℝ) ∂ν = 0 := by
-      have : (ν.restrict {y : ℝ | |y| = 1}) = 0 := by
+    have h_zero : ∫ _ in {y : ℝ | |y| = ρ}, (1 : ℝ) ∂ν = 0 := by
+      have : (ν.restrict {y : ℝ | |y| = ρ}) = 0 := by
         rw [Measure.restrict_eq_zero]; exact hν_atom
-      rw [show (∫ _ in {y : ℝ | |y| = 1}, (1 : ℝ) ∂ν) =
-            ∫ _, (1 : ℝ) ∂(ν.restrict {y : ℝ | |y| = 1}) from rfl, this,
+      rw [show (∫ _ in {y : ℝ | |y| = ρ}, (1 : ℝ) ∂ν) =
+            ∫ _, (1 : ℝ) ∂(ν.restrict {y : ℝ | |y| = ρ}) from rfl, this,
           integral_zero_measure]
     rw [h_zero] at h_lim
     exact h_lim
@@ -3245,11 +3262,11 @@ private lemma scaled_largeSet_integral_tendsto
   have hn₀_N₂ : N₂ ≤ n₀ := le_trans (le_max_right _ _) (le_max_left _ _)
   have hn₀_2 : 2 ≤ n₀ := le_max_right _ _
   have hn₀_1 : 1 ≤ n₀ := le_trans (by norm_num) hn₀_2
-  have h_bnd_φg_int : |∫ x, φg n₀ x ∂ν - ∫ x in largeSet 1, g x ∂ν| < ε / 3 := by
+  have h_bnd_φg_int : |∫ x, φg n₀ x ∂ν - ∫ x in largeSet ρ, g x ∂ν| < ε / 3 := by
     have := hN₁ n₀ hn₀_N₁; rwa [Real.dist_eq] at this
-  have h_χ_int_nn : 0 ≤ ∫ x, largeAnnulusBCF n₀ x ∂ν :=
-    integral_nonneg (fun x => largeAnnulusBCF_nonneg n₀ x)
-  have h_bnd_χ_int : ∫ x, largeAnnulusBCF n₀ x ∂ν < ε / (6 * (M + 1)) := by
+  have h_χ_int_nn : 0 ≤ ∫ x, largeAnnulusBCF ρ hρ n₀ x ∂ν :=
+    integral_nonneg (fun x => largeAnnulusBCF_nonneg ρ hρ n₀ x)
+  have h_bnd_χ_int : ∫ x, largeAnnulusBCF ρ hρ n₀ x ∂ν < ε / (6 * (M + 1)) := by
     have := hN₂ n₀ hn₀_N₂
     rw [Real.dist_eq, sub_zero, abs_of_nonneg h_χ_int_nn] at this
     exact this
@@ -3257,11 +3274,11 @@ private lemma scaled_largeSet_integral_tendsto
   have h_φg_kjump : Tendsto (fun k => (t_seq k).val⁻¹ *
       ∫ x, φg n₀ x ∂(S.measure (t_seq k) : Measure ℝ))
       atTop (𝓝 (∫ x, φg n₀ x ∂ν)) :=
-    h_jump (φg n₀) (largeUpperMulBCF_vanishes_near_zero n₀ hn₀_1 g hg_cont M hg_bnd)
+    h_jump (φg n₀) (largeUpperMulBCF_vanishes_near_zero ρ hρ n₀ hn₀_1 g hg_cont M hg_bnd)
   have h_χ_kjump : Tendsto (fun k => (t_seq k).val⁻¹ *
-      ∫ x, largeAnnulusBCF n₀ x ∂(S.measure (t_seq k) : Measure ℝ))
-      atTop (𝓝 (∫ x, largeAnnulusBCF n₀ x ∂ν)) :=
-    h_jump (largeAnnulusBCF n₀) (largeAnnulusBCF_vanishes_near_zero n₀ hn₀_2)
+      ∫ x, largeAnnulusBCF ρ hρ n₀ x ∂(S.measure (t_seq k) : Measure ℝ))
+      atTop (𝓝 (∫ x, largeAnnulusBCF ρ hρ n₀ x ∂ν)) :=
+    h_jump (largeAnnulusBCF ρ hρ n₀) (largeAnnulusBCF_vanishes_near_zero ρ hρ n₀ hn₀_2)
   obtain ⟨K₁, hK₁⟩ := (Metric.tendsto_atTop.mp h_φg_kjump) (ε / 3) hpos_3
   obtain ⟨K₂, hK₂⟩ := (Metric.tendsto_atTop.mp h_χ_kjump) (ε / (6 * (M + 1))) hpos_6Mplus
   refine ⟨max K₁ K₂, fun k hk => ?_⟩
@@ -3273,7 +3290,7 @@ private lemma scaled_largeSet_integral_tendsto
     have := hK₁ k hk_K₁; rwa [Real.dist_eq] at this
   -- Bound on t_k⁻¹ · ∫ χ_{n₀} dμ_k via the limit of ∫ χ dν.
   have h_bnd_χ_k : (t_seq k).val⁻¹ *
-      ∫ x, largeAnnulusBCF n₀ x ∂(S.measure (t_seq k) : Measure ℝ) ≤
+      ∫ x, largeAnnulusBCF ρ hρ n₀ x ∂(S.measure (t_seq k) : Measure ℝ) ≤
       2 * (ε / (6 * (M + 1))) := by
     have h_diff := hK₂ k hk_K₂
     rw [Real.dist_eq] at h_diff
@@ -3283,52 +3300,52 @@ private lemma scaled_largeSet_integral_tendsto
   -- Integrate against μ_k: |t_k⁻¹ · ∫ (φg n₀ - indicator g) dμ_k| ≤ M · t_k⁻¹ · ∫ χ_{n₀} dμ_k.
   have h_int_diff_bnd :
       |(t_seq k).val⁻¹ * ∫ x, φg n₀ x ∂(S.measure (t_seq k) : Measure ℝ) -
-        (t_seq k).val⁻¹ * ∫ x in largeSet 1, g x ∂(S.measure (t_seq k) : Measure ℝ)| ≤
+        (t_seq k).val⁻¹ * ∫ x in largeSet ρ, g x ∂(S.measure (t_seq k) : Measure ℝ)| ≤
       M * ((t_seq k).val⁻¹ *
-        ∫ x, largeAnnulusBCF n₀ x ∂(S.measure (t_seq k) : Measure ℝ)) := by
+        ∫ x, largeAnnulusBCF ρ hρ n₀ x ∂(S.measure (t_seq k) : Measure ℝ)) := by
     set μk : Measure ℝ := (S.measure (t_seq k) : Measure ℝ) with hμk_def
     have h_indicator_int :
-        ∫ x in largeSet 1, g x ∂μk = ∫ x, Set.indicator (largeSet 1) g x ∂μk :=
-      (integral_indicator (measurableSet_largeSet 1)).symm
+        ∫ x in largeSet ρ, g x ∂μk = ∫ x, Set.indicator (largeSet ρ) g x ∂μk :=
+      (integral_indicator (measurableSet_largeSet ρ)).symm
     rw [h_indicator_int, ← mul_sub, abs_mul]
     have h_tinv_nn : (0 : ℝ) ≤ (t_seq k).val⁻¹ :=
       inv_nonneg.mpr (le_of_lt (t_seq k).prop)
     rw [abs_of_nonneg h_tinv_nn,
-        show M * ((t_seq k).val⁻¹ * ∫ x, largeAnnulusBCF n₀ x ∂μk) =
-            (t_seq k).val⁻¹ * (M * ∫ x, largeAnnulusBCF n₀ x ∂μk) from by ring]
+        show M * ((t_seq k).val⁻¹ * ∫ x, largeAnnulusBCF ρ hρ n₀ x ∂μk) =
+            (t_seq k).val⁻¹ * (M * ∫ x, largeAnnulusBCF ρ hρ n₀ x ∂μk) from by ring]
     refine mul_le_mul_of_nonneg_left ?_ h_tinv_nn
     -- |∫ (φg - indicator g) dμk| ≤ M · ∫ χ dμk
     have h_φg_int : Integrable (φg n₀) μk := (φg n₀).integrable _
-    have h_ind_int : Integrable (Set.indicator (largeSet 1) g) μk := by
+    have h_ind_int : Integrable (Set.indicator (largeSet ρ) g) μk := by
       have hg_int : Integrable g μk :=
         Integrable.mono' (integrable_const M)
           hg_cont.aestronglyMeasurable
           (Filter.Eventually.of_forall (fun x => by
             rw [Real.norm_eq_abs]; exact hg_bnd x))
-      exact hg_int.indicator (measurableSet_largeSet 1)
+      exact hg_int.indicator (measurableSet_largeSet ρ)
     rw [← integral_sub h_φg_int h_ind_int]
-    have h_ptwise : ∀ x, |φg n₀ x - Set.indicator (largeSet 1) g x| ≤
-        M * largeAnnulusBCF n₀ x := fun x =>
-      largeUpperMulBCF_sub_indicator_abs_le n₀ g hg_cont M hM_nn hg_bnd x
-    calc |∫ x, (φg n₀ x - Set.indicator (largeSet 1) g x) ∂μk|
-        ≤ ∫ x, M * largeAnnulusBCF n₀ x ∂μk := by
+    have h_ptwise : ∀ x, |φg n₀ x - Set.indicator (largeSet ρ) g x| ≤
+        M * largeAnnulusBCF ρ hρ n₀ x := fun x =>
+      largeUpperMulBCF_sub_indicator_abs_le ρ hρ n₀ g hg_cont M hM_nn hg_bnd x
+    calc |∫ x, (φg n₀ x - Set.indicator (largeSet ρ) g x) ∂μk|
+        ≤ ∫ x, M * largeAnnulusBCF ρ hρ n₀ x ∂μk := by
           have h_bnd_int :=
             MeasureTheory.norm_integral_le_of_norm_le
-              (((largeAnnulusBCF n₀).integrable μk).const_mul M)
+              (((largeAnnulusBCF ρ hρ n₀).integrable μk).const_mul M)
               (Filter.Eventually.of_forall (fun x => by
                 rw [Real.norm_eq_abs]; exact h_ptwise x))
           rwa [Real.norm_eq_abs] at h_bnd_int
-      _ = M * ∫ x, largeAnnulusBCF n₀ x ∂μk := integral_const_mul _ _
+      _ = M * ∫ x, largeAnnulusBCF ρ hρ n₀ x ∂μk := integral_const_mul _ _
   -- Triangle inequality assembly.
   rw [Real.dist_eq]
   have h_split :
-      (t_seq k).val⁻¹ * ∫ x in largeSet 1, g x ∂(S.measure (t_seq k) : Measure ℝ) -
-        ∫ x in largeSet 1, g x ∂ν =
-      ((t_seq k).val⁻¹ * ∫ x in largeSet 1, g x ∂(S.measure (t_seq k) : Measure ℝ) -
+      (t_seq k).val⁻¹ * ∫ x in largeSet ρ, g x ∂(S.measure (t_seq k) : Measure ℝ) -
+        ∫ x in largeSet ρ, g x ∂ν =
+      ((t_seq k).val⁻¹ * ∫ x in largeSet ρ, g x ∂(S.measure (t_seq k) : Measure ℝ) -
           (t_seq k).val⁻¹ * ∫ x, φg n₀ x ∂(S.measure (t_seq k) : Measure ℝ)) +
         ((t_seq k).val⁻¹ * ∫ x, φg n₀ x ∂(S.measure (t_seq k) : Measure ℝ) -
           ∫ x, φg n₀ x ∂ν) +
-        (∫ x, φg n₀ x ∂ν - ∫ x in largeSet 1, g x ∂ν) := by ring
+        (∫ x, φg n₀ x ∂ν - ∫ x in largeSet ρ, g x ∂ν) := by ring
   rw [h_split]
   have h_tri : ∀ a b c : ℝ, |a + b + c| ≤ |a| + |b| + |c| := fun a b c => by
     have h1 : |a + b + c| ≤ |a + b| + |c| := by
@@ -3340,14 +3357,14 @@ private lemma scaled_largeSet_integral_tendsto
     linarith
   refine lt_of_le_of_lt (h_tri _ _ _) ?_
   have h_step1 :
-      |(t_seq k).val⁻¹ * ∫ x in largeSet 1, g x ∂(S.measure (t_seq k) : Measure ℝ) -
+      |(t_seq k).val⁻¹ * ∫ x in largeSet ρ, g x ∂(S.measure (t_seq k) : Measure ℝ) -
         (t_seq k).val⁻¹ * ∫ x, φg n₀ x ∂(S.measure (t_seq k) : Measure ℝ)| ≤
       M * ((t_seq k).val⁻¹ *
-        ∫ x, largeAnnulusBCF n₀ x ∂(S.measure (t_seq k) : Measure ℝ)) := by
+        ∫ x, largeAnnulusBCF ρ hρ n₀ x ∂(S.measure (t_seq k) : Measure ℝ)) := by
     rw [abs_sub_comm]; exact h_int_diff_bnd
   have h_main_bnd :
       M * ((t_seq k).val⁻¹ *
-        ∫ x, largeAnnulusBCF n₀ x ∂(S.measure (t_seq k) : Measure ℝ)) ≤
+        ∫ x, largeAnnulusBCF ρ hρ n₀ x ∂(S.measure (t_seq k) : Measure ℝ)) ≤
         M * (2 * (ε / (6 * (M + 1)))) :=
     mul_le_mul_of_nonneg_left h_bnd_χ_k hM_nn
   have h_alg : M * (2 * (ε / (6 * (M + 1)))) ≤ ε / 3 := by
