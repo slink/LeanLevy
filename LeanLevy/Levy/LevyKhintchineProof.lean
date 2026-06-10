@@ -35,7 +35,7 @@ The logarithm of an infinitely divisible char function is conditionally negative
 hypothesis, extract `(b, σ², ν)` along a single subsequence
 (`exists_drift_variance_jumpMeasure_along_seq`) and identify the limit of
 `t⁻¹(charFun μ_t − 1)` with the canonical formula
-(`psi_eq_levyKhintchine_formula`, the single remaining sorry).
+(`psi_eq_levyKhintchine_formula`).
 -/
 
 open MeasureTheory MeasureTheory.Measure ProbabilityTheory Complex Filter Topology
@@ -4398,6 +4398,212 @@ theorem exists_drift_variance_jumpMeasure_along_seq
   exact ⟨r, b, Real.toNNReal σ, ν, hν_fin, t_seq, hr_mem, hν_zero, hν_r, ht_seq, hb_final,
     hσ_final, h_jump_final⟩
 
+/-- **ν-side bookkeeping for the LK assembly.** Reorganizes the three subsequential-limit
+contributions (drift, compensated small-jump remainder at radius `r`, large-jump integral
+over `largeSet r`) into the canonical Lévy-Khintchine triple `(b_r + ∫_{r≤|x|<1} x dν,
+σ_sq_r − ∫_{|x|<r} x² dν, ν)`. The key moves are: the small-ball remainder splits off its
+own second moment `∫_{|x|<r} x² dν`; the `largeSet r` integral splits into a band
+`{r≤|x|<1}` and the `largeSet 1` tail; on the band the uncompensated `exp−1` re-expresses
+as the compensated `exp−1−ixξ` plus the drift correction `∫_{r≤|x|<1} x dν`. -/
+private lemma psi_levyKhintchine_algebra
+    {r : ℝ} (hr : r ∈ Set.Ioc (1/2 : ℝ) 1) (ξ : ℝ)
+    {ν : Measure ℝ} [IsFiniteMeasure ν] (hν_zero : ν {0} = 0) (b_r : ℝ) (σ_sq_r : ℝ≥0) :
+    (↑b_r * ↑ξ * I
+      + (-(↑(σ_sq_r : ℝ) * ↑ξ ^ 2 / 2)
+          + ∫ x in {x | |x| < r},
+              (exp ((↑x : ℂ) * ↑ξ * I) - 1 - (↑x : ℂ) * ↑ξ * I + ((↑x : ℂ) * ↑ξ) ^ 2 / 2) ∂ν))
+      + ∫ x in largeSet r, (exp ((↑x : ℂ) * ↑ξ * I) - 1) ∂ν =
+    ↑(b_r + ∫ x in {x | r ≤ |x| ∧ |x| < 1}, x ∂ν) * ↑ξ * I
+      - ↑((σ_sq_r : ℝ) - ∫ x in {x | |x| < r}, x ^ 2 ∂ν) * ↑ξ ^ 2 / 2
+      + ∫ x, levyCompensatedIntegrand ξ x ∂ν := by
+  have hr_pos : (0 : ℝ) < r := by linarith [hr.1]
+  have hr1 : r ≤ 1 := hr.2
+  -- ν is a Lévy measure (finite + ν{0}=0).
+  have hν_levy : IsLevyMeasure ν := by
+    refine ⟨hν_zero, ?_⟩
+    calc ∫⁻ x, ENNReal.ofReal (min 1 (x ^ 2)) ∂ν
+        ≤ ∫⁻ _, 1 ∂ν := lintegral_mono (fun x => by
+          rw [show (1 : ℝ≥0∞) = ENNReal.ofReal 1 by simp]
+          exact ENNReal.ofReal_le_ofReal (min_le_left _ _))
+      _ = ν Set.univ := lintegral_one
+      _ < ⊤ := (‹IsFiniteMeasure ν›).measure_univ_lt_top
+  -- Abbreviations for the sets.
+  set Bball : Set ℝ := {x | |x| < r} with hBball_def
+  set Bband : Set ℝ := {x | r ≤ |x| ∧ |x| < 1} with hBband_def
+  -- Measurability of the sets.
+  have hmeas_ball : MeasurableSet Bball :=
+    measurableSet_lt continuous_abs.measurable measurable_const
+  have hmeas_band : MeasurableSet Bband :=
+    (measurableSet_le measurable_const continuous_abs.measurable).inter
+      (measurableSet_lt continuous_abs.measurable measurable_const)
+  have hmeas_ge1 : MeasurableSet (largeSet 1) := measurableSet_largeSet 1
+  -- `exp(ixξ)−1` is continuous and globally bounded by 2.
+  have hg_cont : Continuous (fun x : ℝ => exp ((↑x : ℂ) * ↑ξ * I) - 1) :=
+    ((Complex.continuous_exp.comp
+      ((Complex.continuous_ofReal.mul continuous_const).mul continuous_const)).sub
+      continuous_const)
+  have hg_bnd : ∀ x : ℝ, ‖exp ((↑x : ℂ) * ↑ξ * I) - 1‖ ≤ 2 := fun x => by
+    rw [show ((↑x : ℂ) * ↑ξ * I) = ((↑(x * ξ) : ℂ)) * I from by push_cast; ring]
+    calc ‖exp ((↑(x * ξ) : ℂ) * I) - 1‖
+        ≤ ‖exp ((↑(x * ξ) : ℂ) * I)‖ + ‖(1 : ℂ)‖ := norm_sub_le _ _
+      _ = 2 := by rw [Complex.norm_exp_ofReal_mul_I, norm_one]; norm_num
+  -- `exp(ixξ)−1` is integrable on ν and any subset.
+  have hg_intOn : ∀ s : Set ℝ, IntegrableOn (fun x : ℝ => exp ((↑x : ℂ) * ↑ξ * I) - 1) s ν :=
+    fun s => integrableOn_of_bounded hg_cont hg_bnd
+  -- `ixξ` is integrableOn any set contained in {|x|<1} (bounded by |ξ|).
+  have hxi_intOn : ∀ s : Set ℝ, MeasurableSet s → s ⊆ {x : ℝ | |x| < 1} →
+      IntegrableOn (fun x : ℝ => (↑x : ℂ) * ↑ξ * I) s ν := by
+    intro s hs hsub
+    refine (integrable_const (|ξ|)).mono' ?_ ?_
+    · exact ((Complex.measurable_ofReal.mul measurable_const).mul
+        measurable_const).aestronglyMeasurable
+    · refine (ae_restrict_iff' hs).mpr (Filter.Eventually.of_forall (fun x hx => ?_))
+      have hx1 : |x| < 1 := hsub hx
+      have hnorm : ‖((↑x : ℂ) * ↑ξ * I)‖ = |x| * |ξ| := by
+        rw [show ((↑x : ℂ) * ↑ξ * I) = ((↑(x * ξ) : ℂ)) * I from by push_cast; ring,
+            norm_mul, Complex.norm_I, mul_one, Complex.norm_real, Real.norm_eq_abs, abs_mul]
+      rw [hnorm]
+      calc |x| * |ξ| ≤ 1 * |ξ| :=
+            mul_le_mul_of_nonneg_right (le_of_lt hx1) (abs_nonneg _)
+        _ = |ξ| := one_mul _
+  -- Set the three opaque ℂ-atoms `A`, `Bcpx`, `Ctail` and two real atoms.
+  set A : ℂ := ∫ x in Bball, (exp ((↑x : ℂ) * ↑ξ * I) - 1 - (↑x : ℂ) * ↑ξ * I) ∂ν with hA_def
+  set Bcpx : ℂ := ∫ x in Bband, (exp ((↑x : ℂ) * ↑ξ * I) - 1 - (↑x : ℂ) * ↑ξ * I) ∂ν with hBcpx_def
+  set Ctail : ℂ := ∫ x in largeSet 1, (exp ((↑x : ℂ) * ↑ξ * I) - 1) ∂ν with hCtail_def
+  set Pball : ℝ := ∫ x in Bball, x ^ 2 ∂ν with hPball_def
+  set Pbar : ℝ := ∫ x in Bband, x ∂ν with hPbar_def
+  -- Identity 1: remainder split on the ball.
+  have hball_sub : Bball ⊆ {x : ℝ | |x| < 1} :=
+    fun x hx => lt_of_lt_of_le hx hr1
+  have hxi_ball : IntegrableOn (fun x : ℝ => (↑x : ℂ) * ↑ξ * I) Bball ν :=
+    hxi_intOn Bball hmeas_ball hball_sub
+  have hcomp_ball : IntegrableOn
+      (fun x : ℝ => exp ((↑x : ℂ) * ↑ξ * I) - 1 - (↑x : ℂ) * ↑ξ * I) Bball ν :=
+    (hg_intOn Bball).sub hxi_ball
+  have hquad_ball : IntegrableOn (fun x : ℝ => ((↑x : ℂ) * ↑ξ) ^ 2 / 2) Bball ν := by
+    refine (integrable_const (r ^ 2 * ξ ^ 2 / 2 : ℝ)).mono' ?_ ?_
+    · exact (((Complex.measurable_ofReal.mul measurable_const).pow_const 2).div_const 2).aestronglyMeasurable
+    · refine (ae_restrict_iff' hmeas_ball).mpr (Filter.Eventually.of_forall (fun x hx => ?_))
+      have hx_r : |x| < r := hx
+      have hnorm : ‖((↑x : ℂ) * ↑ξ) ^ 2 / 2‖ = x ^ 2 * ξ ^ 2 / 2 := by
+        rw [norm_div, show ((↑x : ℂ) * ↑ξ) ^ 2 = ((↑(x ^ 2 * ξ ^ 2) : ℂ)) from by push_cast; ring,
+          Complex.norm_real, Real.norm_eq_abs, abs_of_nonneg (by positivity),
+          show ‖(2 : ℂ)‖ = 2 from by norm_num]
+      rw [hnorm]
+      have hx2 : x ^ 2 ≤ r ^ 2 := by
+        rw [← sq_abs x]; exact pow_le_pow_left₀ (abs_nonneg x) (le_of_lt hx_r) 2
+      have : x ^ 2 * ξ ^ 2 ≤ r ^ 2 * ξ ^ 2 :=
+        mul_le_mul_of_nonneg_right hx2 (by positivity)
+      linarith
+  have h_id1 : (∫ x in Bball,
+      (exp ((↑x : ℂ) * ↑ξ * I) - 1 - (↑x : ℂ) * ↑ξ * I + ((↑x : ℂ) * ↑ξ) ^ 2 / 2) ∂ν)
+      = A + (↑Pball : ℂ) * ↑ξ ^ 2 / 2 := by
+    rw [integral_add hcomp_ball hquad_ball, hA_def]
+    congr 1
+    -- The quadratic ν-integral over the ball: pull `↑ξ²/2` out and recognize `∫ x²`.
+    have hquad_eq : ∀ x : ℝ, ((↑x : ℂ) * ↑ξ) ^ 2 / 2 = (↑ξ ^ 2 / 2 : ℂ) * (↑(x ^ 2) : ℂ) := by
+      intro x; push_cast; ring
+    calc (∫ x in Bball, ((↑x : ℂ) * ↑ξ) ^ 2 / 2 ∂ν)
+        = ∫ x in Bball, (↑ξ ^ 2 / 2 : ℂ) * (↑(x ^ 2) : ℂ) ∂ν :=
+          setIntegral_congr_fun hmeas_ball (fun x _ => hquad_eq x)
+      _ = (↑ξ ^ 2 / 2 : ℂ) * ∫ x in Bball, (↑(x ^ 2) : ℂ) ∂ν := integral_const_mul _ _
+      _ = (↑ξ ^ 2 / 2 : ℂ) * (↑Pball : ℂ) := by
+          rw [hPball_def]; congr 1; exact integral_complex_ofReal
+      _ = (↑Pball : ℂ) * ↑ξ ^ 2 / 2 := by ring
+  -- Identity 2: largeSet r splits into band ⊎ largeSet 1.
+  have h_id2 : (∫ x in largeSet r, (exp ((↑x : ℂ) * ↑ξ * I) - 1) ∂ν)
+      = (∫ x in Bband, (exp ((↑x : ℂ) * ↑ξ * I) - 1) ∂ν) + Ctail := by
+    have h_disj : Disjoint Bband (largeSet 1) := by
+      rw [Set.disjoint_left]
+      intro x hx hx'
+      exact absurd (mem_largeSet.mp hx') (not_le.mpr hx.2)
+    have h_union : largeSet r = Bband ∪ largeSet 1 := by
+      ext x
+      simp only [largeSet, hBband_def, Set.mem_setOf_eq, Set.mem_union, mem_largeSet]
+      constructor
+      · intro hx
+        rcases lt_or_ge (|x|) 1 with h | h
+        · exact Or.inl ⟨hx, h⟩
+        · exact Or.inr h
+      · rintro (⟨h, _⟩ | h)
+        · exact h
+        · exact le_trans hr1 h
+    rw [hCtail_def, h_union,
+      setIntegral_union h_disj hmeas_ge1 (hg_intOn Bband) (hg_intOn (largeSet 1))]
+  -- Identity 3: band uncompensated = compensated + drift correction.
+  have hband_sub : Bband ⊆ {x : ℝ | |x| < 1} := fun x hx => hx.2
+  have hxi_band : IntegrableOn (fun x : ℝ => (↑x : ℂ) * ↑ξ * I) Bband ν :=
+    hxi_intOn Bband hmeas_band hband_sub
+  have hcomp_band : IntegrableOn
+      (fun x : ℝ => exp ((↑x : ℂ) * ↑ξ * I) - 1 - (↑x : ℂ) * ↑ξ * I) Bband ν :=
+    (hg_intOn Bband).sub hxi_band
+  have h_id3 : (∫ x in Bband, (exp ((↑x : ℂ) * ↑ξ * I) - 1) ∂ν)
+      = Bcpx + (↑Pbar : ℂ) * ↑ξ * I := by
+    have hsplit : (∫ x in Bband, (exp ((↑x : ℂ) * ↑ξ * I) - 1) ∂ν)
+        = Bcpx + ∫ x in Bband, ((↑x : ℂ) * ↑ξ * I) ∂ν := by
+      rw [hBcpx_def, ← integral_add hcomp_band hxi_band]
+      exact setIntegral_congr_fun hmeas_band (fun x _ => by ring)
+    rw [hsplit]
+    congr 1
+    -- The band drift integral: pull `↑ξ·I` out and recognize `∫ x`.
+    calc (∫ x in Bband, ((↑x : ℂ) * ↑ξ * I) ∂ν)
+        = ∫ x in Bband, ((↑ξ * I : ℂ) * (↑x : ℂ)) ∂ν :=
+          setIntegral_congr_fun hmeas_band (fun x _ => by ring)
+      _ = (↑ξ * I : ℂ) * ∫ x in Bband, (↑x : ℂ) ∂ν := integral_const_mul _ _
+      _ = (↑ξ * I : ℂ) * (↑Pbar : ℂ) := by rw [hPbar_def]; congr 1; exact integral_complex_ofReal
+      _ = (↑Pbar : ℂ) * ↑ξ * I := by ring
+  -- Identity 4: global compensated split.
+  have h_levy_int : Integrable (levyCompensatedIntegrand ξ) ν :=
+    integrable_levyCompensatedIntegrand hν_levy ξ
+  -- `levyComp = exp−1−ixξ` on `{|x|<1}` and `= exp−1` on `largeSet 1`.
+  have hlevy_small : ∀ x : ℝ, |x| < 1 →
+      levyCompensatedIntegrand ξ x = exp ((↑x : ℂ) * ↑ξ * I) - 1 - (↑x : ℂ) * ↑ξ * I := by
+    intro x hx
+    simp only [levyCompensatedIntegrand_def, if_pos hx, mul_one]
+  have hlevy_large : ∀ x : ℝ, x ∈ largeSet 1 →
+      levyCompensatedIntegrand ξ x = exp ((↑x : ℂ) * ↑ξ * I) - 1 :=
+    fun x hx => levyCompensatedIntegrand_eq_on_large (mem_largeSet.mp hx)
+  have h_id4 : (∫ x, levyCompensatedIntegrand ξ x ∂ν) = A + Bcpx + Ctail := by
+    -- Split ℝ = smallSet ⊎ largeSet 1.
+    have hsplit_top : (∫ x, levyCompensatedIntegrand ξ x ∂ν)
+        = (∫ x in smallSet, levyCompensatedIntegrand ξ x ∂ν)
+          + ∫ x in (smallSet)ᶜ, levyCompensatedIntegrand ξ x ∂ν :=
+      (integral_add_compl measurableSet_smallSet h_levy_int).symm
+    have hcompl_small : (smallSet : Set ℝ)ᶜ = largeSet 1 := by
+      rw [smallSet_eq_compl_largeSet, compl_compl]
+    -- On largeSet 1, levyComp = exp−1, giving Ctail.
+    have h_large_eq : (∫ x in (smallSet)ᶜ, levyCompensatedIntegrand ξ x ∂ν) = Ctail := by
+      rw [hcompl_small, hCtail_def]
+      exact setIntegral_congr_fun hmeas_ge1 (fun x hx => hlevy_large x hx)
+    -- On smallSet, levyComp = exp−1−ixξ; split into Bball ⊎ Bband.
+    have h_small_eq : (∫ x in smallSet, levyCompensatedIntegrand ξ x ∂ν) = A + Bcpx := by
+      have h_disj : Disjoint Bball Bband := by
+        rw [Set.disjoint_left]
+        intro x hx hx'
+        exact absurd hx'.1 (not_le.mpr hx)
+      have h_union : (smallSet : Set ℝ) = Bball ∪ Bband := by
+        ext x
+        simp only [mem_smallSet, hBball_def, hBband_def, Set.mem_setOf_eq, Set.mem_union]
+        constructor
+        · intro hx
+          rcases lt_or_ge (|x|) r with h | h
+          · exact Or.inl h
+          · exact Or.inr ⟨h, hx⟩
+        · rintro (h | ⟨_, h⟩)
+          · exact lt_of_lt_of_le h hr1
+          · exact h
+      -- Rewrite levyComp to exp−1−ixξ on smallSet, then split.
+      have hrw : (∫ x in smallSet, levyCompensatedIntegrand ξ x ∂ν)
+          = ∫ x in smallSet, (exp ((↑x : ℂ) * ↑ξ * I) - 1 - (↑x : ℂ) * ↑ξ * I) ∂ν :=
+        setIntegral_congr_fun measurableSet_smallSet
+          (fun x hx => hlevy_small x (mem_smallSet.mp hx))
+      rw [hrw, h_union,
+        setIntegral_union h_disj hmeas_band hcomp_ball hcomp_band, hA_def, hBcpx_def]
+    rw [hsplit_top, h_large_eq, h_small_eq]
+  rw [h_id1, h_id2, h_id3, h_id4]
+  push_cast
+  ring
+
 /-- **The Lévy-Khintchine formula for ψ (finite-ν pivot).** Given the drift `b`, the
 Gaussian variance `σ²`, and the externally-provided finite Lévy measure `ν` on `ℝ\{0}`,
 together with the three subsequential limits from
@@ -4417,12 +4623,15 @@ the ν level — the drift correction `∫_{r≤|x|<1} x dν` and the variance c
 already carries). An earlier radius-1 statement was *false* (it double-counted the
 small-jump second moment, e.g. for compound Poisson `ν = δ_{1/2}`).
 
-**Proof strategy (currently `sorry`, to be closed in a follow-up commit):**
+**Proof strategy:**
 Combine the four limit identifications in `𝓝 (S.exponent ξ)` at split radius `r`:
 1. `charFun_scaled_limit`: `t⁻¹·(charFun(μ_t)(ξ) − 1) → ψ(ξ)`.
 2. `drift_term`: `iξ·(t⁻¹·∫_{|x|<r} x dμ_t) → b_r·ξ·I`.
 3. `scaled_smallBall_compensated_tendsto`: the small-jump identification at radius `r`.
-4. `scaled_largeSet_charFun_tendsto`: the large-jump identification at radius `r`. -/
+4. `scaled_largeSet_charFun_tendsto`: the large-jump identification at radius `r`.
+The per-`t` identity `charFun_sub_one_div_decomp` lets `tendsto_nhds_unique` equate the
+two limits; `psi_levyKhintchine_algebra` then reorganizes the ν-side integrals into the
+canonical triple. -/
 theorem psi_eq_levyKhintchine_formula
     {r : ℝ} (hr : r ∈ Set.Ioc (1/2 : ℝ) 1)
     (b_r : ℝ) (σ_sq_r : ℝ≥0) {ν : Measure ℝ} [IsFiniteMeasure ν]
@@ -4444,7 +4653,30 @@ theorem psi_eq_levyKhintchine_formula
       ↑(b_r + ∫ x in {x | r ≤ |x| ∧ |x| < 1}, x ∂ν) * ↑ξ * I
       - ↑((σ_sq_r : ℝ) - ∫ x in {x | |x| < r}, x ^ 2 ∂ν) * ↑ξ ^ 2 / 2
       + ∫ x, levyCompensatedIntegrand ξ x ∂ν := by
-  sorry
+  have hr_pos : (0 : ℝ) < r := by linarith [hr.1]
+  -- B1: pull `t_seq` back through the comap filter and obtain the LHS limit.
+  have htseq_filter : Tendsto t_seq atTop (Filter.comap Subtype.val (𝓝[>] (0 : ℝ))) := by
+    rw [Filter.tendsto_comap_iff]
+    exact tendsto_nhdsWithin_iff.mpr
+      ⟨ht_seq, Filter.Eventually.of_forall (fun n => (t_seq n).prop)⟩
+  have hLHS : Tendsto (fun n =>
+      (charFun (S.measure (t_seq n) : Measure ℝ) ξ - 1) / (↑(t_seq n).val : ℂ))
+      atTop (𝓝 (S.exponent ξ)) :=
+    (S.charFun_scaled_limit ξ).comp htseq_filter
+  -- B3: the three term-limits (types inferred from the respective lemmas).
+  have hT1 := S.drift_term ξ ht_seq hb
+  have hT2 := S.scaled_smallBall_compensated_tendsto hr_pos hr.2 ξ hν_zero hν_r hσ h_jump
+  have hT3 := S.scaled_largeSet_charFun_tendsto hr_pos ξ hν_r h_jump
+  -- B4: sum of the three limits (matching the per-`n` decomposition pointwise).
+  have hRHS_lim := (hT1.add hT2).add hT3
+  -- B2 + B5: the LHS quotient equals the per-`n` sum; uniqueness of limits.
+  -- The decomposition emits `↑(t⁻¹)`; the limit lemmas emit `(↑t)⁻¹`; bridge via `ofReal_inv`.
+  have hLHS_sum := hLHS.congr (fun n => by
+    rw [S.charFun_sub_one_div_decomp (t_seq n) ξ hr.2, Complex.ofReal_inv])
+  have h_eq := tendsto_nhds_unique hLHS_sum hRHS_lim
+  rw [h_eq]
+  -- B6: ν-side algebra (handled by the dedicated identity lemma above).
+  exact psi_levyKhintchine_algebra hr ξ hν_zero b_r σ_sq_r
 
 /-- **Main assembly (finite-ν pivot).** Under the finite-small-mass hypothesis, the
 characteristic exponent `ψ` of `S` decomposes into the Lévy-Khintchine triple
