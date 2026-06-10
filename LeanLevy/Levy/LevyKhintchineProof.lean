@@ -2790,23 +2790,23 @@ lemma drift_limit
 
 /-- The drift term contributes `b * ξ * I` to the decomposition.
 Factor out `ξ * I` from the integral of `x * ξ * I`. -/
-lemma drift_term (ξ : ℝ)
+lemma drift_term (ξ : ℝ) {r : ℝ}
     {t_seq : ℕ → {t : ℝ // 0 < t}} (_ht : Tendsto (fun n => (t_seq n).val) atTop (𝓝 0))
     {b : ℝ} (hb : Tendsto (fun n =>
-      (t_seq n).val⁻¹ * ∫ x in smallSet, x ∂(S.measure (t_seq n) : Measure ℝ))
+      (t_seq n).val⁻¹ * ∫ x in {x | |x| < r}, x ∂(S.measure (t_seq n) : Measure ℝ))
     atTop (𝓝 b)) :
     Tendsto (fun n =>
       ((t_seq n).val⁻¹ : ℂ) *
-      ∫ x in smallSet, (↑x * ↑ξ * I) ∂(S.measure (t_seq n) : Measure ℝ))
+      ∫ x in {x | |x| < r}, (↑x * ↑ξ * I) ∂(S.measure (t_seq n) : Measure ℝ))
     atTop (𝓝 (↑b * ↑ξ * I)) := by
   -- Step 1: Rewrite each summand to factor out the constant (↑ξ * I)
   suffices h : Tendsto (fun n =>
-      ↑((t_seq n).val⁻¹ * ∫ x in smallSet, x ∂(S.measure (t_seq n) : Measure ℝ)) *
+      ↑((t_seq n).val⁻¹ * ∫ x in {x | |x| < r}, x ∂(S.measure (t_seq n) : Measure ℝ)) *
       ((↑ξ : ℂ) * I)) atTop (𝓝 (↑b * ↑ξ * I)) by
     refine h.congr (fun n => ?_)
     -- Show the two expressions are equal
-    have : ∫ x in smallSet, ((↑x : ℂ) * ↑ξ * I) ∂(S.measure (t_seq n) : Measure ℝ) =
-        ↑(∫ x in smallSet, x ∂(S.measure (t_seq n) : Measure ℝ)) * (↑ξ * I) := by
+    have : ∫ x in {x | |x| < r}, ((↑x : ℂ) * ↑ξ * I) ∂(S.measure (t_seq n) : Measure ℝ) =
+        ↑(∫ x in {x | |x| < r}, x ∂(S.measure (t_seq n) : Measure ℝ)) * (↑ξ * I) := by
       simp_rw [mul_assoc]
       have : ∀ x : ℝ, (↑x : ℂ) * ((↑ξ : ℂ) * I) = (↑x : ℂ) • ((↑ξ : ℂ) * I) := by
         intro x; rw [smul_eq_mul]
@@ -2828,17 +2828,22 @@ This is the algebraic backbone of `psi_eq_levyKhintchine_formula`: the LK assemb
 chains subsequential limits of the three RHS terms (`drift_term`, the to-be-proved
 small/large jump identifications) and matches against `charFun_scaled_limit` to
 conclude the formula. -/
-private lemma charFun_sub_one_div_decomp (t : {t : ℝ // 0 < t}) (ξ : ℝ) :
+private lemma charFun_sub_one_div_decomp (t : {t : ℝ // 0 < t}) (ξ : ℝ)
+    {r : ℝ} (hr1 : r ≤ 1) :
     (charFun (S.measure t : Measure ℝ) ξ - 1) / (↑t.val : ℂ) =
       (↑t.val⁻¹ : ℂ) *
-          ∫ x in smallSet, ((↑x : ℂ) * ↑ξ * I) ∂(S.measure t : Measure ℝ)
+          ∫ x in {x | |x| < r}, ((↑x : ℂ) * ↑ξ * I) ∂(S.measure t : Measure ℝ)
       + (↑t.val⁻¹ : ℂ) *
-          ∫ x in smallSet, (exp ((↑x : ℂ) * ↑ξ * I) - 1 - (↑x : ℂ) * ↑ξ * I)
+          ∫ x in {x | |x| < r}, (exp ((↑x : ℂ) * ↑ξ * I) - 1 - (↑x : ℂ) * ↑ξ * I)
             ∂(S.measure t : Measure ℝ)
       + (↑t.val⁻¹ : ℂ) *
-          ∫ x in largeSet 1, (exp ((↑x : ℂ) * ↑ξ * I) - 1)
+          ∫ x in largeSet r, (exp ((↑x : ℂ) * ↑ξ * I) - 1)
             ∂(S.measure t : Measure ℝ) := by
   set μ : Measure ℝ := (S.measure t : Measure ℝ) with hμ_def
+  have hmeas_ball : MeasurableSet {x : ℝ | |x| < r} :=
+    measurableSet_lt continuous_abs.measurable measurable_const
+  have hball_compl : {x : ℝ | |x| < r} = (largeSet r)ᶜ := by
+    ext x; simp only [largeSet, Set.mem_setOf_eq, Set.mem_compl_iff, not_le]
   -- Integrability of x ↦ exp(↑x*↑ξ*I) against μ.
   have hexp_int : Integrable (fun x : ℝ => exp ((↑x : ℂ) * ↑ξ * I)) μ := by
     refine (integrable_charFun_integrand (μ := μ) ξ).congr ?_
@@ -2847,12 +2852,12 @@ private lemma charFun_sub_one_div_decomp (t : {t : ℝ // 0 < t}) (ξ : ℝ) :
   -- Integrability of x ↦ exp(↑x*↑ξ*I) − 1.
   have hsub_int : Integrable (fun x : ℝ => exp ((↑x : ℂ) * ↑ξ * I) - 1) μ :=
     hexp_int.sub (integrable_const _)
-  -- Integrability of x ↦ ↑x*↑ξ*I on smallSet (bounded by |ξ|).
-  have hxi_int : IntegrableOn (fun x : ℝ => (↑x : ℂ) * ↑ξ * I) smallSet μ := by
+  -- Integrability of x ↦ ↑x*↑ξ*I on {|x|<r} (bounded by |ξ|).
+  have hxi_int : IntegrableOn (fun x : ℝ => (↑x : ℂ) * ↑ξ * I) {x | |x| < r} μ := by
     refine (integrable_const (|ξ|)).mono' ?_ ?_
     · exact ((Complex.measurable_ofReal.mul measurable_const).mul
         measurable_const).aestronglyMeasurable
-    · refine (ae_restrict_iff' measurableSet_smallSet).mpr ?_
+    · refine (ae_restrict_iff' hmeas_ball).mpr ?_
       filter_upwards with x hx
       have hnorm : ‖((↑x : ℂ) * ↑ξ * I)‖ = |x| * |ξ| := by
         rw [show ((↑x : ℂ) * ↑ξ * I) = ((↑(x * ξ) : ℂ)) * I from by
@@ -2861,11 +2866,11 @@ private lemma charFun_sub_one_div_decomp (t : {t : ℝ // 0 < t}) (ξ : ℝ) :
             Real.norm_eq_abs, abs_mul]
       rw [hnorm]
       calc |x| * |ξ| ≤ 1 * |ξ| :=
-            mul_le_mul_of_nonneg_right (le_of_lt hx) (abs_nonneg _)
+            mul_le_mul_of_nonneg_right (le_of_lt (lt_of_lt_of_le hx hr1)) (abs_nonneg _)
         _ = |ξ| := one_mul _
-  -- Integrability of the compensated remainder on smallSet.
+  -- Integrability of the compensated remainder on {|x|<r}.
   have hrem_int : IntegrableOn
-      (fun x : ℝ => exp ((↑x : ℂ) * ↑ξ * I) - 1 - (↑x : ℂ) * ↑ξ * I) smallSet μ :=
+      (fun x : ℝ => exp ((↑x : ℂ) * ↑ξ * I) - 1 - (↑x : ℂ) * ↑ξ * I) {x | |x| < r} μ :=
     (hsub_int.integrableOn).sub hxi_int
   -- Step 1: (charFun μ ξ − 1) = ∫ (exp(ixξ) − 1) dμ.
   have h_one : (∫ _ : ℝ, (1 : ℂ) ∂μ) = 1 := by simp
@@ -2877,21 +2882,21 @@ private lemma charFun_sub_one_div_decomp (t : {t : ℝ // 0 < t}) (ξ : ℝ) :
             rw [hcf, h_one]
       _ = ∫ x, (exp ((↑x : ℂ) * ↑ξ * I) - 1) ∂μ :=
           (integral_sub hexp_int (integrable_const 1)).symm
-  -- Step 2: split via smallSet/largeSet 1.
-  have hcompl : (smallSetᶜ : Set ℝ) = largeSet 1 := by
-    rw [smallSet_eq_compl_largeSet, compl_compl]
+  -- Step 2: split via {|x|<r}/largeSet r.
+  have hcompl_ball : ({x : ℝ | |x| < r})ᶜ = largeSet r := by
+    rw [hball_compl, compl_compl]
   have h2 : ∫ x, (exp ((↑x : ℂ) * ↑ξ * I) - 1) ∂μ
-      = ∫ x in smallSet, (exp ((↑x : ℂ) * ↑ξ * I) - 1) ∂μ
-        + ∫ x in largeSet 1, (exp ((↑x : ℂ) * ↑ξ * I) - 1) ∂μ := by
-    have hs := integral_exp_sub_one_split μ ξ hsub_int
-    rw [hcompl] at hs
+      = ∫ x in {x | |x| < r}, (exp ((↑x : ℂ) * ↑ξ * I) - 1) ∂μ
+        + ∫ x in largeSet r, (exp ((↑x : ℂ) * ↑ξ * I) - 1) ∂μ := by
+    have hs := (integral_add_compl hmeas_ball hsub_int).symm
+    rw [hcompl_ball] at hs
     exact hs
-  -- Step 3: split the smallSet integral additively.
-  have h3 : ∫ x in smallSet, (exp ((↑x : ℂ) * ↑ξ * I) - 1) ∂μ
-      = ∫ x in smallSet, ((↑x : ℂ) * ↑ξ * I) ∂μ
-        + ∫ x in smallSet, (exp ((↑x : ℂ) * ↑ξ * I) - 1 - (↑x : ℂ) * ↑ξ * I) ∂μ := by
+  -- Step 3: split the {|x|<r} integral additively.
+  have h3 : ∫ x in {x | |x| < r}, (exp ((↑x : ℂ) * ↑ξ * I) - 1) ∂μ
+      = ∫ x in {x | |x| < r}, ((↑x : ℂ) * ↑ξ * I) ∂μ
+        + ∫ x in {x | |x| < r}, (exp ((↑x : ℂ) * ↑ξ * I) - 1 - (↑x : ℂ) * ↑ξ * I) ∂μ := by
     rw [← integral_add hxi_int hrem_int]
-    refine setIntegral_congr_fun measurableSet_smallSet (fun x _ => ?_)
+    refine setIntegral_congr_fun hmeas_ball (fun x _ => ?_)
     ring
   rw [h1, h2, h3]
   push_cast
