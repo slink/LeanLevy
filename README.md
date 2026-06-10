@@ -4,14 +4,9 @@ A Lean 4 formalization of Lévy processes, built on top of mathlib.
 
 ## What's here
 
-**Bochner–Gaussian process construction** (`LeanLevy/Representation/BochnerGaussian.lean`)
-- Positive semidefinite kernels: `IsPositiveSemidefiniteKernel`, shift kernel `K ψ s t := ψ(s-t)`
-- `kernel_from_pd`: a positive definite function induces a PSD kernel
-- `gaussianFDD`: Gaussian finite-dimensional distributions (product of i.i.d. N(0,1))
-- `gaussianFDD_consistent`: FDD family is consistent under coordinate projection
-- `covMatrix`: covariance matrix `ψ(tᵢ - tⱼ)` with `covMatrix_is_psd`
-- `gaussianProjectiveFamily` + `gaussian_process_from_pd`: Kolmogorov extension yields a path measure on `ℝ → ℝ`
-- `bochner_identity`: for continuous PD ψ with ψ(0)=1, `ψ t = ∫ exp(I·t·x) ∂μ` for the spectral measure μ
+**Bochner API** (`LeanLevy/Representation/BochnerGaussian.lean`)
+- `covMatrix`: covariance matrix `ψ(tᵢ - tⱼ)` of a positive definite function, with `covMatrix_is_psd`
+- `bochner_identity`: for continuous PD ψ with ψ(0)=1, `ψ t = ∫ exp(I·t·x) ∂μ` for the spectral measure μ (explicit-integral form of Bochner's theorem)
 
 **Fourier analysis** (`LeanLevy/Fourier/`)
 - Fourier transform of finite measures on ℝ, with boundedness, continuity, and value at zero
@@ -88,10 +83,11 @@ A Lean 4 formalization of Lévy processes, built on top of mathlib.
 - Sub-lemmas 1–3 fully proved: non-vanishing, continuous logarithm, conditional negative definiteness
 - Schoenberg helper lemmas, convolution semigroup structure
 - Sub-lemma 4: Schoenberg's theorem proved via kernel factorization + spectral decomposition; convolution semigroup construction complete
-- Lévy–Khintchine assembly uses the finite-ν pivot: `(b, σ², ν)` extracted along a single subsequence via `exists_drift_variance_jumpMeasure_along_seq`; representation theorem fully proved
-- Analytic limit identification (`psi_eq_levyKhintchine_formula`) fully proved: chains the scalar large-jump limit, drift term, small-jump 3rd-order Taylor remainder (via δ-truncation), and large-jump cutoff approximations to conclude `t⁻¹(charFun μ_t − 1) → Ψ(ξ)`
+- Lévy–Khintchine assembly uses the finite-ν pivot: the triple `(b, σ², ν)` is extracted along a single subsequence via `exists_drift_variance_jumpMeasure_along_seq`, and the representation theorem (`levyKhintchine_representation_finite`) is fully proved
+- Analytic limit identification (`psi_eq_levyKhintchine_formula`) fully proved: it identifies `t⁻¹(charFun μ_t − 1) → Ψ(ξ)` by chaining four subsequential limits — the drift term, the small-jump compensated limit (3rd-order Taylor remainder + δ-truncation), and the complex large-jump limit (smooth-cutoff approximation) — against `charFun_scaled_limit` via uniqueness of limits
+- The formula is stated at an **extracted atom-free split radius** `r ∈ (1/2, 1]`: the Gaussian variance is `σ² = lim t⁻¹∫_{|x|<r} x² dμ_t − ∫_{|x|<r} x² dν` (subtracting the small-jump second moment that the compensated integral already carries) and the drift is recovered at the ν level as `b + ∫_{r≤|x|<1} x dν`. This normalization is what makes the formula correct — a naive radius-1 statement double-counts the small-jump second moment
 
-The entire codebase is **sorry-free**.
+The entire codebase is **sorry-free** (verified by `#print axioms`: the representation theorem depends only on `propext`, `Classical.choice`, `Quot.sound`).
 
 ## Building
 
@@ -105,7 +101,6 @@ lake build
 
 ```
 LeanLevy/
-├── Basic.lean
 ├── Fourier/
 │   ├── Bochner.lean
 │   ├── MeasureFourier.lean
