@@ -2584,17 +2584,39 @@ contributions from the total limit `ψ(ξ)`.
 `ξ · I · ∫ x dμ_t`, so after scaling by `1/t` and taking the limit, contributes `b · ξ · I`
 to the decomposition. -/
 
-/-- The scaled first moment on the small set is eventually bounded along `t_n → 0`, so
+/-- `x²` is integrable on `smallSet` against any finite measure (bounded by `1` there). -/
+private lemma integrableOn_sq_smallSet (μ : Measure ℝ) [IsFiniteMeasure μ] :
+    IntegrableOn (fun x => x ^ 2) smallSet μ := by
+  refine IntegrableOn.of_bound (measure_lt_top _ _) ?_ 1 ?_
+  · exact ((continuous_pow 2).measurable.aemeasurable.aestronglyMeasurable).restrict
+  · exact (ae_restrict_mem measurableSet_smallSet).mono (fun x hx => by
+      have hxlt : |x| < 1 := mem_smallSet.mp hx
+      simp only [Real.norm_eq_abs]
+      have h2 : x ^ 2 < 1 := by
+        have h3 : |x| ^ 2 < 1 := pow_lt_one₀ (abs_nonneg x) hxlt two_ne_zero
+        rwa [sq_abs] at h3
+      rw [abs_of_nonneg (sq_nonneg x)]; linarith)
+
+/-- The scaled first moment on `{|x| < r}` is eventually bounded along `t_n → 0`, so
 Bolzano-Weierstrass gives a convergent subsequence.  Boundedness follows from the sin
-decomposition: `t⁻¹∫_{small} x = Im((charFun-1)/t) − t⁻¹∫_{large} sin + t⁻¹∫_{small}(x-sin)`,
+decomposition: `t⁻¹∫_{|x|<r} x = Im((charFun-1)/t) − t⁻¹∫_{largeSet r} sin + t⁻¹∫_{|x|<r}(x-sin)`,
 where the three terms are respectively eventually bounded (via charFun limit), globally bounded
-(via scaled_mass_bound_real), and eventually bounded (via the x²/2 bound + second-moment). -/
+(via scaled_mass_bound_real at radius r), and eventually bounded (via the x²/2 bound + the
+second-moment dominated through `{|x|<r} ⊆ smallSet`). -/
 lemma drift_limit
+    {r : ℝ} (hr : 0 < r) (hr1 : r ≤ 1)
     {t_seq : ℕ → {t : ℝ // 0 < t}} (ht : Tendsto (fun n => (t_seq n).val) atTop (𝓝 0)) :
     ∃ b : ℝ, ∃ φ : ℕ → ℕ, StrictMono φ ∧
     Tendsto (fun n =>
-      (t_seq (φ n)).val⁻¹ * ∫ x in smallSet, x ∂(S.measure (t_seq (φ n)) : Measure ℝ))
+      (t_seq (φ n)).val⁻¹ * ∫ x in {x | |x| < r}, x ∂(S.measure (t_seq (φ n)) : Measure ℝ))
     atTop (𝓝 b) := by
+  -- The radius-`r` open ball: measurability and complement identity.
+  have hmeas_ball : MeasurableSet {x : ℝ | |x| < r} :=
+    measurableSet_lt continuous_abs.measurable measurable_const
+  have hball_compl : {x : ℝ | |x| < r} = (largeSet r)ᶜ := by
+    ext x; simp only [largeSet, Set.mem_setOf_eq, Set.mem_compl_iff, not_le]
+  have hsubset : {x : ℝ | |x| < r} ⊆ smallSet :=
+    fun x hx => mem_smallSet.mpr (lt_of_lt_of_le hx hr1)
   -- Pull `t_seq` back through the comap filter used by `charFun_scaled_limit`.
   have htseq_filter : Tendsto t_seq atTop (Filter.comap Subtype.val (𝓝[>] (0 : ℝ))) := by
     rw [Filter.tendsto_comap_iff]
@@ -2641,13 +2663,13 @@ lemma drift_limit
               (hint1.sub (integrable_const 1))).symm]
     simp only [Complex.sub_im, Complex.one_im, sub_zero, Complex.exp_ofReal_mul_I_im]
     rw [div_eq_inv_mul]
-  -- Global bound on t⁻¹ * μ_t(largeSet 1) via scaled_mass_bound_real.
-  obtain ⟨C_large, hC_large⟩ := S.scaled_mass_bound_real 1 one_pos
+  -- Global bound on t⁻¹ * μ_t(largeSet r) via scaled_mass_bound_real.
+  obtain ⟨C_large, hC_large⟩ := S.scaled_mass_bound_real r hr
   -- Eventually bounded second moment: t⁻¹ ∫_small x² ≤ C₂.
   obtain ⟨C₂, hC₂_pos, hC₂⟩ := S.scaled_second_moment_bounded_along_seq ht
-  -- The sequence a_n := t_n⁻¹ ∫_small x dμ_n is eventually in a compact interval.
+  -- The sequence a_n := t_n⁻¹ ∫_{|x|<r} x dμ_n is eventually in a compact interval.
   set a : ℕ → ℝ := fun n =>
-    (t_seq n).val⁻¹ * ∫ x in smallSet, x ∂(S.measure (t_seq n) : Measure ℝ)
+    (t_seq n).val⁻¹ * ∫ x in {x | |x| < r}, x ∂(S.measure (t_seq n) : Measure ℝ)
   have ha_bdd : ∀ᶠ n in atTop, a n ∈ Set.Icc (-(|(S.exponent 1).im| + 1 + C_large + C₂))
       (|(S.exponent 1).im| + 1 + C_large + C₂) := by
     filter_upwards [hIm_bdd, hC₂] with n hIm hC₂n
@@ -2662,94 +2684,99 @@ lemma drift_limit
       Integrable.of_bound Real.continuous_sin.aestronglyMeasurable 1
         (ae_of_all _ fun x => by simp [Real.abs_sin_le_abs, abs_le.mpr ⟨Real.neg_one_le_sin x,
           Real.sin_le_one x⟩])
-    have hint_x_small : IntegrableOn (fun x => x) smallSet (S.measure (t_seq n) : Measure ℝ) :=
+    have hint_x_small : IntegrableOn (fun x => x) {x | |x| < r}
+        (S.measure (t_seq n) : Measure ℝ) :=
       IntegrableOn.of_bound (measure_lt_top _ _)
         continuous_id.aestronglyMeasurable.restrict 1
-        ((ae_restrict_mem measurableSet_smallSet).mono
-          (fun x hx => by simp only [Real.norm_eq_abs]; exact le_of_lt (mem_smallSet.mp hx)))
-    have hint_sin_small : IntegrableOn (fun x => Real.sin x) smallSet
+        ((ae_restrict_mem hmeas_ball).mono
+          (fun x hx => by
+            simp only [Real.norm_eq_abs]
+            exact (lt_of_lt_of_le hx hr1).le))
+    have hint_sin_small : IntegrableOn (fun x => Real.sin x) {x | |x| < r}
         (S.measure (t_seq n) : Measure ℝ) :=
       hint_sin.integrableOn
-    have hint_sin_large : IntegrableOn (fun x => Real.sin x) (largeSet 1)
-        (S.measure (t_seq n) : Measure ℝ) :=
-      hint_sin.integrableOn
-    have hint_xsin_small : IntegrableOn (fun x => x - Real.sin x) smallSet
+    have hint_xsin_small : IntegrableOn (fun x => x - Real.sin x) {x | |x| < r}
         (S.measure (t_seq n) : Measure ℝ) :=
       (hint_x_small.sub hint_sin_small)
-    -- ∫_small x = ∫_small (x - sin x) + ∫_small sin x
-    have hsplit_x : ∫ x in smallSet, x ∂(S.measure (t_seq n) : Measure ℝ) =
-        ∫ x in smallSet, (x - Real.sin x) ∂(S.measure (t_seq n) : Measure ℝ) +
-        ∫ x in smallSet, Real.sin x ∂(S.measure (t_seq n) : Measure ℝ) := by
+    -- ∫_{|x|<r} x = ∫_{|x|<r} (x - sin x) + ∫_{|x|<r} sin x
+    have hsplit_x : ∫ x in {x | |x| < r}, x ∂(S.measure (t_seq n) : Measure ℝ) =
+        ∫ x in {x | |x| < r}, (x - Real.sin x) ∂(S.measure (t_seq n) : Measure ℝ) +
+        ∫ x in {x | |x| < r}, Real.sin x ∂(S.measure (t_seq n) : Measure ℝ) := by
       rw [← integral_add hint_xsin_small hint_sin_small]
       congr 1; ext x; ring
-    -- ∫_small sin x = ∫ sin x - ∫_large sin x (split by smallSet = largeSet 1 complement)
-    have hsplit_sin : ∫ x in smallSet, Real.sin x ∂(S.measure (t_seq n) : Measure ℝ) =
+    -- ∫_{|x|<r} sin x = ∫ sin x - ∫_{largeSet r} sin x (ball = (largeSet r)ᶜ)
+    have hsplit_sin : ∫ x in {x | |x| < r}, Real.sin x ∂(S.measure (t_seq n) : Measure ℝ) =
         ∫ x, Real.sin x ∂(S.measure (t_seq n) : Measure ℝ) -
-        ∫ x in largeSet 1, Real.sin x ∂(S.measure (t_seq n) : Measure ℝ) := by
-      rw [smallSet_eq_compl_largeSet,
-          ← integral_add_compl (measurableSet_largeSet 1) hint_sin]
+        ∫ x in largeSet r, Real.sin x ∂(S.measure (t_seq n) : Measure ℝ) := by
+      rw [hball_compl,
+          ← integral_add_compl (measurableSet_largeSet r) hint_sin]
       ring
-    -- a_n = t⁻¹∫_small(x-sin) + Im(charFun/t) - t⁻¹∫_large sin
+    -- a_n = t⁻¹∫_{|x|<r}(x-sin) + Im(charFun/t) - t⁻¹∫_{largeSet r} sin
     have ha_eq : a n = (t_seq n).val⁻¹ *
-        ∫ x in smallSet, (x - Real.sin x) ∂(S.measure (t_seq n) : Measure ℝ) +
+        ∫ x in {x | |x| < r}, (x - Real.sin x) ∂(S.measure (t_seq n) : Measure ℝ) +
         (((S.measure (t_seq n)).characteristicFun 1 - 1) / ↑(t_seq n).val).im -
         (t_seq n).val⁻¹ *
-        ∫ x in largeSet 1, Real.sin x ∂(S.measure (t_seq n) : Measure ℝ) := by
+        ∫ x in largeSet r, Real.sin x ∂(S.measure (t_seq n) : Measure ℝ) := by
       simp only [a, hIm_eq n, hsplit_x, hsplit_sin]
       ring
-    -- Bound |t⁻¹∫_large sin x|: each |sin x| ≤ 1, so ≤ t⁻¹ * μ(large 1) ≤ C_large
+    -- Bound |t⁻¹∫_{largeSet r} sin x|: each |sin x| ≤ 1, so ≤ t⁻¹ * μ(largeSet r) ≤ C_large
     have hL : |(t_seq n).val⁻¹ *
-        ∫ x in largeSet 1, Real.sin x ∂(S.measure (t_seq n) : Measure ℝ)| ≤ C_large := by
-      have hbound : ‖∫ x in largeSet 1, Real.sin x ∂(S.measure (t_seq n) : Measure ℝ)‖ ≤
-          ((S.measure (t_seq n) : Measure ℝ) (largeSet 1)).toReal := by
+        ∫ x in largeSet r, Real.sin x ∂(S.measure (t_seq n) : Measure ℝ)| ≤ C_large := by
+      have hbound : ‖∫ x in largeSet r, Real.sin x ∂(S.measure (t_seq n) : Measure ℝ)‖ ≤
+          ((S.measure (t_seq n) : Measure ℝ) (largeSet r)).toReal := by
         have h := norm_setIntegral_le_of_norm_le_const
-            (measure_lt_top (S.measure (t_seq n) : Measure ℝ) (largeSet 1))
+            (measure_lt_top (S.measure (t_seq n) : Measure ℝ) (largeSet r))
             (fun x _ => show ‖Real.sin x‖ ≤ 1 by
               simp only [Real.norm_eq_abs]
               exact abs_le.mpr ⟨by linarith [Real.neg_one_le_sin x], Real.sin_le_one x⟩)
         simpa [one_mul] using h
       rw [abs_mul, abs_of_pos (inv_pos.mpr t_pos)]
-      calc (t_seq n).val⁻¹ * |∫ x in largeSet 1, Real.sin x ∂(S.measure (t_seq n) : Measure ℝ)|
-          ≤ (t_seq n).val⁻¹ * ((S.measure (t_seq n) : Measure ℝ) (largeSet 1)).toReal := by
+      calc (t_seq n).val⁻¹ * |∫ x in largeSet r, Real.sin x ∂(S.measure (t_seq n) : Measure ℝ)|
+          ≤ (t_seq n).val⁻¹ * ((S.measure (t_seq n) : Measure ℝ) (largeSet r)).toReal := by
             apply mul_le_mul_of_nonneg_left _ (inv_nonneg.mpr (le_of_lt t_pos))
             rwa [Real.norm_eq_abs] at hbound
         _ ≤ C_large := hC_large (t_seq n)
-    -- Bound |t⁻¹∫_small (x - sin x)|: |x - sin x| ≤ x²/2 on smallSet
+    -- x² integrable on smallSet (bounded by 1, finite measure) — for the domination step.
+    have hint_sq_small : IntegrableOn (fun x => x ^ 2) smallSet
+        (S.measure (t_seq n) : Measure ℝ) :=
+      integrableOn_sq_smallSet _
+    -- Domination: ∫_{|x|<r} x² ≤ ∫_small x²  (since {|x|<r} ⊆ smallSet, x² ≥ 0).
+    have hdom : ∫ x in {x | |x| < r}, x ^ 2 ∂(S.measure (t_seq n) : Measure ℝ) ≤
+        ∫ x in smallSet, x ^ 2 ∂(S.measure (t_seq n) : Measure ℝ) :=
+      setIntegral_mono_set hint_sq_small (ae_of_all _ fun x => sq_nonneg x)
+        (HasSubset.Subset.eventuallyLE hsubset)
+    -- Bound |t⁻¹∫_{|x|<r} (x - sin x)|: |x - sin x| ≤ x²/2 on {|x|<r}, then dominate by smallSet.
     have hS : |(t_seq n).val⁻¹ *
-        ∫ x in smallSet, (x - Real.sin x) ∂(S.measure (t_seq n) : Measure ℝ)| ≤ C₂ := by
-      have habs_bound : ∀ x ∈ smallSet, |x - Real.sin x| ≤ x ^ 2 / 2 :=
-        fun x hx => abs_sub_sin_le_sq_div_two (le_of_lt (mem_smallSet.mp hx))
-      have hxsin_norm : ‖∫ x in smallSet, (x - Real.sin x) ∂(S.measure (t_seq n) : Measure ℝ)‖ ≤
-          (1/2) * ∫ x in smallSet, x ^ 2 ∂(S.measure (t_seq n) : Measure ℝ) := by
-        calc ‖∫ x in smallSet, (x - Real.sin x) ∂(S.measure (t_seq n) : Measure ℝ)‖
-            ≤ ∫ x in smallSet, ‖x - Real.sin x‖ ∂(S.measure (t_seq n) : Measure ℝ) :=
+        ∫ x in {x | |x| < r}, (x - Real.sin x) ∂(S.measure (t_seq n) : Measure ℝ)| ≤ C₂ := by
+      have habs_bound : ∀ x ∈ {x : ℝ | |x| < r}, |x - Real.sin x| ≤ x ^ 2 / 2 :=
+        fun x hx => abs_sub_sin_le_sq_div_two (le_of_lt (lt_of_lt_of_le hx hr1))
+      have hxsin_norm : ‖∫ x in {x | |x| < r}, (x - Real.sin x)
+            ∂(S.measure (t_seq n) : Measure ℝ)‖ ≤
+          (1/2) * ∫ x in {x | |x| < r}, x ^ 2 ∂(S.measure (t_seq n) : Measure ℝ) := by
+        calc ‖∫ x in {x | |x| < r}, (x - Real.sin x) ∂(S.measure (t_seq n) : Measure ℝ)‖
+            ≤ ∫ x in {x | |x| < r}, ‖x - Real.sin x‖ ∂(S.measure (t_seq n) : Measure ℝ) :=
               norm_integral_le_integral_norm _
-          _ ≤ ∫ x in smallSet, x ^ 2 / 2 ∂(S.measure (t_seq n) : Measure ℝ) := by
+          _ ≤ ∫ x in {x | |x| < r}, x ^ 2 / 2 ∂(S.measure (t_seq n) : Measure ℝ) := by
               apply setIntegral_mono_on hint_xsin_small.norm
-              · refine IntegrableOn.of_bound (measure_lt_top _ _) ?_ 1 ?_
-                · exact ((continuous_pow 2).measurable.div_const 2
-                           |>.aemeasurable.aestronglyMeasurable).restrict
-                · exact (ae_restrict_mem measurableSet_smallSet).mono (fun x hx => by
-                    have hxlt : |x| < 1 := mem_smallSet.mp hx
-                    simp only [Real.norm_eq_abs]
-                    have h1 : 0 ≤ x ^ 2 / 2 := by positivity
-                    rw [abs_of_nonneg h1]
-                    have h2 : x ^ 2 < 1 := by
-                      have h3 : |x| ^ 2 < 1 := pow_lt_one₀ (abs_nonneg x) hxlt two_ne_zero
-                      rwa [sq_abs] at h3
-                    linarith)
-              · exact measurableSet_smallSet
+              · exact ((hint_sq_small.mono_set hsubset).div_const 2)
+              · exact hmeas_ball
               · intro x hx
                 simp only [Real.norm_eq_abs]
                 exact habs_bound x hx
-          _ = (1/2) * ∫ x in smallSet, x ^ 2 ∂(S.measure (t_seq n) : Measure ℝ) := by
+          _ = (1/2) * ∫ x in {x | |x| < r}, x ^ 2 ∂(S.measure (t_seq n) : Measure ℝ) := by
               rw [← integral_const_mul]; congr 1; funext x; ring
       rw [Real.norm_eq_abs, abs_mul, abs_of_pos (inv_pos.mpr t_pos)] at *
-      calc (t_seq n).val⁻¹ * ‖∫ x in smallSet, (x - Real.sin x) ∂(S.measure (t_seq n) : Measure ℝ)‖
-          ≤ (t_seq n).val⁻¹ * ((1/2) * ∫ x in smallSet, x ^ 2 ∂(S.measure (t_seq n) : Measure ℝ)) :=
+      calc (t_seq n).val⁻¹ *
+            ‖∫ x in {x | |x| < r}, (x - Real.sin x) ∂(S.measure (t_seq n) : Measure ℝ)‖
+          ≤ (t_seq n).val⁻¹ *
+              ((1/2) * ∫ x in {x | |x| < r}, x ^ 2 ∂(S.measure (t_seq n) : Measure ℝ)) :=
             mul_le_mul_of_nonneg_left hxsin_norm (inv_nonneg.mpr (le_of_lt t_pos))
-        _ = (1/2) * ((t_seq n).val⁻¹ * ∫ x in smallSet, x ^ 2 ∂(S.measure (t_seq n) : Measure ℝ)) :=
-            by ring
+        _ = (1/2) * ((t_seq n).val⁻¹ *
+              ∫ x in {x | |x| < r}, x ^ 2 ∂(S.measure (t_seq n) : Measure ℝ)) := by ring
+        _ ≤ (1/2) * ((t_seq n).val⁻¹ *
+              ∫ x in smallSet, x ^ 2 ∂(S.measure (t_seq n) : Measure ℝ)) := by
+            apply mul_le_mul_of_nonneg_left _ (by norm_num)
+            exact mul_le_mul_of_nonneg_left hdom (inv_nonneg.mpr (le_of_lt t_pos))
         _ ≤ (1/2) * C₂ := by
             apply mul_le_mul_of_nonneg_left hC₂n (by norm_num)
         _ ≤ C₂ := by linarith [hC₂_pos]
@@ -4282,24 +4309,33 @@ since `Tendsto` is preserved under further sub-extraction. -/
 theorem exists_drift_variance_jumpMeasure_along_seq
     (h_finite_small_mass : ∃ C : ℝ≥0, ∀ t : {t : ℝ // 0 < t},
         t.val⁻¹ * ((S.measure t : Measure ℝ) smallSet).toReal ≤ ↑C) :
-    ∃ (b : ℝ) (σ_sq : ℝ≥0) (ν : Measure ℝ) (_ : IsFiniteMeasure ν)
+    ∃ (r : ℝ) (b : ℝ) (σ_sq : ℝ≥0) (ν : Measure ℝ) (_ : IsFiniteMeasure ν)
       (t_seq : ℕ → {t : ℝ // 0 < t}),
-      ν {0} = 0 ∧
+      r ∈ Set.Ioc (1/2 : ℝ) 1 ∧
+      ν {0} = 0 ∧ ν {x | |x| = r} = 0 ∧
       Tendsto (fun n => (t_seq n).val) atTop (𝓝 0) ∧
       Tendsto (fun n =>
-        (t_seq n).val⁻¹ * ∫ x in smallSet, x ∂(S.measure (t_seq n) : Measure ℝ))
+        (t_seq n).val⁻¹ * ∫ x in {x | |x| < r}, x ∂(S.measure (t_seq n) : Measure ℝ))
           atTop (𝓝 b) ∧
       Tendsto (fun n =>
-        (t_seq n).val⁻¹ * ∫ x in smallSet, x ^ 2 ∂(S.measure (t_seq n) : Measure ℝ))
+        (t_seq n).val⁻¹ * ∫ x in {x | |x| < r}, x ^ 2 ∂(S.measure (t_seq n) : Measure ℝ))
           atTop (𝓝 (σ_sq : ℝ)) ∧
-      (∀ (f : BoundedContinuousFunction ℝ ℝ), (∃ r > 0, ∀ x, |x| < r → f x = 0) →
+      (∀ (f : BoundedContinuousFunction ℝ ℝ), (∃ r' > 0, ∀ x, |x| < r' → f x = 0) →
         Tendsto (fun n => (t_seq n).val⁻¹ * ∫ x, f x ∂(S.measure (t_seq n) : Measure ℝ))
           atTop (𝓝 (∫ x, f x ∂ν))) := by
   -- Step 1: Outer extraction — Lévy measure ν and its witnessing sequence t_seq_ν.
   obtain ⟨ν, hν_fin, t_seq_ν, ht_seq_ν, hν_zero, h_jump_conv⟩ :=
     S.exists_levyMeasure_finite h_finite_small_mass
-  -- Step 2: Drift sub-subsequence φ₁ along t_seq_ν.
-  obtain ⟨b, φ₁, hφ₁_mono, hb⟩ := S.drift_limit ht_seq_ν
+  -- Step 1b: an atom-free split radius `r ∈ (1/2, 1]`.
+  obtain ⟨r, hr_mem, hν_r⟩ := exists_atomFree_radius ν (show (1/2 : ℝ) < 1 by norm_num)
+  have hr_pos : (0 : ℝ) < r := by linarith [hr_mem.1]
+  have hr_le1 : r ≤ 1 := hr_mem.2
+  have hmeas_ball : MeasurableSet {x : ℝ | |x| < r} :=
+    measurableSet_lt continuous_abs.measurable measurable_const
+  have hsubset : {x : ℝ | |x| < r} ⊆ smallSet :=
+    fun x hx => mem_smallSet.mpr (lt_of_lt_of_le hx hr_le1)
+  -- Step 2: Drift sub-subsequence φ₁ along t_seq_ν, at radius r.
+  obtain ⟨b, φ₁, hφ₁_mono, hb⟩ := S.drift_limit hr_pos hr_le1 ht_seq_ν
   -- The composed sequence t_seq_ν ∘ φ₁ still tends to 0.
   have ht_seq₁ : Tendsto (fun n => (t_seq_ν (φ₁ n)).val) atTop (𝓝 0) :=
     ht_seq_ν.comp hφ₁_mono.tendsto_atTop
@@ -4307,14 +4343,28 @@ theorem exists_drift_variance_jumpMeasure_along_seq
   obtain ⟨C, _hC_pos, hC⟩ := S.scaled_second_moment_bounded_along_seq ht_seq₁
   set a : ℕ → ℝ := fun n =>
     (t_seq_ν (φ₁ n)).val⁻¹ *
-      ∫ x in smallSet, x ^ 2 ∂(S.measure (t_seq_ν (φ₁ n)) : Measure ℝ) with ha_def
+      ∫ x in {x | |x| < r}, x ^ 2 ∂(S.measure (t_seq_ν (φ₁ n)) : Measure ℝ) with ha_def
   have ha_nonneg : ∀ n, 0 ≤ a n := fun n => by
     have ht_pos : 0 < (t_seq_ν (φ₁ n)).val := (t_seq_ν (φ₁ n)).prop
     refine mul_nonneg (inv_nonneg.mpr ht_pos.le) ?_
-    exact setIntegral_nonneg measurableSet_smallSet (fun x _ => sq_nonneg x)
+    exact setIntegral_nonneg hmeas_ball (fun x _ => sq_nonneg x)
   have ha_bdd : ∀ᶠ n in atTop, a n ∈ Set.Icc (0 : ℝ) C := by
     filter_upwards [hC] with n hCn
-    exact ⟨ha_nonneg n, hCn⟩
+    refine ⟨ha_nonneg n, ?_⟩
+    -- a n = t⁻¹∫_{|x|<r} x² ≤ t⁻¹∫_small x² ≤ C  (domination over {|x|<r} ⊆ smallSet).
+    have ht_pos : 0 < (t_seq_ν (φ₁ n)).val := (t_seq_ν (φ₁ n)).prop
+    have hint_sq_small : IntegrableOn (fun x => x ^ 2) smallSet
+        (S.measure (t_seq_ν (φ₁ n)) : Measure ℝ) :=
+      integrableOn_sq_smallSet _
+    have hdom : ∫ x in {x | |x| < r}, x ^ 2 ∂(S.measure (t_seq_ν (φ₁ n)) : Measure ℝ) ≤
+        ∫ x in smallSet, x ^ 2 ∂(S.measure (t_seq_ν (φ₁ n)) : Measure ℝ) :=
+      setIntegral_mono_set hint_sq_small (ae_of_all _ fun x => sq_nonneg x)
+        (HasSubset.Subset.eventuallyLE hsubset)
+    calc a n
+        ≤ (t_seq_ν (φ₁ n)).val⁻¹ *
+            ∫ x in smallSet, x ^ 2 ∂(S.measure (t_seq_ν (φ₁ n)) : Measure ℝ) :=
+          mul_le_mul_of_nonneg_left hdom (inv_nonneg.mpr ht_pos.le)
+      _ ≤ C := hCn
   obtain ⟨σ, hσ_mem, φ₂, hφ₂_mono, hσ⟩ :=
     isCompact_Icc.tendsto_subseq' ha_bdd.frequently
   -- Step 4: Assemble the final subsequence t_seq_ν ∘ φ₁ ∘ φ₂.
@@ -4322,25 +4372,26 @@ theorem exists_drift_variance_jumpMeasure_along_seq
   -- t_seq tends to 0.
   have ht_seq : Tendsto (fun n => (t_seq n).val) atTop (𝓝 0) :=
     ht_seq₁.comp hφ₂_mono.tendsto_atTop
-  -- Drift convergence along the composite subsequence.
+  -- Drift convergence along the composite subsequence (at radius r).
   have hb_final : Tendsto (fun n =>
-      (t_seq n).val⁻¹ * ∫ x in smallSet, x ∂(S.measure (t_seq n) : Measure ℝ))
+      (t_seq n).val⁻¹ * ∫ x in {x | |x| < r}, x ∂(S.measure (t_seq n) : Measure ℝ))
       atTop (𝓝 b) := hb.comp hφ₂_mono.tendsto_atTop
   -- Variance convergence: σ ≥ 0 so it coerces from Real.toNNReal.
   have hσ_final : Tendsto (fun n =>
-      (t_seq n).val⁻¹ * ∫ x in smallSet, x ^ 2 ∂(S.measure (t_seq n) : Measure ℝ))
+      (t_seq n).val⁻¹ * ∫ x in {x | |x| < r}, x ^ 2 ∂(S.measure (t_seq n) : Measure ℝ))
       atTop (𝓝 ((Real.toNNReal σ : ℝ≥0) : ℝ)) := by
     rw [Real.coe_toNNReal σ hσ_mem.1]
     exact hσ
   -- Jump-measure convergence: subseq of jump-convergent is still jump-convergent.
   have h_jump_final : ∀ (f : BoundedContinuousFunction ℝ ℝ),
-      (∃ r > 0, ∀ x, |x| < r → f x = 0) →
+      (∃ r' > 0, ∀ x, |x| < r' → f x = 0) →
       Tendsto (fun n => (t_seq n).val⁻¹ * ∫ x, f x ∂(S.measure (t_seq n) : Measure ℝ))
         atTop (𝓝 (∫ x, f x ∂ν)) := by
     intro f hf
     have h := h_jump_conv f hf
     exact h.comp ((hφ₁_mono.comp hφ₂_mono).tendsto_atTop)
-  exact ⟨b, Real.toNNReal σ, ν, hν_fin, t_seq, hν_zero, ht_seq, hb_final, hσ_final, h_jump_final⟩
+  exact ⟨r, b, Real.toNNReal σ, ν, hν_fin, t_seq, hr_mem, hν_zero, hν_r, ht_seq, hb_final,
+    hσ_final, h_jump_final⟩
 
 /-- **The Lévy-Khintchine formula for ψ (finite-ν pivot).** Given the drift `b`, the
 Gaussian variance `σ²`, and the externally-provided finite Lévy measure `ν` on `ℝ\{0}`,
@@ -4353,41 +4404,40 @@ The hypotheses encode exactly the output of the diagonal extraction:
 * `hσ` — second-moment convergence,
 * `h_jump` — vague (vanishing-near-0) convergence of `t⁻¹·μ_t` to `ν`.
 
-**Proof strategy (currently `sorry`, to be closed in a follow-up commit):**
-Combine four limit identifications in `𝓝 (S.exponent ξ)`:
-1. `charFun_scaled_limit`: `t⁻¹·(charFun(μ_t)(ξ) − 1) → ψ(ξ)`.
-2. `drift_term`: `iξ·(t⁻¹·∫_{smallSet} x dμ_t) → b·ξ·I`.
-3. **Small-jump identification (analytic core, not yet proved):**
-   `t⁻¹·∫_{smallSet}(exp(ixξ)−1−ixξ) dμ_t → −σ²ξ²/2 + ∫_{smallSet} compInt dν`.
-   Argument: write the integrand as `−(xξ)²/2 + O(|x|³ξ³)`; the quadratic pairs with
-   the σ² limit, the cubic remainder is handled by a δ-truncation on smallSet using the
-   uniform second-moment bound and `h_jump` on the outer band.
-4. **Large-jump identification (not yet proved):** `t⁻¹·∫_{largeSet 1}(exp(ixξ)−1)
-   dμ_t → ∫_{largeSet 1} compInt dν`. Argument: approximate the indicator-truncated
-   integrand by bounded continuous functions vanishing near 0 (smooth cutoffs at radius
-   `1/n`), apply `h_jump` for each cutoff, take `n → ∞`.
+**Soundness note (2026-06):** the formula is stated at an extracted *atom-free* split
+radius `r ∈ (1/2, 1]`. The drift `b_r` and Gaussian-variance `σ_sq_r` are the radius-`r`
+subsequential limits; the standard radius-1 compensator is recovered by converting at
+the ν level — the drift correction `∫_{r≤|x|<1} x dν` and the variance correction
+`−∫_{|x|<r} x² dν` (which removes the small-jump second moment the compensated integral
+already carries). An earlier radius-1 statement was *false* (it double-counted the
+small-jump second moment, e.g. for compound Poisson `ν = δ_{1/2}`).
 
-The assembly then matches the per-`n` integral identity
-`(charFun(μ_t)(ξ)−1)/t = iξ·t⁻¹·∫_{smallSet} x dμ_t + t⁻¹·∫_{smallSet}(exp(ixξ)−1−ixξ)
-dμ_t + t⁻¹·∫_{largeSet 1}(exp(ixξ)−1) dμ_t` and concludes by uniqueness of limits. -/
+**Proof strategy (currently `sorry`, to be closed in a follow-up commit):**
+Combine the four limit identifications in `𝓝 (S.exponent ξ)` at split radius `r`:
+1. `charFun_scaled_limit`: `t⁻¹·(charFun(μ_t)(ξ) − 1) → ψ(ξ)`.
+2. `drift_term`: `iξ·(t⁻¹·∫_{|x|<r} x dμ_t) → b_r·ξ·I`.
+3. `scaled_smallBall_compensated_tendsto`: the small-jump identification at radius `r`.
+4. `scaled_largeSet_charFun_tendsto`: the large-jump identification at radius `r`. -/
 theorem psi_eq_levyKhintchine_formula
-    (b : ℝ) (σ_sq : ℝ≥0) {ν : Measure ℝ} [IsFiniteMeasure ν]
-    (_hν_zero : ν {0} = 0)
+    {r : ℝ} (hr : r ∈ Set.Ioc (1/2 : ℝ) 1)
+    (b_r : ℝ) (σ_sq_r : ℝ≥0) {ν : Measure ℝ} [IsFiniteMeasure ν]
+    (hν_zero : ν {0} = 0) (hν_r : ν {x | |x| = r} = 0)
     {t_seq : ℕ → {t : ℝ // 0 < t}}
-    (_ht_seq : Tendsto (fun n => (t_seq n).val) atTop (𝓝 0))
-    (_hb : Tendsto (fun n =>
-        (t_seq n).val⁻¹ * ∫ x in smallSet, x ∂(S.measure (t_seq n) : Measure ℝ))
-        atTop (𝓝 b))
-    (_hσ : Tendsto (fun n =>
-        (t_seq n).val⁻¹ * ∫ x in smallSet, x ^ 2 ∂(S.measure (t_seq n) : Measure ℝ))
-        atTop (𝓝 (σ_sq : ℝ)))
-    (_h_jump : ∀ (f : BoundedContinuousFunction ℝ ℝ),
-        (∃ r > 0, ∀ x, |x| < r → f x = 0) →
+    (ht_seq : Tendsto (fun n => (t_seq n).val) atTop (𝓝 0))
+    (hb : Tendsto (fun n =>
+        (t_seq n).val⁻¹ * ∫ x in {x | |x| < r}, x ∂(S.measure (t_seq n) : Measure ℝ))
+        atTop (𝓝 b_r))
+    (hσ : Tendsto (fun n =>
+        (t_seq n).val⁻¹ * ∫ x in {x | |x| < r}, x ^ 2 ∂(S.measure (t_seq n) : Measure ℝ))
+        atTop (𝓝 ((σ_sq_r : ℝ≥0) : ℝ)))
+    (h_jump : ∀ (f : BoundedContinuousFunction ℝ ℝ),
+        (∃ r' > 0, ∀ x, |x| < r' → f x = 0) →
         Tendsto (fun n => (t_seq n).val⁻¹ * ∫ x, f x ∂(S.measure (t_seq n) : Measure ℝ))
           atTop (𝓝 (∫ x, f x ∂ν)))
     (ξ : ℝ) :
-    S.exponent ξ = ↑b * ↑ξ * I
-      - ↑(σ_sq : ℝ) * ↑ξ ^ 2 / 2
+    S.exponent ξ =
+      ↑(b_r + ∫ x in {x | r ≤ |x| ∧ |x| < 1}, x ∂ν) * ↑ξ * I
+      - ↑((σ_sq_r : ℝ) - ∫ x in {x | |x| < r}, x ^ 2 ∂ν) * ↑ξ ^ 2 / 2
       + ∫ x, levyCompensatedIntegrand ξ x ∂ν := by
   sorry
 
@@ -4407,9 +4457,12 @@ theorem psi_decomposition
         S.exponent ξ = ↑b * ↑ξ * I
           - ↑(σ_sq : ℝ) * ↑ξ ^ 2 / 2
           + ∫ x, levyCompensatedIntegrand ξ x ∂ν := by
-  obtain ⟨b, σ_sq, ν, hν_fin, t_seq, hν_zero, ht_seq, hb, hσ, h_jump⟩ :=
+  obtain ⟨r, b_r, σ_sq_r, ν, hν_fin, t_seq, hr_mem, hν_zero, hν_r, ht_seq, hb, hσ, h_jump⟩ :=
     S.exists_drift_variance_jumpMeasure_along_seq h_finite_small_mass
-  refine ⟨b, σ_sq, ν, ?_, ?_⟩
+  -- Corrected witnesses: drift `b' = b_r + ∫_{r≤|x|<1} x dν`, Gaussian variance
+  -- `σ_G² = σ_sq_r − ∫_{|x|<r} x² dν` (≥ 0, packaged via `Real.toNNReal`).
+  refine ⟨b_r + ∫ x in {x | r ≤ |x| ∧ |x| < 1}, x ∂ν,
+    Real.toNNReal ((σ_sq_r : ℝ) - ∫ x in {x | |x| < r}, x ^ 2 ∂ν), ν, ?_, ?_⟩
   · -- A finite measure with ν{0}=0 is a Lévy measure: `min(1,x²) ≤ 1` and `ν univ < ∞`.
     refine ⟨hν_zero, ?_⟩
     have hbound : ∀ x : ℝ, ENNReal.ofReal (min 1 (x ^ 2)) ≤ 1 := fun x => by
@@ -4420,7 +4473,14 @@ theorem psi_decomposition
       _ = ν Set.univ := lintegral_one
       _ < ⊤ := hν_fin.measure_univ_lt_top
   · intro ξ
-    exact S.psi_eq_levyKhintchine_formula b σ_sq hν_zero ht_seq hb hσ h_jump ξ
+    -- σ_G² ≥ 0, so its `Real.toNNReal` coercion is honest (no truncation).
+    have hr_pos : (0 : ℝ) < r := by linarith [hr_mem.1]
+    have hnn : (0 : ℝ) ≤ (σ_sq_r : ℝ) - ∫ x in {x | |x| < r}, x ^ 2 ∂ν := by
+      have := S.smallBall_second_moment_nu_le hr_pos hν_zero hν_r hσ h_jump
+      linarith
+    rw [show (↑(Real.toNNReal ((σ_sq_r : ℝ) - ∫ x in {x | |x| < r}, x ^ 2 ∂ν)) : ℝ)
+          = (σ_sq_r : ℝ) - ∫ x in {x | |x| < r}, x ^ 2 ∂ν from Real.coe_toNNReal _ hnn]
+    exact S.psi_eq_levyKhintchine_formula hr_mem b_r σ_sq_r hν_zero hν_r ht_seq hb hσ h_jump ξ
 
 end ConvolutionSemigroup
 
