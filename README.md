@@ -88,14 +88,10 @@ A Lean 4 formalization of Lévy processes, built on top of mathlib.
 - Sub-lemmas 1–3 fully proved: non-vanishing, continuous logarithm, conditional negative definiteness
 - Schoenberg helper lemmas, convolution semigroup structure
 - Sub-lemma 4: Schoenberg's theorem proved via kernel factorization + spectral decomposition; convolution semigroup construction complete
-- Lévy–Khintchine assembly uses the finite-ν pivot: `(b, σ², ν)` extracted along a single subsequence via `exists_drift_variance_jumpMeasure_along_seq`; one sorry remains
+- Lévy–Khintchine assembly uses the finite-ν pivot: `(b, σ², ν)` extracted along a single subsequence via `exists_drift_variance_jumpMeasure_along_seq`; representation theorem fully proved
+- Analytic limit identification (`psi_eq_levyKhintchine_formula`) fully proved: chains the scalar large-jump limit, drift term, small-jump 3rd-order Taylor remainder (via δ-truncation), and large-jump cutoff approximations to conclude `t⁻¹(charFun μ_t − 1) → Ψ(ξ)`
 
-## Incomplete
-
-Exactly one sorry remains across the entire codebase:
-
-**`LeanLevy/Levy/LevyKhintchineProof.lean`** (1 sorry):
-- **`psi_eq_levyKhintchine_formula`** — Analytic limit identification: chain the scalar large-jump limit, drift term, small-jump 3rd-order Taylor remainder (via δ-truncation), and large-jump cutoff approximations to conclude `t⁻¹(charFun μ_t − 1) → Ψ(ξ)`. Uses the finite-ν pivot: `(b, σ², ν)` are extracted from a single diagonal subsequence, so no per-cutoff consistency or shell gluing is required.
+The entire codebase is **sorry-free**.
 
 ## Building
 
