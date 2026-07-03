@@ -1597,6 +1597,55 @@ private lemma scaled_mass_bound_real_with_max (ε : ℝ) (hε : 0 < ε)
     _ = ε * (4 * M / ε) := by rw [hint_const]
     _ = 4 * M := by field_simp [hε.ne']
 
+/-- **Tail decay of the scaled mass, uniform in `t`.** For every `ε > 0` there is a
+radius `R ≥ 1` beyond which the scaled mass `t⁻¹ · μ_t({|x| ≥ R})` is at most `ε`,
+uniformly over all `t > 0`. Since `ψ` is continuous with `ψ 0 = 0`, its norm is small
+on `[0, 2/R]` for large `R`, and `scaled_mass_bound_real_with_max` converts that into
+a mass bound. This is the tightness input for the canonical-measure extraction. -/
+private lemma scaled_largeSet_mass_le_of_large_radius (ε : ℝ) (hε : 0 < ε) :
+    ∃ R : ℝ, 1 ≤ R ∧ ∀ t : {t : ℝ // 0 < t},
+      t.val⁻¹ * ((S.measure t : Measure ℝ) (largeSet R)).toReal ≤ ε := by
+  -- Since `ψ` is continuous with `ψ 0 = 0`, `‖ψ‖` is small on a neighbourhood of `0`.
+  have hξ_exist : ∃ r : ℝ, 0 < r ∧ ∀ ξ, |ξ| < r → ‖S.exponent ξ‖ < ε/4 := by
+    have htend : Tendsto (fun ξ : ℝ => ‖S.exponent ξ‖) (𝓝 0) (𝓝 0) := by
+      have h1 : Tendsto S.exponent (𝓝 0) (𝓝 0) := by
+        have := S.exponent_continuous.tendsto 0
+        rw [S.exponent_zero] at this
+        exact this
+      have h2 : Tendsto (fun z : ℂ => ‖z‖) (𝓝 0) (𝓝 0) := by
+        have := (continuous_norm (E := ℂ)).tendsto 0
+        simpa using this
+      exact h2.comp h1
+    have hnhds : ∀ᶠ ξ in 𝓝 (0 : ℝ), ‖S.exponent ξ‖ < ε/4 :=
+      htend.eventually (Iio_mem_nhds (by linarith))
+    rw [Metric.eventually_nhds_iff] at hnhds
+    obtain ⟨r, hr_pos, hr⟩ := hnhds
+    exact ⟨r, hr_pos, fun ξ hξ => hr (by simpa [Real.dist_eq, sub_zero] using hξ)⟩
+  obtain ⟨r, hr_pos, hr⟩ := hξ_exist
+  -- Choose `R ≥ 1` large enough that `2/R < r`, so `[0, 2/R] ⊆ [0, r)`.
+  set R := max (1 : ℝ) (2 / r + 1) with hR_def
+  have hR_ge_one : 1 ≤ R := le_max_left _ _
+  have hR_pos : 0 < R := lt_of_lt_of_le one_pos hR_ge_one
+  have hR_inv : 2 / R < r := by
+    have h_denom_pos : (0 : ℝ) < 2 / r + 1 := by positivity
+    have h1 : 2 / R ≤ 2 / (2 / r + 1) :=
+      div_le_div_of_nonneg_left (by norm_num) h_denom_pos (le_max_right _ _)
+    have h2 : 2 / (2 / r + 1) < r := by
+      rw [div_lt_iff₀ h_denom_pos]
+      have h3 : (2 / r + 1) * r = 2 + r := by field_simp
+      linarith [h3]
+    linarith
+  have hM_bound : ∀ ξ ∈ Set.Icc (0:ℝ) (2/R), ‖S.exponent ξ‖ ≤ ε/4 := by
+    intro ξ hξ
+    have h1 : |ξ| < r := by
+      rw [abs_of_nonneg hξ.1]
+      exact lt_of_le_of_lt hξ.2 hR_inv
+    exact le_of_lt (hr ξ h1)
+  refine ⟨R, hR_ge_one, fun t => ?_⟩
+  calc t.val⁻¹ * ((S.measure t : Measure ℝ) (largeSet R)).toReal
+      ≤ 4 * (ε/4) := S.scaled_mass_bound_real_with_max R hR_pos (ε/4) (by positivity) hM_bound t
+    _ = ε := by ring
+
 /-! ### 3.2b — Finite Lévy measure on `ℝ \ {0}` under uniform small-jump mass
 
 Under the additional hypothesis that the scaled mass on `smallSet` is uniformly bounded
