@@ -2225,6 +2225,123 @@ private lemma integrableOn_sq_smallSet (μ : Measure ℝ) [IsFiniteMeasure μ] :
         rwa [sq_abs] at h3
       rw [abs_of_nonneg (sq_nonneg x)]; linarith)
 
+/-! ### Canonical (tilted) scaled measures
+
+`min(1, x²) · (t⁻¹ μ_t)` has uniformly bounded mass with NO small-jump hypothesis:
+the tilt kills the small-jump blow-up (second-moment bound) while the tail carries
+the large-jump mass bound. Its weak limit is Khintchine's canonical measure. -/
+
+/-- The scaled measure `t⁻¹ · μ_t` tilted by the density `min 1 x²`. -/
+noncomputable def tiltedScaledMeasure (t : {t : ℝ // 0 < t}) : Measure ℝ :=
+  (S.scaledMeasure t).withDensity (fun x => ENNReal.ofReal (min 1 (x ^ 2)))
+
+/-- A real bound on the scaled mass `t⁻¹ · μ_t(A)` lifts to an `ℝ≥0∞` bound on
+`scaledMeasure t A`. -/
+private lemma scaledMeasure_apply_le_ofReal (t : {t : ℝ // 0 < t}) (A : Set ℝ) (c : ℝ)
+    (h : t.val⁻¹ * ((S.measure t : Measure ℝ) A).toReal ≤ c) :
+    S.scaledMeasure t A ≤ ENNReal.ofReal c := by
+  rw [S.scaledMeasure_apply,
+    show (S.measure t : Measure ℝ) A = ENNReal.ofReal ((S.measure t : Measure ℝ) A).toReal from
+      (ENNReal.ofReal_toReal (measure_ne_top _ _)).symm,
+    ← ENNReal.ofReal_mul (le_of_lt (inv_pos.mpr t.prop))]
+  exact ENNReal.ofReal_le_ofReal h
+
+/-- Integrals against the tilted measure are tilt-weighted integrals against `μ_t`. -/
+lemma tiltedScaledMeasure_integral_eq (t : {t : ℝ // 0 < t}) (g : ℝ → ℝ)
+    (_hg : Continuous g) (_hg_bdd : ∃ M, ∀ x, |g x| ≤ M) :
+    ∫ x, g x ∂(S.tiltedScaledMeasure t) =
+      t.val⁻¹ * ∫ x, g x * min 1 (x ^ 2) ∂(S.measure t : Measure ℝ) := by
+  have hmeas : Measurable (fun x : ℝ => ENNReal.ofReal (min 1 (x ^ 2))) :=
+    ENNReal.measurable_ofReal.comp (measurable_const.min (continuous_pow 2).measurable)
+  have hpt : ∀ x : ℝ,
+      (ENNReal.ofReal (min 1 (x ^ 2))).toReal • g x = g x * min 1 (x ^ 2) := by
+    intro x
+    rw [ENNReal.toReal_ofReal (le_min zero_le_one (sq_nonneg x)), smul_eq_mul, mul_comm]
+  rw [show S.tiltedScaledMeasure t = (S.scaledMeasure t).withDensity
+        (fun x => ENNReal.ofReal (min 1 (x ^ 2))) from rfl,
+    integral_withDensity_eq_integral_toReal_smul hmeas
+      (Eventually.of_forall fun _ => ENNReal.ofReal_lt_top),
+    integral_congr_ae (Eventually.of_forall hpt),
+    S.integral_scaledMeasure, smul_eq_mul]
+
+/-- Eventual uniform total-mass bound on the tilted measures as `t → 0⁺`. -/
+lemma tiltedScaledMeasure_mass_eventually_le :
+    ∃ C : ℝ≥0, 0 < C ∧ ∀ᶠ (t : {t : ℝ // 0 < t}) in comap Subtype.val (𝓝[>] (0 : ℝ)),
+      S.tiltedScaledMeasure t Set.univ ≤ (C : ℝ≥0∞) := by
+  obtain ⟨C₂, hC₂_pos, hC₂⟩ := S.scaledMeasure_small_second_moment_bounded
+  obtain ⟨C_large, hC_large⟩ := S.scaled_mass_bound_real 1 one_pos
+  refine ⟨C₂.toNNReal + C_large + 1, zero_lt_one.trans_le le_add_self, ?_⟩
+  filter_upwards [hC₂] with t ht
+  -- Bound on the small-jump part: tilt = x², controlled by the second moment.
+  have hA : ∫⁻ x in smallSet, ENNReal.ofReal (min 1 (x ^ 2)) ∂(S.scaledMeasure t)
+      ≤ ENNReal.ofReal C₂ := by
+    have hfg : Set.EqOn (fun x : ℝ => ENNReal.ofReal (min 1 (x ^ 2)))
+        (fun x => ENNReal.ofReal (x ^ 2)) smallSet := by
+      intro x hx
+      have hx2 : x ^ 2 ≤ 1 := by nlinarith [sq_abs x, abs_nonneg x, mem_smallSet.mp hx]
+      simp [min_eq_right hx2]
+    rw [setLIntegral_congr_fun measurableSet_smallSet hfg]
+    simp only [scaledMeasure]
+    rw [Measure.restrict_smul, lintegral_smul_measure, smul_eq_mul,
+        ← ofReal_integral_eq_lintegral_ofReal (integrableOn_sq_smallSet (S.measure t : Measure ℝ))
+          (ae_of_all _ fun x => sq_nonneg x),
+        ← ENNReal.ofReal_mul (le_of_lt (inv_pos.mpr t.prop))]
+    exact ENNReal.ofReal_le_ofReal ht
+  -- Bound on the large-jump part: tilt ≤ 1, controlled by the large-jump mass bound.
+  have hB : ∫⁻ x in smallSetᶜ, ENNReal.ofReal (min 1 (x ^ 2)) ∂(S.scaledMeasure t)
+      ≤ ENNReal.ofReal (C_large : ℝ) := by
+    have hle1 : ∫⁻ x in smallSetᶜ, ENNReal.ofReal (min 1 (x ^ 2)) ∂(S.scaledMeasure t)
+        ≤ S.scaledMeasure t smallSetᶜ := by
+      calc ∫⁻ x in smallSetᶜ, ENNReal.ofReal (min 1 (x ^ 2)) ∂(S.scaledMeasure t)
+          ≤ ∫⁻ _ in smallSetᶜ, 1 ∂(S.scaledMeasure t) :=
+            lintegral_mono (fun x => ENNReal.ofReal_le_one.mpr (min_le_left _ _))
+        _ = S.scaledMeasure t smallSetᶜ := setLIntegral_one _
+    refine hle1.trans ?_
+    rw [smallSet_eq_compl_largeSet, compl_compl]
+    exact S.scaledMeasure_apply_le_ofReal t (largeSet 1) (C_large : ℝ) (hC_large t)
+  -- Assemble: total mass = small + large parts.
+  have hmass : S.tiltedScaledMeasure t Set.univ
+      = ∫⁻ x, ENNReal.ofReal (min 1 (x ^ 2)) ∂(S.scaledMeasure t) := by
+    rw [show S.tiltedScaledMeasure t = (S.scaledMeasure t).withDensity
+          (fun x => ENNReal.ofReal (min 1 (x ^ 2))) from rfl,
+      withDensity_apply _ MeasurableSet.univ]
+    exact setLIntegral_univ _
+  have hsplit : ∫⁻ x, ENNReal.ofReal (min 1 (x ^ 2)) ∂(S.scaledMeasure t)
+      = ∫⁻ x in smallSet, ENNReal.ofReal (min 1 (x ^ 2)) ∂(S.scaledMeasure t)
+        + ∫⁻ x in smallSetᶜ, ENNReal.ofReal (min 1 (x ^ 2)) ∂(S.scaledMeasure t) :=
+    (lintegral_add_compl _ measurableSet_smallSet).symm
+  rw [hmass, hsplit]
+  calc ∫⁻ x in smallSet, ENNReal.ofReal (min 1 (x ^ 2)) ∂(S.scaledMeasure t)
+        + ∫⁻ x in smallSetᶜ, ENNReal.ofReal (min 1 (x ^ 2)) ∂(S.scaledMeasure t)
+      ≤ ENNReal.ofReal C₂ + ENNReal.ofReal (C_large : ℝ) := add_le_add hA hB
+    _ ≤ ((C₂.toNNReal + C_large + 1 : ℝ≥0) : ℝ≥0∞) := by
+        have e1 : ENNReal.ofReal C₂ = (↑C₂.toNNReal : ℝ≥0∞) := rfl
+        have e2 : ENNReal.ofReal (C_large : ℝ) = (↑C_large : ℝ≥0∞) := ENNReal.ofReal_coe_nnreal
+        rw [e1, e2, ENNReal.coe_add, ENNReal.coe_add, ENNReal.coe_one]
+        exact le_self_add
+
+/-- Uniform tail bound: for every `ε > 0` some radius `R ≥ 1` has
+`tiltedScaledMeasure t (largeSet R) ≤ ε` for all `t`. -/
+lemma tiltedScaledMeasure_largeSet_le (ε : ℝ) (hε : 0 < ε) :
+    ∃ R : ℝ, 1 ≤ R ∧ ∀ t : {t : ℝ // 0 < t},
+      S.tiltedScaledMeasure t (largeSet R) ≤ ENNReal.ofReal ε := by
+  obtain ⟨R, hR1, hR⟩ := S.scaled_largeSet_mass_le_of_large_radius ε hε
+  refine ⟨R, hR1, fun t => ?_⟩
+  -- On `largeSet R` the tilt equals `1`, so the tilted mass is the plain scaled mass.
+  have hfg : Set.EqOn (fun x : ℝ => ENNReal.ofReal (min 1 (x ^ 2)))
+      (fun _ => (1 : ℝ≥0∞)) (largeSet R) := by
+    intro x hx
+    have hx1 : (1 : ℝ) ≤ x ^ 2 := by
+      nlinarith [sq_abs x, abs_nonneg x, hR1, mem_largeSet.mp hx]
+    simp [min_eq_left hx1]
+  have heq : S.tiltedScaledMeasure t (largeSet R) = S.scaledMeasure t (largeSet R) := by
+    rw [show S.tiltedScaledMeasure t = (S.scaledMeasure t).withDensity
+          (fun x => ENNReal.ofReal (min 1 (x ^ 2))) from rfl,
+      withDensity_apply _ (measurableSet_largeSet R),
+      setLIntegral_congr_fun (measurableSet_largeSet R) hfg, setLIntegral_one]
+  rw [heq]
+  exact S.scaledMeasure_apply_le_ofReal t (largeSet R) ε (hR t)
+
 /-- The scaled first moment on `{|x| < r}` is eventually bounded along `t_n → 0`, so
 Bolzano-Weierstrass gives a convergent subsequence.  Boundedness follows from the sin
 decomposition: `t⁻¹∫_{|x|<r} x = Im((charFun-1)/t) − t⁻¹∫_{largeSet r} sin + t⁻¹∫_{|x|<r}(x-sin)`,
