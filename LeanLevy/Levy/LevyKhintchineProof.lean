@@ -3763,12 +3763,77 @@ private lemma scaled_band_integral_tendsto
   refine h_sub_lim.congr (fun k => ?_)
   rw [h_split (S.measure (t_seq k) : Measure ℝ) (measure_lt_top _ _), mul_sub]
 
+/-- `x²` is integrable on the ball `{|x| < r}` under any Lévy measure. On the ball the bound
+`x² ≤ max 1 (r²) · min 1 (x²)` holds pointwise (case on `x² ≤ 1`), so the ν-integral is
+controlled by `∫⁻ min(1, x²) dν < ⊤`. -/
+private lemma sq_integrableOn_ball_levy
+    {ν : Measure ℝ} (hν : IsLevyMeasure ν) (r : ℝ) :
+    IntegrableOn (fun x : ℝ => x ^ 2) {x : ℝ | |x| < r} ν := by
+  set K : ℝ := max 1 (r ^ 2) with hK_def
+  have hK1 : (1 : ℝ) ≤ K := le_max_left _ _
+  have hK_nn : (0 : ℝ) ≤ K := le_trans zero_le_one hK1
+  refine ⟨(continuous_pow 2).aestronglyMeasurable, ?_⟩
+  rw [hasFiniteIntegral_iff_enorm]
+  have hbound : ∫⁻ x in {x : ℝ | |x| < r}, ‖x ^ 2‖ₑ ∂ν ≤
+      ENNReal.ofReal K * ∫⁻ x, ENNReal.ofReal (min 1 (x ^ 2)) ∂ν := by
+    calc ∫⁻ x in {x : ℝ | |x| < r}, ‖x ^ 2‖ₑ ∂ν
+        ≤ ∫⁻ x in {x : ℝ | |x| < r}, ENNReal.ofReal (K * min 1 (x ^ 2)) ∂ν := by
+          refine setLIntegral_mono ?_ (fun x hx => ?_)
+          · exact ENNReal.measurable_ofReal.comp
+              (measurable_const.mul (measurable_const.min (measurable_id'.pow_const 2)))
+          · rw [Real.enorm_eq_ofReal (sq_nonneg x)]
+            refine ENNReal.ofReal_le_ofReal ?_
+            have hxr : |x| < r := hx
+            by_cases hle : x ^ 2 ≤ 1
+            · rw [min_eq_right hle]
+              exact le_mul_of_one_le_left (sq_nonneg x) hK1
+            · rw [min_eq_left (not_le.mp hle).le, mul_one]
+              have hx2 : x ^ 2 < r ^ 2 := by
+                have h := abs_lt.mp hxr
+                nlinarith [h.1, h.2]
+              exact le_trans (le_of_lt hx2) (le_max_right _ _)
+      _ = ∫⁻ x in {x : ℝ | |x| < r}, ENNReal.ofReal K * ENNReal.ofReal (min 1 (x ^ 2)) ∂ν := by
+          refine lintegral_congr (fun x => ?_)
+          rw [ENNReal.ofReal_mul hK_nn]
+      _ ≤ ∫⁻ x, ENNReal.ofReal K * ENNReal.ofReal (min 1 (x ^ 2)) ∂ν :=
+          setLIntegral_le_lintegral _ _
+      _ = ENNReal.ofReal K * ∫⁻ x, ENNReal.ofReal (min 1 (x ^ 2)) ∂ν :=
+          lintegral_const_mul' _ _ ENNReal.ofReal_ne_top
+  exact lt_of_le_of_lt hbound (ENNReal.mul_lt_top ENNReal.ofReal_lt_top hν.2)
+
+/-- The cubic Taylor remainder is integrable on the ball `{|x| < r}` (for `r ≤ 1`) under any
+Lévy measure: on the ball it equals `levyCompensatedIntegrand ξ x + (xξ)²/2`, and both summands
+are ν-integrable (the compensated integrand globally, the quadratic term by
+`sq_integrableOn_ball_levy`). -/
+private lemma remainder_integrableOn_ball_levy
+    {r : ℝ} (hr1 : r ≤ 1) (ξ : ℝ) {ν : Measure ℝ} (hν : IsLevyMeasure ν) :
+    IntegrableOn
+      (fun x : ℝ => exp ((↑x : ℂ) * ↑ξ * I) - 1 - (↑x : ℂ) * ↑ξ * I + ((↑x : ℂ) * ↑ξ) ^ 2 / 2)
+      {x : ℝ | |x| < r} ν := by
+  have hmeas : MeasurableSet {x : ℝ | |x| < r} :=
+    (isOpen_lt continuous_abs continuous_const).measurableSet
+  have hcomp : IntegrableOn (levyCompensatedIntegrand ξ) {x : ℝ | |x| < r} ν :=
+    (integrable_levyCompensatedIntegrand hν ξ).integrableOn
+  have hquad : IntegrableOn (fun x : ℝ => ((↑x : ℂ) * ↑ξ) ^ 2 / 2) {x : ℝ | |x| < r} ν := by
+    have hrw : (fun x : ℝ => ((↑x : ℂ) * ↑ξ) ^ 2 / 2) =
+        fun x : ℝ => (↑((x ^ 2 * (ξ ^ 2 / 2) : ℝ)) : ℂ) := by
+      funext x; push_cast; ring
+    rw [hrw]
+    exact ((sq_integrableOn_ball_levy hν r).mul_const (ξ ^ 2 / 2)).ofReal
+  have hsum : IntegrableOn
+      (levyCompensatedIntegrand ξ + fun x : ℝ => ((↑x : ℂ) * ↑ξ) ^ 2 / 2)
+      {x : ℝ | |x| < r} ν := hcomp.add hquad
+  refine hsum.congr_fun (fun x hx => ?_) hmeas
+  have hx1 : |x| < 1 := lt_of_lt_of_le hx hr1
+  simp only [Pi.add_apply, levyCompensatedIntegrand_def, if_pos hx1]
+  ring
+
 /-- The `ν`-small-ball second moment is dominated by the scaled-second-moment limit:
 `∫_{|x|<r} x² dν ≤ σ_sq_r`. This makes the Gaussian variance
 `σ_G² = σ_sq_r − ∫_{|x|<r} x² dν` nonnegative. -/
 private lemma smallBall_second_moment_nu_le
     {r : ℝ} (hr : 0 < r)
-    {ν : Measure ℝ} [IsFiniteMeasure ν] (hν_zero : ν {0} = 0)
+    {ν : Measure ℝ} (hν : IsLevyMeasure ν) (hν_zero : ν {0} = 0)
     (hν_r : ν {x | |x| = r} = 0)
     {t_seq : ℕ → {t : ℝ // 0 < t}} {σ_sq_r : ℝ}
     (hσ : Tendsto (fun k => (t_seq k).val⁻¹ *
@@ -3796,7 +3861,7 @@ private lemma smallBall_second_moment_nu_le
   have h_meas_ball : MeasurableSet {x : ℝ | |x| < r} :=
     (isOpen_lt continuous_abs continuous_const).measurableSet
   -- Atom-free shrinking sequence `δ m ↓ 0` inside `(0, r)`.
-  obtain ⟨δ, hδ_pos, hδ_lt, hδ_null, hδ_tendsto⟩ := exists_atomFree_seq_tendsto_zero ν hr
+  obtain ⟨δ, hδ_pos, hδ_lt, hδ_null, hδ_tendsto⟩ := hν.exists_atomFree_seq_tendsto_zero hr
   -- Per-`m` ν-band second moment, bounded by `σ_sq_r`.
   have h_band_le : ∀ m, ∫ x in {x | δ m ≤ |x| ∧ |x| < r}, x ^ 2 ∂ν ≤ σ_sq_r := by
     intro m
@@ -3811,7 +3876,7 @@ private lemma smallBall_second_moment_nu_le
         ∫ x in {x | δ m ≤ |x| ∧ |x| < r}, x ^ 2 ∂(S.measure (t_seq k) : Measure ℝ))
         atTop (𝓝 (∫ x in {x | δ m ≤ |x| ∧ |x| < r}, x ^ 2 ∂ν)) := by
       have h := S.scaled_band_integral_tendsto (hδ := hδ_pos m) (hδρ := hδ_lt m)
-        g hg_cont hr2_nn hg_bnd (IsLevyMeasure.of_isFiniteMeasure hν_zero) (hδ_null m) hν_r h_jump
+        g hg_cont hr2_nn hg_bnd hν (hδ_null m) hν_r h_jump
       -- Swap `g` for `x²` on the band (it lies in the ball where `g = x²`).
       have hswap : ∀ (μ : Measure ℝ),
           ∫ x in {x | δ m ≤ |x| ∧ |x| < r}, g x ∂μ =
@@ -3859,23 +3924,22 @@ private lemma smallBall_second_moment_nu_le
   have h_lim : Tendsto (fun m => ∫ x, f m x ∂ν) atTop
       (𝓝 (∫ x, Set.indicator {x : ℝ | |x| < r} (fun x => x ^ 2) x ∂ν)) := by
     refine MeasureTheory.tendsto_integral_of_dominated_convergence
-      (bound := fun x => Set.indicator {x : ℝ | |x| < r} (fun x => r ^ 2) x)
+      (bound := fun x => Set.indicator {x : ℝ | |x| < r} (fun x => x ^ 2) x)
       (fun m => ((continuous_pow 2).aestronglyMeasurable.indicator (h_meas_band' m)))
       ?_ ?_ ?_
-    · -- the dominating function is integrable.
-      exact (integrable_const (r ^ 2)).indicator h_meas_ball
-    · -- domination `|f m x| ≤ r²·1_ball x`.
+    · -- the dominating function `x²·1_ball` is ν-integrable (Lévy small-ball second moment).
+      exact (integrable_indicator_iff h_meas_ball).mpr (sq_integrableOn_ball_levy hν r)
+    · -- domination `|f m x| ≤ x²·1_ball x`.
       intro m
       refine Filter.Eventually.of_forall (fun x => ?_)
       simp only [Real.norm_eq_abs, hf_def, Set.indicator_apply]
       by_cases hx : x ∈ {x : ℝ | δ m ≤ |x| ∧ |x| < r}
       · have hxr : x ∈ {x : ℝ | |x| < r} := hx.2
         rw [if_pos hx, if_pos hxr]
-        have : x ^ 2 ≤ r ^ 2 := by rw [← hg_eq_ball x hxr]; exact min_le_right _ _
-        rw [abs_of_nonneg (sq_nonneg x)]; exact this
+        exact le_of_eq (abs_of_nonneg (sq_nonneg x))
       · rw [if_neg hx]
         simp only [abs_zero]
-        split <;> [exact hr2_nn; exact le_refl 0]
+        split <;> [exact sq_nonneg x; exact le_refl 0]
     · -- pointwise convergence ν-a.e. (off the ν-null point `0`).
       have h_ae : ∀ᵐ x ∂ν, x ≠ 0 := by
         rw [ae_iff]
@@ -4017,7 +4081,7 @@ Re/Im split (à la `scaled_largeSet_charFun_tendsto`), feeding the *clamped* rea
 parts to `scaled_band_integral_tendsto`. -/
 private lemma remainder_band_tendsto
     {δ r : ℝ} (hδ : 0 < δ) (hδr : δ < r) (hr1 : r ≤ 1) (ξ : ℝ)
-    {ν : Measure ℝ} [IsFiniteMeasure ν] (hν_zero : ν {0} = 0)
+    {ν : Measure ℝ} (hν : IsLevyMeasure ν)
     (hν_δ : ν {x | |x| = δ} = 0) (hν_r : ν {x | |x| = r} = 0)
     {t_seq : ℕ → {t : ℝ // 0 < t}}
     (h_jump : ∀ (f : BoundedContinuousFunction ℝ ℝ),
@@ -4056,14 +4120,17 @@ private lemma remainder_band_tendsto
   have hRc_eq : ∀ x ∈ band, Rc x = R x := fun x hx => by
     show R (max (-r) (min x r)) = R x
     rw [clamp_eq_of_abs_lt hx.2]
-  -- Decomposition of the complex band integral via Re/Im of `Rc`, for any finite measure.
-  have h_decomp : ∀ (m : Measure ℝ) [IsFiniteMeasure m],
+  -- The band has finite `ν`-mass (it avoids a neighbourhood of `0`).
+  have hν_band : ν band < ⊤ :=
+    lt_of_le_of_lt (measure_mono (fun x hx => hx.1)) (hν.measure_setOf_abs_ge_lt_top hδ)
+  -- Decomposition of the complex band integral via Re/Im of `Rc`, for any measure finite on the band.
+  have h_decomp : ∀ (m : Measure ℝ), m band < ⊤ →
       ∫ x in band, R x ∂m =
         (↑(∫ x in band, gRe x ∂m) : ℂ) + (↑(∫ x in band, gIm x ∂m) : ℂ) * I := by
-    intro m _
+    intro m hm
     have hR_int : IntegrableOn R band m := by
       have : IntegrableOn Rc band m :=
-        integrableOn_of_bounded hRc_cont (fun x => by
+        integrableOn_of_bounded_of_measure_lt_top hm hRc_cont (fun x => by
           simpa [Real.norm_eq_abs] using hRc_bnd x)
       exact this.congr_fun hRc_eq h_meas_band
     have h := setIntegral_re_add_im hR_int
@@ -4081,12 +4148,12 @@ private lemma remainder_band_tendsto
       ∫ x in band, gRe x ∂(S.measure (t_seq k) : Measure ℝ))
       atTop (𝓝 (∫ x in band, gRe x ∂ν)) :=
     S.scaled_band_integral_tendsto hδ hδr gRe hgRe_cont hM_nn hgRe_bnd
-      (IsLevyMeasure.of_isFiniteMeasure hν_zero) hν_δ hν_r h_jump
+      hν hν_δ hν_r h_jump
   have h_im_lim : Tendsto (fun k => (t_seq k).val⁻¹ *
       ∫ x in band, gIm x ∂(S.measure (t_seq k) : Measure ℝ))
       atTop (𝓝 (∫ x in band, gIm x ∂ν)) :=
     S.scaled_band_integral_tendsto hδ hδr gIm hgIm_cont hM_nn hgIm_bnd
-      (IsLevyMeasure.of_isFiniteMeasure hν_zero) hν_δ hν_r h_jump
+      hν hν_δ hν_r h_jump
   -- Recombine into the complex limit.
   have h_re_lim_C : Tendsto (fun k => (↑((t_seq k).val⁻¹ *
       ∫ x in band, gRe x ∂(S.measure (t_seq k) : Measure ℝ)) : ℂ))
@@ -4097,9 +4164,9 @@ private lemma remainder_band_tendsto
       atTop (𝓝 ((↑(∫ x in band, gIm x ∂ν) : ℂ) * I)) :=
     ((Complex.continuous_ofReal.tendsto _).comp h_im_lim).mul_const I
   have h_sum := h_re_lim_C.add h_im_lim_C
-  rw [← h_decomp ν] at h_sum
+  rw [← h_decomp ν hν_band] at h_sum
   refine h_sum.congr (fun k => ?_)
-  rw [h_decomp (S.measure (t_seq k) : Measure ℝ)]
+  rw [h_decomp (S.measure (t_seq k) : Measure ℝ) (measure_lt_top _ _)]
   push_cast
   ring
 
@@ -4129,8 +4196,12 @@ integral of the cubic remainder is dominated by the inner-ball second moment:
 `‖∫_{|x|<δ} R dm‖ ≤ (2/9)|ξ|³·δ·∫_{|x|<δ} x² dm`. (Cube bound `‖R x‖ ≤ (2/9)|ξ|³|x|³`,
 then `|x|³ ≤ δ·x²` on the ball.) -/
 private lemma remainder_inner_ball_norm_le
-    {δ : ℝ} (hδ : 0 < δ) (hδ1 : δ ≤ 1) (ξ : ℝ) (hδξ : δ * |ξ| ≤ 1)
-    (m : Measure ℝ) [IsFiniteMeasure m] :
+    {δ : ℝ} (_hδ : 0 < δ) (_hδ1 : δ ≤ 1) (ξ : ℝ) (hδξ : δ * |ξ| ≤ 1)
+    (m : Measure ℝ)
+    (hRint : IntegrableOn
+      (fun x : ℝ => exp ((↑x : ℂ) * ↑ξ * I) - 1 - (↑x : ℂ) * ↑ξ * I + ((↑x : ℂ) * ↑ξ) ^ 2 / 2)
+      {x : ℝ | |x| < δ} m)
+    (hsqint : IntegrableOn (fun x : ℝ => x ^ 2) {x : ℝ | |x| < δ} m) :
     ‖∫ x in {x | |x| < δ},
         (exp ((↑x : ℂ) * ↑ξ * I) - 1 - (↑x : ℂ) * ↑ξ * I + ((↑x : ℂ) * ↑ξ) ^ 2 / 2) ∂m‖ ≤
       (2 / 9 : ℝ) * |ξ| ^ 3 * δ * ∫ x in {x | |x| < δ}, x ^ 2 ∂m := by
@@ -4154,12 +4225,11 @@ private lemma remainder_inner_ball_norm_le
   -- Integrability of `‖R‖` on the ball (`R` integrable ⟹ `‖R‖` integrable).
   have hR_int : IntegrableOn
       (fun x : ℝ => exp ((↑x : ℂ) * ↑ξ * I) - 1 - (↑x : ℂ) * ↑ξ * I + ((↑x : ℂ) * ↑ξ) ^ 2 / 2)
-      {x : ℝ | |x| < δ} m :=
-    remainder_integrableOn_ball (le_of_lt hδ) hδ1 ξ m
+      {x : ℝ | |x| < δ} m := hRint
   -- The dominating bound `(2/9)|ξ|³·δ·x²` is integrable on the ball.
   have hbound_int : IntegrableOn (fun x : ℝ => (2 / 9 : ℝ) * |ξ| ^ 3 * δ * x ^ 2)
       {x : ℝ | |x| < δ} m :=
-    (sq_integrableOn_ball δ m).const_mul ((2 / 9 : ℝ) * |ξ| ^ 3 * δ)
+    hsqint.const_mul ((2 / 9 : ℝ) * |ξ| ^ 3 * δ)
   -- Step 2: monotone comparison `∫ ‖R‖ ≤ ∫ (2/9)|ξ|³·δ·x²`.
   have hnorm_int : IntegrableOn (fun x : ℝ =>
       ‖exp ((↑x : ℂ) * ↑ξ * I) - 1 - (↑x : ℂ) * ↑ξ * I + ((↑x : ℂ) * ↑ξ) ^ 2 / 2‖)
@@ -4194,8 +4264,11 @@ private lemma remainder_inner_ball_norm_le
 finite measure, the remainder integral over the ball `{|x| < r}` is the sum of the inner-ball
 integral and the band integral. -/
 private lemma remainder_ball_split
-    {δ r : ℝ} (hδ : 0 < δ) (hδr : δ < r) (hr1 : r ≤ 1) (ξ : ℝ)
-    (m : Measure ℝ) [IsFiniteMeasure m] :
+    {δ r : ℝ} (_hδ : 0 < δ) (hδr : δ < r) (_hr1 : r ≤ 1) (ξ : ℝ)
+    (m : Measure ℝ)
+    (hRint : IntegrableOn
+      (fun x : ℝ => exp ((↑x : ℂ) * ↑ξ * I) - 1 - (↑x : ℂ) * ↑ξ * I + ((↑x : ℂ) * ↑ξ) ^ 2 / 2)
+      {x : ℝ | |x| < r} m) :
     ∫ x in {x | |x| < r},
         (exp ((↑x : ℂ) * ↑ξ * I) - 1 - (↑x : ℂ) * ↑ξ * I + ((↑x : ℂ) * ↑ξ) ^ 2 / 2) ∂m =
       (∫ x in {x | |x| < δ},
@@ -4206,8 +4279,7 @@ private lemma remainder_ball_split
     exp ((↑x : ℂ) * ↑ξ * I) - 1 - (↑x : ℂ) * ↑ξ * I + ((↑x : ℂ) * ↑ξ) ^ 2 / 2 with hR_def
   have h_inner_sub : {x : ℝ | |x| < δ} ⊆ {x : ℝ | |x| < r} := fun x hx => lt_trans hx hδr
   have h_band_sub : {x : ℝ | δ ≤ |x| ∧ |x| < r} ⊆ {x : ℝ | |x| < r} := fun x hx => hx.2
-  have hR_int_ball : IntegrableOn R {x : ℝ | |x| < r} m :=
-    remainder_integrableOn_ball (le_of_lt (hδ.trans hδr)) hr1 ξ m
+  have hR_int_ball : IntegrableOn R {x : ℝ | |x| < r} m := hRint
   have hR_int_inner : IntegrableOn R {x : ℝ | |x| < δ} m :=
     hR_int_ball.mono_set h_inner_sub
   have hR_int_band : IntegrableOn R {x : ℝ | δ ≤ |x| ∧ |x| < r} m :=
@@ -4237,7 +4309,7 @@ private lemma remainder_ball_split
 `scaled_band_integral_tendsto` (Re/Im); ν-tail by dominated convergence as `δ → 0`. -/
 private lemma scaled_smallBall_remainder_tendsto
     {r : ℝ} (hr : 0 < r) (hr1 : r ≤ 1) (ξ : ℝ)
-    {ν : Measure ℝ} [IsFiniteMeasure ν] (hν_zero : ν {0} = 0)
+    {ν : Measure ℝ} (hν : IsLevyMeasure ν) (_hν_zero : ν {0} = 0)
     (hν_r : ν {x | |x| = r} = 0)
     {t_seq : ℕ → {t : ℝ // 0 < t}}
     (hσ_bdd : ∃ C : ℝ, ∀ k, (t_seq k).val⁻¹ *
@@ -4270,7 +4342,7 @@ private lemma scaled_smallBall_remainder_tendsto
   obtain ⟨C, hC⟩ := hσ_bdd
   have hξ_pos : 0 < |ξ| := abs_pos.mpr hξ0
   have hc_pos : 0 < min r (1 / |ξ|) := lt_min hr (by positivity)
-  obtain ⟨δ, hδ_pos, hδ_lt, hδ_atom, hδ_lim⟩ := exists_atomFree_seq_tendsto_zero ν hc_pos
+  obtain ⟨δ, hδ_pos, hδ_lt, hδ_atom, hδ_lim⟩ := hν.exists_atomFree_seq_tendsto_zero hc_pos
   -- For each `m`: `δ m < r`, `δ m ≤ 1`, `δ m·|ξ| ≤ 1`.
   have hδ_ltr : ∀ m, δ m < r := fun m => (hδ_lt m).trans_le (min_le_left _ _)
   have hδ_le1 : ∀ m, δ m ≤ 1 := fun m => le_of_lt ((hδ_ltr m).trans_le hr1)
@@ -4283,7 +4355,7 @@ private lemma scaled_smallBall_remainder_tendsto
   -- Inner-ball `ν`-second moment is bounded by `Bν`.
   have hν_inner_sq_le : ∀ m, ∫ x in {x | |x| < δ m}, x ^ 2 ∂ν ≤ Bν := by
     intro m
-    refine setIntegral_mono_set (sq_integrableOn_ball r ν)
+    refine setIntegral_mono_set (sq_integrableOn_ball_levy hν r)
       (ae_restrict_of_forall_mem
         ((isOpen_lt continuous_abs continuous_const).measurableSet) (fun x _ => sq_nonneg x))
       (HasSubset.Subset.eventuallyLE (fun x hx => lt_trans hx (hδ_ltr m)))
@@ -4309,7 +4381,7 @@ private lemma scaled_smallBall_remainder_tendsto
   obtain ⟨m, hmC, hmBν⟩ := (hevC.and hevBν).exists
   -- Band limit for this `m` ⟹ an index `N` controlling the band term.
   have h_band_lim := S.remainder_band_tendsto (hδ_pos m) (hδ_ltr m) hr1 ξ
-    hν_zero (hδ_atom m) hν_r h_jump
+    hν (hδ_atom m) hν_r h_jump
   rw [Metric.tendsto_atTop] at h_band_lim
   obtain ⟨N, hN⟩ := h_band_lim (ε / 3) (by linarith)
   refine ⟨N, fun k hk => ?_⟩
@@ -4321,7 +4393,9 @@ private lemma scaled_smallBall_remainder_tendsto
   have hck_eq : ck = (↑tk : ℂ) := by rw [hck_def, htk_def]; push_cast; ring
   -- Split the ball integral (μk and ν) into inner ball + band.
   have hsplit_μ := remainder_ball_split (hδ_pos m) (hδ_ltr m) hr1 ξ μk
+    (remainder_integrableOn_ball (le_of_lt hr) hr1 ξ μk)
   have hsplit_ν := remainder_ball_split (hδ_pos m) (hδ_ltr m) hr1 ξ ν
+    (remainder_integrableOn_ball_levy hr1 ξ hν)
   -- Name the four set-integrals atomically (so `ring` treats them as opaque scalars).
   set iμ : ℂ := ∫ x in {x | |x| < δ m},
       (exp ((↑x : ℂ) * ↑ξ * I) - 1 - (↑x : ℂ) * ↑ξ * I + ((↑x : ℂ) * ↑ξ) ^ 2 / 2) ∂μk with hiμ_def
@@ -4353,6 +4427,8 @@ private lemma scaled_smallBall_remainder_tendsto
           ≤ tk * ((2 / 9 : ℝ) * |ξ| ^ 3 * δ m * ∫ x in {x | |x| < δ m}, x ^ 2 ∂μk) := by
             refine mul_le_mul_of_nonneg_left ?_ (le_of_lt htk_pos)
             exact remainder_inner_ball_norm_le (hδ_pos m) (hδ_le1 m) ξ (hδξ m) μk
+              (remainder_integrableOn_ball (le_of_lt (hδ_pos m)) (hδ_le1 m) ξ μk)
+              (sq_integrableOn_ball (δ m) μk)
         _ = (2 / 9 : ℝ) * |ξ| ^ 3 * δ m *
               (tk * ∫ x in {x | |x| < δ m}, x ^ 2 ∂μk) := by ring
         _ ≤ (2 / 9 : ℝ) * |ξ| ^ 3 * δ m * C := by
@@ -4373,6 +4449,8 @@ private lemma scaled_smallBall_remainder_tendsto
             (exp ((↑x : ℂ) * ↑ξ * I) - 1 - (↑x : ℂ) * ↑ξ * I + ((↑x : ℂ) * ↑ξ) ^ 2 / 2) ∂ν‖
           ≤ (2 / 9 : ℝ) * |ξ| ^ 3 * δ m * ∫ x in {x | |x| < δ m}, x ^ 2 ∂ν :=
             remainder_inner_ball_norm_le (hδ_pos m) (hδ_le1 m) ξ (hδξ m) ν
+              (remainder_integrableOn_ball_levy (hδ_le1 m) ξ hν)
+              (sq_integrableOn_ball_levy hν (δ m))
         _ ≤ (2 / 9 : ℝ) * |ξ| ^ 3 * δ m * Bν := by
             refine mul_le_mul_of_nonneg_left (hν_inner_sq_le m) (by have := hδ_pos m; positivity)
     calc ‖ck * iμ‖ + ‖iν‖
@@ -4386,7 +4464,7 @@ private lemma scaled_smallBall_remainder_tendsto
 assembly, where the `−σ_G²ξ²/2` regrouping is done once. -/
 private lemma scaled_smallBall_compensated_tendsto
     {r : ℝ} (hr : 0 < r) (hr1 : r ≤ 1) (ξ : ℝ)
-    {ν : Measure ℝ} [IsFiniteMeasure ν] (hν_zero : ν {0} = 0)
+    {ν : Measure ℝ} (hν : IsLevyMeasure ν) (hν_zero : ν {0} = 0)
     (hν_r : ν {x | |x| = r} = 0)
     {t_seq : ℕ → {t : ℝ // 0 < t}} {σ_sq_r : ℝ}
     (hσ : Tendsto (fun k => (t_seq k).val⁻¹ *
@@ -4407,7 +4485,7 @@ private lemma scaled_smallBall_compensated_tendsto
     obtain ⟨C, hC⟩ := bddAbove_def.mp hσ.isBoundedUnder_le.bddAbove_range
     exact ⟨C, fun k => hC _ ⟨k, rfl⟩⟩
   -- Remainder limit from lemma 1.
-  have hrem := S.scaled_smallBall_remainder_tendsto hr hr1 ξ hν_zero hν_r hσ_bdd h_jump
+  have hrem := S.scaled_smallBall_remainder_tendsto hr hr1 ξ hν hν_zero hν_r hσ_bdd h_jump
   -- The quadratic-correction limit: `↑ξ²/2 · ↑(t⁻¹·∫x²dμ_k) → ↑ξ²/2 · ↑σ_sq_r`.
   have hquad : Tendsto (fun k => (↑ξ ^ 2 / 2 : ℂ) *
       (↑((t_seq k).val⁻¹ * ∫ x in {x | |x| < r}, x ^ 2
@@ -4846,7 +4924,8 @@ theorem psi_eq_levyKhintchine_formula
     (S.charFun_scaled_limit ξ).comp htseq_filter
   -- B3: the three term-limits (types inferred from the respective lemmas).
   have hT1 := S.drift_term ξ ht_seq hb
-  have hT2 := S.scaled_smallBall_compensated_tendsto hr_pos hr.2 ξ hν_zero hν_r hσ h_jump
+  have hT2 := S.scaled_smallBall_compensated_tendsto hr_pos hr.2 ξ
+    (IsLevyMeasure.of_isFiniteMeasure hν_zero) hν_zero hν_r hσ h_jump
   have hT3 := S.scaled_largeSet_charFun_tendsto hr_pos ξ
     (IsLevyMeasure.of_isFiniteMeasure hν_zero) hν_r h_jump
   -- B4: sum of the three limits (matching the per-`n` decomposition pointwise).
@@ -4895,7 +4974,9 @@ theorem psi_decomposition
     -- σ_G² ≥ 0, so its `Real.toNNReal` coercion is honest (no truncation).
     have hr_pos : (0 : ℝ) < r := by linarith [hr_mem.1]
     have hnn : (0 : ℝ) ≤ (σ_sq_r : ℝ) - ∫ x in {x | |x| < r}, x ^ 2 ∂ν := by
-      have := S.smallBall_second_moment_nu_le hr_pos hν_zero hν_r hσ h_jump
+      haveI := hν_fin
+      have := S.smallBall_second_moment_nu_le hr_pos
+        (IsLevyMeasure.of_isFiniteMeasure hν_zero) hν_zero hν_r hσ h_jump
       linarith
     rw [show (↑(Real.toNNReal ((σ_sq_r : ℝ) - ∫ x in {x | |x| < r}, x ^ 2 ∂ν)) : ℝ)
           = (σ_sq_r : ℝ) - ∫ x in {x | |x| < r}, x ^ 2 ∂ν from Real.coe_toNNReal _ hnn]
