@@ -468,6 +468,100 @@ theorem cnd_levyCompensatedIntegrand_fixed (x : ℝ) :
   rw [key]
   exact hexp.add hlin
 
+/-! ### Integral-level properties of the compensated integrand
+
+The pointwise facts about `levyCompensatedIntegrand` lift to its integral against a Lévy
+measure `ν`: conditional negative definiteness, continuity in the frequency variable, and
+Hermitian symmetry. These feed the converse Lévy–Khintchine construction. -/
+
+/-- Against a Lévy measure, `x ↦ min 1 x²` is Bochner integrable. -/
+theorem IsLevyMeasure.integrable_min_one_sq {ν : Measure ℝ} (hν : IsLevyMeasure ν) :
+    Integrable (fun x : ℝ => min 1 (x ^ 2)) ν := by
+  refine ⟨(continuous_const.min (continuous_pow 2)).aestronglyMeasurable, ?_⟩
+  rw [hasFiniteIntegral_iff_enorm]
+  have henorm : ∀ x : ℝ, ‖min 1 (x ^ 2)‖ₑ = ENNReal.ofReal (min 1 (x ^ 2)) := fun x =>
+    Real.enorm_eq_ofReal (le_min zero_le_one (sq_nonneg x))
+  simp_rw [henorm]
+  exact hν.lintegral_min_one_sq_lt_top
+
+/-- The compensated integrand is continuous in the frequency variable `ξ`. -/
+theorem continuous_levyCompensatedIntegrand_fst (x : ℝ) :
+    Continuous (fun ξ => levyCompensatedIntegrand ξ x) := by
+  unfold levyCompensatedIntegrand
+  by_cases hx : |x| < 1
+  · simp only [if_pos hx, mul_one]; fun_prop
+  · simp only [if_neg hx, mul_zero, sub_zero]; fun_prop
+
+/-- The integral of the compensated integrand against a Lévy measure is conditionally
+negative definite in the frequency variable. -/
+theorem cnd_integral_levyCompensatedIntegrand {ν : Measure ℝ} (hν : IsLevyMeasure ν) :
+    IsConditionallyNegativeDefinite (fun ξ => ∫ x, levyCompensatedIntegrand ξ x ∂ν) := by
+  intro n ξ c hc
+  -- Each `conj (c i) · c j · f(ξᵢ - ξⱼ, ·)` is integrable against `ν`.
+  have hint : ∀ i j : Fin n,
+      Integrable (fun x => starRingEnd ℂ (c i) * c j *
+        levyCompensatedIntegrand (ξ i - ξ j) x) ν :=
+    fun i j => (integrable_levyCompensatedIntegrand hν _).const_mul _
+  have hG_int : Integrable (fun x => ∑ i, ∑ j, starRingEnd ℂ (c i) * c j *
+      levyCompensatedIntegrand (ξ i - ξ j) x) ν :=
+    integrable_finset_sum Finset.univ fun i _ =>
+      integrable_finset_sum Finset.univ fun j _ => hint i j
+  -- Pull the finite double sum through the integral (no Fubini).
+  have key : (∫ x, ∑ i, ∑ j, starRingEnd ℂ (c i) * c j *
+      levyCompensatedIntegrand (ξ i - ξ j) x ∂ν) =
+      ∑ i, ∑ j, starRingEnd ℂ (c i) * c j *
+        ∫ x, levyCompensatedIntegrand (ξ i - ξ j) x ∂ν := by
+    rw [integral_finset_sum Finset.univ
+      fun i _ => integrable_finset_sum Finset.univ fun j _ => hint i j]
+    refine Finset.sum_congr rfl fun i _ => ?_
+    rw [integral_finset_sum Finset.univ fun j _ => hint i j]
+    refine Finset.sum_congr rfl fun j _ => ?_
+    exact integral_const_mul _ _
+  show 0 ≤ (∑ i, ∑ j, starRingEnd ℂ (c i) * c j *
+    ∫ x, levyCompensatedIntegrand (ξ i - ξ j) x ∂ν).re
+  rw [← key, show (∫ x, ∑ i, ∑ j, starRingEnd ℂ (c i) * c j *
+      levyCompensatedIntegrand (ξ i - ξ j) x ∂ν).re =
+      ∫ x, (∑ i, ∑ j, starRingEnd ℂ (c i) * c j *
+        levyCompensatedIntegrand (ξ i - ξ j) x).re ∂ν from
+    ((@RCLike.reCLM ℂ _).integral_comp_comm hG_int).symm]
+  refine integral_nonneg fun x => ?_
+  exact cnd_levyCompensatedIntegrand_fixed x n ξ c hc
+
+/-- The integral of the compensated integrand against a Lévy measure is continuous in the
+frequency variable. -/
+theorem continuous_integral_levyCompensatedIntegrand {ν : Measure ℝ} (hν : IsLevyMeasure ν) :
+    Continuous (fun ξ => ∫ x, levyCompensatedIntegrand ξ x ∂ν) := by
+  rw [continuous_iff_continuousAt]
+  intro ξ₀
+  -- Dominate near `ξ₀` by `(2 + 3(|ξ₀|+1)²)·min(1, x²)`; the global bound `(2 + 3ξ²)`
+  -- grows in `ξ`, so we work at each point.
+  refine continuousAt_of_dominated
+    (bound := fun x => (2 + 3 * (|ξ₀| + 1) ^ 2) * min 1 (x ^ 2))
+    (Eventually.of_forall fun ξ => (measurable_levyCompensatedIntegrand ξ).aestronglyMeasurable)
+    ?_ (hν.integrable_min_one_sq.const_mul _)
+    (Eventually.of_forall fun x => (continuous_levyCompensatedIntegrand_fst x).continuousAt)
+  have hev : ∀ᶠ ξ in 𝓝 ξ₀, |ξ| < |ξ₀| + 1 :=
+    continuous_abs.continuousAt.eventually_lt continuousAt_const (by linarith)
+  filter_upwards [hev] with ξ hξ
+  filter_upwards with x
+  have hξ2 : ξ ^ 2 ≤ (|ξ₀| + 1) ^ 2 := by
+    nlinarith [sq_abs ξ, hξ.le, abs_nonneg ξ, abs_nonneg ξ₀]
+  have hmin : (0 : ℝ) ≤ min 1 (x ^ 2) := le_min zero_le_one (sq_nonneg x)
+  calc ‖levyCompensatedIntegrand ξ x‖
+      ≤ (2 + 3 * ξ ^ 2) * min 1 (x ^ 2) := norm_levyCompensatedIntegrand_le ξ x
+    _ ≤ (2 + 3 * (|ξ₀| + 1) ^ 2) * min 1 (x ^ 2) := by nlinarith [hξ2, hmin]
+
+/-- Hermitian symmetry of the compensated integral: reflecting the frequency conjugates the
+integral, `∫ f(-ξ, x) ∂ν = conj (∫ f(ξ, x) ∂ν)`. -/
+theorem hermitian_integral_levyCompensatedIntegrand {ν : Measure ℝ}
+    (_hν : IsLevyMeasure ν) (ξ : ℝ) :
+    ∫ x, levyCompensatedIntegrand (-ξ) x ∂ν =
+      starRingEnd ℂ (∫ x, levyCompensatedIntegrand ξ x ∂ν) :=
+  calc ∫ x, levyCompensatedIntegrand (-ξ) x ∂ν
+      = ∫ x, starRingEnd ℂ (levyCompensatedIntegrand ξ x) ∂ν :=
+        integral_congr_ae (ae_of_all ν fun x => (conj_levyCompensatedIntegrand ξ x).symm)
+    _ = starRingEnd ℂ (∫ x, levyCompensatedIntegrand ξ x ∂ν) := integral_conj
+
 /-- PSD of characteristic function: the Hermitian form with charFun values is non-negative.
 This wraps the ProbabilityMeasure-level statement for bare Measures. -/
 private theorem charFun_psd {ν : Measure ℝ} [IsProbabilityMeasure ν]
