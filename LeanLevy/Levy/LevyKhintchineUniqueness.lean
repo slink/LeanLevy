@@ -120,4 +120,292 @@ theorem smearedMeasure_singleton_zero {ν : Measure ℝ} (hν : IsLevyMeasure ν
     withDensity_apply _ (measurableSet_singleton 0),
     setLIntegral_measure_zero _ _ hν.zero_singleton, add_zero]
 
+/-!
+## The smear identity
+
+We identify the *smeared exponent* `g(ξ) = ψ_T(ξ) − ½ ∫_{[-1,1]} ψ_T(ξ+u) du` with
+`charFun (smearedMeasure σ² ν) ξ`. The drift piece cancels (its `u`-average is symmetric),
+the Gaussian piece contributes the constant `σ²/6`, and the jump piece contributes
+`∫ e^{ixξ}(1 − sinc x) dν`.
+-/
+
+section SmearIdentity
+
+variable {ν : Measure ℝ}
+
+/-- `1 − Real.sinc x` is non-negative everywhere (via the sinc lower bound). -/
+private lemma one_sub_sinc_nonneg (x : ℝ) : 0 ≤ 1 - Real.sinc x :=
+  le_trans (mul_nonneg (by positivity) (le_min zero_le_one (sq_nonneg x)))
+    (mul_min_le_one_sub_sinc x)
+
+/-- `∫_{-1}^{1} (ξ + u) du = 2ξ`. -/
+private lemma intInt_linear (ξ : ℝ) : ∫ u in (-1 : ℝ)..1, (ξ + u) = 2 * ξ := by
+  rw [intervalIntegral.integral_comp_add_left (fun v => v) ξ, integral_id]
+  ring
+
+/-- `∫_{-1}^{1} (ξ + u)² du = 2ξ² + 2/3`. -/
+private lemma intInt_quadratic (ξ : ℝ) : ∫ u in (-1 : ℝ)..1, (ξ + u) ^ 2 = 2 * ξ ^ 2 + 2 / 3 := by
+  rw [intervalIntegral.integral_comp_add_left (fun v => v ^ 2) ξ, integral_pow]
+  ring
+
+/-- The symmetric exponential average, shifted: `∫_{-1}^{1} e^{ix(ξ+u)} du = e^{ixξ}·2·sinc x`. -/
+private lemma intInt_exp_shift (ξ x : ℝ) :
+    ∫ u in (-1 : ℝ)..1, Complex.exp (↑x * ↑(ξ + u) * Complex.I)
+      = Complex.exp (↑x * ↑ξ * Complex.I) * (2 * (Real.sinc x : ℂ)) := by
+  have hcongr : (fun u : ℝ => Complex.exp (↑x * ↑(ξ + u) * Complex.I))
+      = fun u : ℝ => Complex.exp (↑x * ↑ξ * Complex.I) * Complex.exp (↑u * ↑x * Complex.I) := by
+    funext u
+    rw [← Complex.exp_add]
+    congr 1
+    push_cast; ring
+  rw [hcongr, show (∫ u in (-1 : ℝ)..1,
+        Complex.exp (↑x * ↑ξ * Complex.I) * Complex.exp (↑u * ↑x * Complex.I))
+      = Complex.exp (↑x * ↑ξ * Complex.I) * ∫ u in (-1 : ℝ)..1, Complex.exp (↑u * ↑x * Complex.I)
+    from intervalIntegral.integral_const_mul _ _]
+  congr 1
+  have h := intervalIntegral_exp_I_symm x
+  rw [← h]; ring
+
+/-- **Pointwise smear of the compensated integrand.** The compensator (linear in the
+frequency) and the constant `−1` both cancel in the `u`-average, leaving `e^{ixξ}(1 − sinc x)`. -/
+private lemma levyCompensatedIntegrand_smear (ξ x : ℝ) :
+    levyCompensatedIntegrand ξ x
+        - (1 / 2 : ℂ) * ∫ u in (-1 : ℝ)..1, levyCompensatedIntegrand (ξ + u) x
+      = Complex.exp (↑x * ↑ξ * Complex.I) * ((1 - Real.sinc x : ℝ) : ℂ) := by
+  -- Interval integrability of the two `u`-dependent pieces.
+  have hexp_int : IntervalIntegrable
+      (fun u => Complex.exp (↑x * ↑(ξ + u) * Complex.I)) volume (-1) 1 :=
+    (Complex.continuous_exp.comp (by fun_prop)).intervalIntegrable _ _
+  have hlin_int : IntervalIntegrable
+      (fun u => (↑x * ↑(ξ + u) * Complex.I * (if |x| < (1 : ℝ) then (1 : ℂ) else 0)))
+      volume (-1) 1 :=
+    (by fun_prop : Continuous fun u : ℝ =>
+      (↑x * ↑(ξ + u) * Complex.I * (if |x| < (1 : ℝ) then (1 : ℂ) else 0))).intervalIntegrable _ _
+  -- The linear (compensator) integral.
+  have hlin : (∫ u in (-1 : ℝ)..1,
+      (↑x * ↑(ξ + u) * Complex.I * (if |x| < (1 : ℝ) then (1 : ℂ) else 0)))
+      = (↑x * Complex.I * (if |x| < (1 : ℝ) then (1 : ℂ) else 0)) * (2 * (ξ : ℂ)) := by
+    have hc : (fun u : ℝ => (↑x * ↑(ξ + u) * Complex.I * (if |x| < (1 : ℝ) then (1 : ℂ) else 0)))
+        = fun u : ℝ =>
+          (↑x * Complex.I * (if |x| < (1 : ℝ) then (1 : ℂ) else 0)) * (↑(ξ + u) : ℂ) := by
+      funext u; ring
+    rw [hc, show (∫ u in (-1 : ℝ)..1,
+          (↑x * Complex.I * (if |x| < (1 : ℝ) then (1 : ℂ) else 0)) * (↑(ξ + u) : ℂ))
+        = (↑x * Complex.I * (if |x| < (1 : ℝ) then (1 : ℂ) else 0))
+            * ∫ u in (-1 : ℝ)..1, (↑(ξ + u) : ℂ)
+      from intervalIntegral.integral_const_mul _ _,
+      intervalIntegral.integral_ofReal, intInt_linear]
+    push_cast; ring
+  -- `∫_{-1}^{1} 1 du = 2`.
+  have h1c : (∫ _u in (-1 : ℝ)..1, (1 : ℂ)) = 2 := by
+    rw [intervalIntegral.integral_const]
+    show (1 - -1 : ℝ) • (1 : ℂ) = 2
+    rw [Complex.real_smul]; push_cast; ring
+  -- Closed form of the full shifted interval integral.
+  have hval : (∫ u in (-1 : ℝ)..1, levyCompensatedIntegrand (ξ + u) x)
+      = Complex.exp (↑x * ↑ξ * Complex.I) * (2 * (Real.sinc x : ℂ)) - 2
+        - (↑x * Complex.I * (if |x| < (1 : ℝ) then (1 : ℂ) else 0)) * (2 * (ξ : ℂ)) := by
+    simp only [levyCompensatedIntegrand_def]
+    rw [intervalIntegral.integral_sub (hexp_int.sub intervalIntegrable_const) hlin_int,
+        intervalIntegral.integral_sub hexp_int intervalIntegrable_const,
+        intInt_exp_shift, hlin, h1c]
+  rw [hval]
+  simp only [levyCompensatedIntegrand_def]
+  push_cast
+  ring
+
+/-- The `u`-average of the shifted compensated integrand as a difference. -/
+private lemma intInt_levyCompensatedIntegrand_eq (ξ x : ℝ) :
+    (∫ u in (-1 : ℝ)..1, levyCompensatedIntegrand (ξ + u) x)
+      = 2 * (levyCompensatedIntegrand ξ x
+          - Complex.exp (↑x * ↑ξ * Complex.I) * ((1 - Real.sinc x : ℝ) : ℂ)) := by
+  have h := levyCompensatedIntegrand_smear ξ x
+  linear_combination (-2 : ℂ) * h
+
+/-- The smeared density `e^{ixξ}(1 − sinc x)` is integrable against a Lévy measure. -/
+private lemma integrable_exp_mul_one_sub_sinc (hν : IsLevyMeasure ν) (ξ : ℝ) :
+    Integrable (fun x => Complex.exp (↑x * ↑ξ * Complex.I) * ((1 - Real.sinc x : ℝ) : ℂ)) ν := by
+  apply Integrable.mono' (g := fun x => 2 * min 1 (x ^ 2)) (hν.integrable_min_one_sq.const_mul 2)
+  · refine (Measurable.mul ?_ ?_).aestronglyMeasurable
+    · exact (((Complex.measurable_ofReal.mul measurable_const).mul measurable_const).cexp)
+    · exact Complex.measurable_ofReal.comp (measurable_const.sub Real.measurable_sinc)
+  · refine ae_of_all _ fun x => ?_
+    rw [norm_mul]
+    have hnorm_exp : ‖Complex.exp (↑x * ↑ξ * Complex.I)‖ = 1 := by
+      rw [show (↑x : ℂ) * ↑ξ * Complex.I = ↑(x * ξ) * Complex.I from by push_cast; ring]
+      exact Complex.norm_exp_ofReal_mul_I _
+    rw [hnorm_exp, one_mul, Complex.norm_real, Real.norm_eq_abs,
+        abs_of_nonneg (one_sub_sinc_nonneg x)]
+    exact one_sub_sinc_le_mul_min x
+
+/-- **Smear of the jump integral.** Fubini swaps the `u`-average with the `ν`-integral; the
+pointwise smear identity then collapses the inner average. -/
+private lemma intInt_exponent_jump (hν : IsLevyMeasure ν) (ξ : ℝ) :
+    ∫ u in (-1 : ℝ)..1, (∫ x, levyCompensatedIntegrand (ξ + u) x ∂ν)
+      = 2 * ((∫ x, levyCompensatedIntegrand ξ x ∂ν)
+          - ∫ x, Complex.exp (↑x * ↑ξ * Complex.I) * ((1 - Real.sinc x : ℝ) : ℂ) ∂ν) := by
+  haveI : IsFiniteMeasure (volume.restrict (Set.uIoc (-1 : ℝ) 1)) := by
+    rw [Set.uIoc_of_le (by norm_num : (-1 : ℝ) ≤ 1)]; infer_instance
+  haveI : SigmaFinite ν := hν.sigmaFinite
+  -- Joint measurability of `(u, x) ↦ f(ξ+u, x)`.
+  have hmeas_joint : Measurable
+      (fun p : ℝ × ℝ => levyCompensatedIntegrand (ξ + p.1) p.2) := by
+    simp only [levyCompensatedIntegrand_def]
+    refine (Measurable.sub (Measurable.sub ?_ measurable_const) ?_)
+    · exact (((Complex.measurable_ofReal.comp measurable_snd).mul
+        (Complex.measurable_ofReal.comp (measurable_const.add measurable_fst))).mul
+        measurable_const).cexp
+    · refine Measurable.mul ?_ ?_
+      · exact ((Complex.measurable_ofReal.comp measurable_snd).mul
+          (Complex.measurable_ofReal.comp (measurable_const.add measurable_fst))).mul
+          measurable_const
+      · exact measurable_const.ite
+          ((isOpen_Iio.preimage (continuous_abs.comp continuous_snd)).measurableSet)
+          measurable_const
+  -- Joint integrability, dominated by `(2 + 3(|ξ|+1)²)·min(1, x²)`.
+  have h_int : Integrable (Function.uncurry (fun u x => levyCompensatedIntegrand (ξ + u) x))
+      ((volume.restrict (Set.uIoc (-1 : ℝ) 1)).prod ν) := by
+    apply Integrable.mono' (g := fun p : ℝ × ℝ => (2 + 3 * (|ξ| + 1) ^ 2) * min 1 (p.2 ^ 2))
+      ((hν.integrable_min_one_sq.const_mul (2 + 3 * (|ξ| + 1) ^ 2)).comp_snd _)
+      hmeas_joint.aestronglyMeasurable
+    have hfst : ∀ᵐ p ∂((volume.restrict (Set.uIoc (-1 : ℝ) 1)).prod ν),
+        p.1 ∈ Set.uIoc (-1 : ℝ) 1 :=
+      Measure.quasiMeasurePreserving_fst.ae (ae_restrict_mem measurableSet_uIoc)
+    filter_upwards [hfst] with p hp
+    have hp1 : |p.1| ≤ 1 := by
+      rw [Set.uIoc_of_le (by norm_num : (-1 : ℝ) ≤ 1)] at hp
+      rw [abs_le]; exact ⟨hp.1.le, hp.2⟩
+    calc ‖Function.uncurry (fun u x => levyCompensatedIntegrand (ξ + u) x) p‖
+        = ‖levyCompensatedIntegrand (ξ + p.1) p.2‖ := rfl
+      _ ≤ (2 + 3 * (ξ + p.1) ^ 2) * min 1 (p.2 ^ 2) := norm_levyCompensatedIntegrand_le _ _
+      _ ≤ (2 + 3 * (|ξ| + 1) ^ 2) * min 1 (p.2 ^ 2) := by
+          apply mul_le_mul_of_nonneg_right _ (le_min zero_le_one (sq_nonneg _))
+          have hsq : (ξ + p.1) ^ 2 ≤ (|ξ| + 1) ^ 2 := by
+            apply sq_le_sq'
+            · nlinarith [abs_le.mp hp1, neg_abs_le ξ, le_abs_self ξ]
+            · nlinarith [abs_le.mp hp1, neg_abs_le ξ, le_abs_self ξ]
+          nlinarith [hsq]
+  rw [intervalIntegral_integral_swap h_int]
+  simp only [intInt_levyCompensatedIntegrand_eq]
+  rw [show (∫ y, 2 * (levyCompensatedIntegrand ξ y
+          - Complex.exp (↑y * ↑ξ * Complex.I) * ((1 - Real.sinc y : ℝ) : ℂ)) ∂ν)
+        = 2 * ∫ y, (levyCompensatedIntegrand ξ y
+            - Complex.exp (↑y * ↑ξ * Complex.I) * ((1 - Real.sinc y : ℝ) : ℂ)) ∂ν
+      from integral_const_mul _ _,
+      integral_sub (integrable_levyCompensatedIntegrand hν ξ)
+        (integrable_exp_mul_one_sub_sinc hν ξ)]
+
+/-- `∫_{-1}^{1} ↑b(ξ+u)I du = 2b·ξ·I` — the drift term of the smeared exponent. -/
+private lemma intInt_exponent_drift (b ξ : ℝ) :
+    ∫ u in (-1 : ℝ)..1, ((b : ℂ) * ↑(ξ + u) * Complex.I)
+      = 2 * (b : ℂ) * ↑ξ * Complex.I := by
+  have hc : (fun u : ℝ => ((b : ℂ) * ↑(ξ + u) * Complex.I))
+      = fun u : ℝ => ((b : ℂ) * Complex.I) * (↑(ξ + u) : ℂ) := by
+    funext u; ring
+  rw [hc, show (∫ u in (-1 : ℝ)..1, ((b : ℂ) * Complex.I) * (↑(ξ + u) : ℂ))
+        = ((b : ℂ) * Complex.I) * ∫ u in (-1 : ℝ)..1, (↑(ξ + u) : ℂ)
+      from intervalIntegral.integral_const_mul _ _,
+      intervalIntegral.integral_ofReal, intInt_linear]
+  push_cast; ring
+
+/-- `∫_{-1}^{1} ↑s(ξ+u)²/2 du = s·ξ² + s/3` — the Gaussian term of the smeared exponent. -/
+private lemma intInt_exponent_gauss (s ξ : ℝ) :
+    ∫ u in (-1 : ℝ)..1, ((s : ℂ) * (↑(ξ + u) : ℂ) ^ 2 / 2)
+      = (s : ℂ) * (ξ : ℂ) ^ 2 + (s : ℂ) / 3 := by
+  have hc : (fun u : ℝ => ((s : ℂ) * (↑(ξ + u) : ℂ) ^ 2 / 2))
+      = fun u : ℝ => ((s : ℂ) / 2) * (↑((ξ + u) ^ 2 : ℝ) : ℂ) := by
+    funext u; push_cast; ring
+  rw [hc, show (∫ u in (-1 : ℝ)..1, ((s : ℂ) / 2) * (↑((ξ + u) ^ 2 : ℝ) : ℂ))
+        = ((s : ℂ) / 2) * ∫ u in (-1 : ℝ)..1, (↑((ξ + u) ^ 2 : ℝ) : ℂ)
+      from intervalIntegral.integral_const_mul _ _,
+      intervalIntegral.integral_ofReal, intInt_quadratic]
+  push_cast; ring
+
+/-- The characteristic function of the smeared measure splits into the Gaussian atom `σ²/6`
+and the jump density integral `∫ e^{ixξ}(1 − sinc x) dν`. -/
+theorem charFun_smearedMeasure (hν : IsLevyMeasure ν) (σ_sq : ℝ≥0) (ξ : ℝ) :
+    charFun (smearedMeasure σ_sq ν) ξ
+      = (((σ_sq : ℝ) / 6 : ℝ) : ℂ)
+        + ∫ x, Complex.exp (↑x * ↑ξ * Complex.I) * ((1 - Real.sinc x : ℝ) : ℂ) ∂ν := by
+  -- The two pieces of `smearedMeasure` are finite measures.
+  haveI hAfin : IsFiniteMeasure (((σ_sq : ℝ≥0∞) / 6) • Measure.dirac (0 : ℝ)) := by
+    refine ⟨?_⟩
+    rw [Measure.smul_apply, smul_eq_mul, Measure.dirac_apply_of_mem (Set.mem_univ 0), mul_one]
+    exact ENNReal.div_lt_top (by simp) (by simp)
+  haveI hBfin : IsFiniteMeasure (ν.withDensity (fun x => ENNReal.ofReal (1 - Real.sinc x))) := by
+    refine ⟨?_⟩
+    rw [withDensity_apply _ MeasurableSet.univ, Measure.restrict_univ]
+    exact smearedMeasure_lintegral_lt_top hν
+  -- Integrability of the charFun integrand against each piece.
+  have hIntA : Integrable (fun x : ℝ => Complex.exp (↑ξ * ↑x * Complex.I))
+      (((σ_sq : ℝ≥0∞) / 6) • Measure.dirac (0 : ℝ)) :=
+    Integrable.of_bound (by fun_prop)
+      1 (ae_of_all _ fun x => le_of_eq (by
+        rw [show (↑ξ : ℂ) * ↑x * Complex.I = ↑(ξ * x) * Complex.I from by push_cast; ring]
+        exact Complex.norm_exp_ofReal_mul_I _))
+  have hIntB : Integrable (fun x : ℝ => Complex.exp (↑ξ * ↑x * Complex.I))
+      (ν.withDensity (fun x => ENNReal.ofReal (1 - Real.sinc x))) :=
+    Integrable.of_bound (by fun_prop)
+      1 (ae_of_all _ fun x => le_of_eq (by
+        rw [show (↑ξ : ℂ) * ↑x * Complex.I = ↑(ξ * x) * Complex.I from by push_cast; ring]
+        exact Complex.norm_exp_ofReal_mul_I _))
+  rw [charFun_apply_real, smearedMeasure, integral_add_measure hIntA hIntB]
+  congr 1
+  · -- Gaussian atom.
+    rw [integral_smul_measure, integral_dirac,
+        show (↑ξ : ℂ) * ↑(0 : ℝ) * Complex.I = 0 from by simp, Complex.exp_zero]
+    show ((↑σ_sq / 6 : ℝ≥0∞).toReal) • (1 : ℂ) = ↑((σ_sq : ℝ) / 6)
+    rw [Complex.real_smul, mul_one]
+    congr 1
+    rw [ENNReal.toReal_div, ENNReal.coe_toReal, ENNReal.toReal_ofNat]
+  · -- Jump density.
+    rw [integral_withDensity_eq_integral_toReal_smul measurable_one_sub_sinc
+        (ae_of_all _ fun x => ENNReal.ofReal_lt_top)]
+    refine integral_congr_ae (ae_of_all _ fun x => ?_)
+    simp only [ENNReal.toReal_ofReal (one_sub_sinc_nonneg x)]
+    show (1 - Real.sinc x : ℝ) • Complex.exp (↑ξ * ↑x * Complex.I)
+      = Complex.exp (↑x * ↑ξ * Complex.I) * ((1 - Real.sinc x : ℝ) : ℂ)
+    rw [Complex.real_smul, show (↑ξ : ℂ) * ↑x * Complex.I = ↑x * ↑ξ * Complex.I from by ring]
+    ring
+
+/-- **The smear identity** (Sato, Theorem 8.1). The smeared Lévy–Khintchine exponent of a
+triple equals the characteristic function of the smeared canonical measure `ρ`. The drift
+cancels, the Gaussian piece produces the constant `σ²/6` (the atom of `ρ`), and the jump
+integral produces the density `1 − sinc` against `ν`. Chained with `Measure.ext_of_charFun`
+(both `smearedMeasure`s are finite) this pins the triple from the exponent alone. -/
+theorem smeared_exponent_eq_charFun (T : LevyKhintchineTriple) (ξ : ℝ) :
+    T.exponent ξ - (1 / 2 : ℂ) * ∫ u in (-1 : ℝ)..1, T.exponent (ξ + u)
+      = charFun (smearedMeasure T.gaussianVariance T.levyMeasure) ξ := by
+  have hν := T.levyMeasure_isLevyMeasure
+  -- Interval integrability of the three exponent pieces.
+  have hdrift_int : IntervalIntegrable
+      (fun u => ((T.drift : ℂ) * ↑(ξ + u) * Complex.I)) volume (-1) 1 :=
+    (by fun_prop : Continuous fun u : ℝ =>
+      ((T.drift : ℂ) * ↑(ξ + u) * Complex.I)).intervalIntegrable _ _
+  have hgauss_int : IntervalIntegrable
+      (fun u => ((T.gaussianVariance : ℝ) : ℂ) * (↑(ξ + u) : ℂ) ^ 2 / 2) volume (-1) 1 :=
+    (by fun_prop : Continuous fun u : ℝ =>
+      ((T.gaussianVariance : ℝ) : ℂ) * (↑(ξ + u) : ℂ) ^ 2 / 2).intervalIntegrable _ _
+  have hjump_int : IntervalIntegrable
+      (fun u => ∫ x, levyCompensatedIntegrand (ξ + u) x ∂T.levyMeasure) volume (-1) 1 :=
+    ((continuous_integral_levyCompensatedIntegrand hν).comp
+      (continuous_const.add continuous_id)).intervalIntegrable _ _
+  -- Closed form of `∫_{-1}^{1} ψ_T(ξ+u) du`.
+  have hval : (∫ u in (-1 : ℝ)..1, T.exponent (ξ + u))
+      = 2 * (T.drift : ℂ) * ↑ξ * Complex.I
+        - (((T.gaussianVariance : ℝ) : ℂ) * (ξ : ℂ) ^ 2 + ((T.gaussianVariance : ℝ) : ℂ) / 3)
+        + 2 * ((∫ x, levyCompensatedIntegrand ξ x ∂T.levyMeasure)
+            - ∫ x, Complex.exp (↑x * ↑ξ * Complex.I) * ((1 - Real.sinc x : ℝ) : ℂ)
+                ∂T.levyMeasure) := by
+    simp only [LevyKhintchineTriple.exponent_def]
+    rw [intervalIntegral.integral_add (hdrift_int.sub hgauss_int) hjump_int,
+        intervalIntegral.integral_sub hdrift_int hgauss_int,
+        intInt_exponent_drift, intInt_exponent_gauss, intInt_exponent_jump hν]
+  rw [LevyKhintchineTriple.exponent_def, hval,
+      charFun_smearedMeasure hν T.gaussianVariance ξ]
+  push_cast
+  ring
+
+end SmearIdentity
+
 end ProbabilityTheory
