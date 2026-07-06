@@ -127,11 +127,9 @@ theorem sigmaFinite (hν : IsLevyMeasure ν) : SigmaFinite ν := by
         nlinarith
   }⟩
 
-end IsLevyMeasure
-
 /-- A finite measure that assigns no mass to the origin is a Levy measure: the integrability
 condition `∫⁻ min(1, x²) dν < ∞` follows from `min(1, x²) ≤ 1` and `ν univ < ∞`. -/
-theorem IsLevyMeasure.of_isFiniteMeasure {ν : Measure ℝ} [IsFiniteMeasure ν]
+theorem of_isFiniteMeasure {ν : Measure ℝ} [IsFiniteMeasure ν]
     (hν_zero : ν {0} = 0) : IsLevyMeasure ν := by
   refine ⟨hν_zero, ?_⟩
   calc ∫⁻ x, ENNReal.ofReal (min 1 (x ^ 2)) ∂ν
@@ -140,6 +138,8 @@ theorem IsLevyMeasure.of_isFiniteMeasure {ν : Measure ℝ} [IsFiniteMeasure ν]
         exact ENNReal.ofReal_le_ofReal (min_le_left _ _))
     _ = ν Set.univ := lintegral_one
     _ < ⊤ := (‹IsFiniteMeasure ν›).measure_univ_lt_top
+
+end IsLevyMeasure
 
 /-- The zero measure is a Levy measure. -/
 theorem isLevyMeasure_zero : IsLevyMeasure (0 : Measure ℝ) :=

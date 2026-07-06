@@ -1674,23 +1674,6 @@ lemma exists_atomFree_radius (ν : Measure ℝ) [IsFiniteMeasure ν] {a b : ℝ}
   refine ⟨r, hr.1, ?_⟩
   exact le_antisymm (not_lt.mp hr.2) (zero_le _)
 
-/-- Atom-free radii accumulating at `0`, each below the bound `c`. -/
-lemma exists_atomFree_seq_tendsto_zero (ν : Measure ℝ) [IsFiniteMeasure ν] {c : ℝ} (hc : 0 < c) :
-    ∃ δ : ℕ → ℝ, (∀ m, 0 < δ m) ∧ (∀ m, δ m < c) ∧ (∀ m, ν {x | |x| = δ m} = 0) ∧
-      Tendsto δ atTop (𝓝 0) := by
-  -- For each `m`, choose an atom-free radius in `(0, min (c/2) (1/(m+1))]`.
-  have hb : ∀ m : ℕ, (0 : ℝ) < min (c / 2) (1 / ((m : ℝ) + 1)) := fun m => by positivity
-  choose δ hδ_mem hδ_null using fun m => exists_atomFree_radius ν (hb m)
-  refine ⟨δ, fun m => (hδ_mem m).1, fun m => ?_, hδ_null, ?_⟩
-  · -- `δ m ≤ min (c/2) (1/(m+1)) ≤ c/2 < c`.
-    calc δ m ≤ min (c / 2) (1 / ((m : ℝ) + 1)) := (hδ_mem m).2
-      _ ≤ c / 2 := min_le_left _ _
-      _ < c := by linarith
-  · -- `0 < δ m ≤ 1/(m+1) → 0` squeezes `δ` to `0`.
-    refine tendsto_of_tendsto_of_tendsto_of_le_of_le tendsto_const_nhds
-      tendsto_one_div_add_atTop_nhds_zero_nat (fun m => (hδ_mem m).1.le) (fun m => ?_)
-    exact (hδ_mem m).2.trans (min_le_right _ _)
-
 /-! ### 3.2d — Atom-free radius selection for (possibly infinite) Lévy measures
 
 The finite-measure results above generalize to arbitrary `IsLevyMeasure ν`: although `ν` may
@@ -1728,8 +1711,8 @@ theorem IsLevyMeasure.exists_atomFree_radius {ν : Measure ℝ} (hν : IsLevyMea
   exact ⟨r, ⟨hc₀_ge_a.trans_lt hr_mem.1, hr_mem.2⟩, hr_null⟩
 
 /-- Atom-free radii accumulating at `0`, each below the bound `c`, for a (possibly infinite)
-Lévy measure. Generalizes `exists_atomFree_seq_tendsto_zero` from `IsFiniteMeasure` to
-`IsLevyMeasure`. -/
+Lévy measure. The `IsLevyMeasure` analogue of `exists_atomFree_radius`, iterated to build a
+null-sphere sequence `δ_m → 0`. -/
 theorem IsLevyMeasure.exists_atomFree_seq_tendsto_zero {ν : Measure ℝ} (hν : IsLevyMeasure ν)
     {c : ℝ} (hc : 0 < c) : ∃ δ : ℕ → ℝ, (∀ m, 0 < δ m) ∧ (∀ m, δ m < c) ∧
       (∀ m, ν {x | |x| = δ m} = 0) ∧ Tendsto δ atTop (𝓝 0) := by
@@ -1954,8 +1937,7 @@ private lemma scaledMeasure_apply_le_ofReal (t : {t : ℝ // 0 < t}) (A : Set �
   exact ENNReal.ofReal_le_ofReal h
 
 /-- Integrals against the tilted measure are tilt-weighted integrals against `μ_t`. -/
-lemma tiltedScaledMeasure_integral_eq (t : {t : ℝ // 0 < t}) (g : ℝ → ℝ)
-    (_hg : Continuous g) (_hg_bdd : ∃ M, ∀ x, |g x| ≤ M) :
+lemma tiltedScaledMeasure_integral_eq (t : {t : ℝ // 0 < t}) (g : ℝ → ℝ) :
     ∫ x, g x ∂(S.tiltedScaledMeasure t) =
       t.val⁻¹ * ∫ x, g x * min 1 (x ^ 2) ∂(S.measure t : Measure ℝ) := by
   have hmeas : Measurable (fun x : ℝ => ENNReal.ofReal (min 1 (x ^ 2))) :=
@@ -2244,6 +2226,10 @@ theorem exists_canonicalMeasure :
   rw [h_int_ν_out]
   exact h_int_ν_subseq
 
+/-- The tilt density `min 1 x²` is strictly positive away from the origin. -/
+private lemma min_one_sq_pos_of_ne_zero {x : ℝ} (hx : x ≠ 0) : 0 < min 1 (x ^ 2) :=
+  lt_min one_pos (by rw [← sq_abs]; exact pow_pos (abs_pos.mpr hx) 2)
+
 /-- **Extraction of a σ-finite Lévy measure — no finiteness hypothesis.** Untilting the
 canonical measure `η` on `{0}ᶜ` yields `ν` with `∫ min(1,x²) dν = η({0}ᶜ) < ∞` by
 construction. The scaled measures `t⁻¹ μ_t` converge to `ν` against every BCF vanishing
@@ -2280,7 +2266,7 @@ theorem exists_levyMeasure :
     filter_upwards [ae_restrict_mem (measurableSet_singleton 0).compl] with x hx
     have hx0 : x ≠ 0 := by simpa using hx
     have hpos : 0 < min 1 (x ^ 2) :=
-      lt_min one_pos (by rw [← sq_abs]; exact pow_pos (abs_pos.mpr hx0) 2)
+      min_one_sq_pos_of_ne_zero hx0
     rw [ENNReal.inv_lt_top]
     exact ENNReal.ofReal_pos.mpr hpos
   -- `∫⁻ min(1,x²) dν = η {0}ᶜ < ∞`: the tilt and untilt cancel a.e. on `{0}ᶜ`.
@@ -2290,7 +2276,7 @@ theorem exists_levyMeasure :
     filter_upwards [ae_restrict_mem (measurableSet_singleton 0).compl] with x hx
     have hx0 : x ≠ 0 := by simpa using hx
     have hpos : 0 < min 1 (x ^ 2) :=
-      lt_min one_pos (by rw [← sq_abs]; exact pow_pos (abs_pos.mpr hx0) 2)
+      min_one_sq_pos_of_ne_zero hx0
     exact ENNReal.inv_mul_cancel (ENNReal.ofReal_pos.mpr hpos).ne' ENNReal.ofReal_ne_top
   have hν_int : ∫⁻ x, ENNReal.ofReal (min 1 (x ^ 2)) ∂ν < ⊤ := by
     simp only [ν]
@@ -2319,7 +2305,7 @@ theorem exists_levyMeasure :
     · push_neg at hx₀
       have hx0_ne : x₀ ≠ 0 := by rintro rfl; rw [abs_zero] at hx₀; linarith
       have hden_ne : min 1 (x₀ ^ 2) ≠ 0 :=
-        ne_of_gt (lt_min one_pos (by rw [← sq_abs]; exact pow_pos (abs_pos.mpr hx0_ne) 2))
+        ne_of_gt (min_one_sq_pos_of_ne_zero hx0_ne)
       exact f.continuous.continuousAt.div
         ((continuous_const.min (continuous_pow 2)).continuousAt) hden_ne
   have hbound : ∀ x, ‖f x / min 1 (x ^ 2)‖ ≤ ‖f‖ / min 1 (r ^ 2) := by
@@ -2349,14 +2335,13 @@ theorem exists_levyMeasure :
     · push_neg at hx
       have hx0 : x ≠ 0 := by rintro rfl; rw [abs_zero] at hx; linarith
       have hden_ne : min 1 (x ^ 2) ≠ 0 :=
-        ne_of_gt (lt_min one_pos (by rw [← sq_abs]; exact pow_pos (abs_pos.mpr hx0) 2))
+        ne_of_gt (min_one_sq_pos_of_ne_zero hx0)
       rw [div_mul_cancel₀ _ hden_ne]
   -- LHS: `t⁻¹ ∫ f dμ_t = ∫ G d(tiltedScaledMeasure t)`.
   have hLHS : ∀ n, (t_seq n).val⁻¹ * ∫ x, f x ∂(S.measure (t_seq n) : Measure ℝ)
       = ∫ x, G x ∂(S.tiltedScaledMeasure (t_seq n)) := by
     intro n
-    rw [S.tiltedScaledMeasure_integral_eq (t_seq n) (fun x => G x) G.continuous
-        ⟨‖f‖ / min 1 (r ^ 2), hbound⟩]
+    rw [S.tiltedScaledMeasure_integral_eq (t_seq n) (fun x => G x)]
     congr 1
     exact integral_congr_ae (ae_of_all _ hfg_pt)
   -- RHS: `∫ f dν = ∫ G dη` — untilt on `{0}ᶜ`, then drop the atom (`G 0 = 0`).
@@ -2367,7 +2352,7 @@ theorem exists_levyMeasure :
     filter_upwards [ae_restrict_mem (measurableSet_singleton 0).compl] with x hx
     have hx0 : x ≠ 0 := by simpa using hx
     have hpos : 0 < min 1 (x ^ 2) :=
-      lt_min one_pos (by rw [← sq_abs]; exact pow_pos (abs_pos.mpr hx0) 2)
+      min_one_sq_pos_of_ne_zero hx0
     rw [smul_eq_mul, hG_apply x, ENNReal.toReal_inv, ENNReal.toReal_ofReal hpos.le,
         div_eq_inv_mul]
   have hstep1 : ∫ x, G x ∂η = ∫ x, G x ∂(η.restrict {0}ᶜ) := by
@@ -3485,7 +3470,7 @@ private lemma remainder_integrableOn_ball_levy
 `σ_G² = σ_sq_r − ∫_{|x|<r} x² dν` nonnegative. -/
 private lemma smallBall_second_moment_nu_le
     {r : ℝ} (hr : 0 < r)
-    {ν : Measure ℝ} (hν : IsLevyMeasure ν) (hν_zero : ν {0} = 0)
+    {ν : Measure ℝ} (hν : IsLevyMeasure ν)
     (hν_r : ν {x | |x| = r} = 0)
     {t_seq : ℕ → {t : ℝ // 0 < t}} {σ_sq_r : ℝ}
     (hσ : Tendsto (fun k => (t_seq k).val⁻¹ *
@@ -3595,7 +3580,7 @@ private lemma smallBall_second_moment_nu_le
     · -- pointwise convergence ν-a.e. (off the ν-null point `0`).
       have h_ae : ∀ᵐ x ∂ν, x ≠ 0 := by
         rw [ae_iff]
-        simpa using hν_zero
+        simpa using hν.1
       filter_upwards [h_ae] with x hx0
       by_cases hxr : x ∈ {x : ℝ | |x| < r}
       · rw [Set.indicator_of_mem hxr]
@@ -4116,7 +4101,7 @@ private lemma scaled_smallBall_remainder_tendsto
 assembly, where the `−σ_G²ξ²/2` regrouping is done once. -/
 private lemma scaled_smallBall_compensated_tendsto
     {r : ℝ} (hr : 0 < r) (hr1 : r ≤ 1) (ξ : ℝ)
-    {ν : Measure ℝ} (hν : IsLevyMeasure ν) (_hν_zero : ν {0} = 0)
+    {ν : Measure ℝ} (hν : IsLevyMeasure ν)
     (hν_r : ν {x | |x| = r} = 0)
     {t_seq : ℕ → {t : ℝ // 0 < t}} {σ_sq_r : ℝ}
     (hσ : Tendsto (fun k => (t_seq k).val⁻¹ *
@@ -4322,7 +4307,7 @@ own second moment `∫_{|x|<r} x² dν`; the `largeSet r` integral splits into a
 as the compensated `exp−1−ixξ` plus the drift correction `∫_{r≤|x|<1} x dν`. -/
 private lemma psi_levyKhintchine_algebra
     {r : ℝ} (hr : r ∈ Set.Ioc (1/2 : ℝ) 1) (ξ : ℝ)
-    {ν : Measure ℝ} (hν : IsLevyMeasure ν) (_hν_zero : ν {0} = 0) (b_r : ℝ) (σ_sq_r : ℝ≥0) :
+    {ν : Measure ℝ} (hν : IsLevyMeasure ν) (b_r : ℝ) (σ_sq_r : ℝ≥0) :
     (↑b_r * ↑ξ * I
       + (-(↑(σ_sq_r : ℝ) * ↑ξ ^ 2 / 2)
           + ∫ x in {x | |x| < r},
@@ -4333,8 +4318,6 @@ private lemma psi_levyKhintchine_algebra
       + ∫ x, levyCompensatedIntegrand ξ x ∂ν := by
   have hr_pos : (0 : ℝ) < r := by linarith [hr.1]
   have hr1 : r ≤ 1 := hr.2
-  -- ν is a Lévy measure.
-  have hν_levy : IsLevyMeasure ν := hν
   -- Abbreviations for the sets.
   set Bball : Set ℝ := {x | |x| < r} with hBball_def
   set Bband : Set ℝ := {x | r ≤ |x| ∧ |x| < 1} with hBband_def
@@ -4397,12 +4380,12 @@ private lemma psi_levyKhintchine_algebra
     exact ((sq_integrableOn_ball_levy hν r).mul_const (ξ ^ 2 / 2)).ofReal
   have hcomp_ball : IntegrableOn
       (fun x : ℝ => exp ((↑x : ℂ) * ↑ξ * I) - 1 - (↑x : ℂ) * ↑ξ * I) Bball ν := by
-    have hrem : IntegrableOn (fun x : ℝ =>
-        exp ((↑x : ℂ) * ↑ξ * I) - 1 - (↑x : ℂ) * ↑ξ * I + ((↑x : ℂ) * ↑ξ) ^ 2 / 2) Bball ν :=
-      remainder_integrableOn_ball_levy hr1 ξ hν
-    refine (hrem.sub hquad_ball).congr (Filter.Eventually.of_forall (fun x => ?_))
-    simp only [Pi.sub_apply]
-    ring
+    -- On `{|x| < r} ⊆ {|x| < 1}` the compensated integrand's indicator fires, so it equals
+    -- `exp(ixξ) − 1 − ixξ`; integrability transfers from the global compensated integrand.
+    refine ((integrable_levyCompensatedIntegrand hν ξ).integrableOn).congr ?_
+    filter_upwards [ae_restrict_mem hmeas_ball] with x hx
+    have hx1 : |x| < 1 := lt_of_lt_of_le hx hr1
+    simp [levyCompensatedIntegrand, hx1]
   have h_id1 : (∫ x in Bball,
       (exp ((↑x : ℂ) * ↑ξ * I) - 1 - (↑x : ℂ) * ↑ξ * I + ((↑x : ℂ) * ↑ξ) ^ 2 / 2) ∂ν)
       = A + (↑Pball : ℂ) * ↑ξ ^ 2 / 2 := by
@@ -4463,7 +4446,7 @@ private lemma psi_levyKhintchine_algebra
       _ = (↑Pbar : ℂ) * ↑ξ * I := by ring
   -- Identity 4: global compensated split.
   have h_levy_int : Integrable (levyCompensatedIntegrand ξ) ν :=
-    integrable_levyCompensatedIntegrand hν_levy ξ
+    integrable_levyCompensatedIntegrand hν ξ
   -- `levyComp = exp−1−ixξ` on `{|x|<1}` and `= exp−1` on `largeSet 1`.
   have hlevy_small : ∀ x : ℝ, |x| < 1 →
       levyCompensatedIntegrand ξ x = exp ((↑x : ℂ) * ↑ξ * I) - 1 - (↑x : ℂ) * ↑ξ * I := by
@@ -4545,7 +4528,7 @@ canonical triple. -/
 theorem psi_eq_levyKhintchine_formula
     {r : ℝ} (hr : r ∈ Set.Ioc (1/2 : ℝ) 1)
     (b_r : ℝ) (σ_sq_r : ℝ≥0) {ν : Measure ℝ} (hν : IsLevyMeasure ν)
-    (hν_zero : ν {0} = 0) (hν_r : ν {x | |x| = r} = 0)
+    (hν_r : ν {x | |x| = r} = 0)
     {t_seq : ℕ → {t : ℝ // 0 < t}}
     (ht_seq : Tendsto (fun n => (t_seq n).val) atTop (𝓝 0))
     (hb : Tendsto (fun n =>
@@ -4576,7 +4559,7 @@ theorem psi_eq_levyKhintchine_formula
   -- B3: the three term-limits (types inferred from the respective lemmas).
   have hT1 := S.drift_term ξ ht_seq hb
   have hT2 := S.scaled_smallBall_compensated_tendsto hr_pos hr.2 ξ
-    hν hν_zero hν_r hσ h_jump
+    hν hν_r hσ h_jump
   have hT3 := S.scaled_largeSet_charFun_tendsto hr_pos ξ
     hν hν_r h_jump
   -- B4: sum of the three limits (matching the per-`n` decomposition pointwise).
@@ -4588,7 +4571,7 @@ theorem psi_eq_levyKhintchine_formula
   have h_eq := tendsto_nhds_unique hLHS_sum hRHS_lim
   rw [h_eq]
   -- B6: ν-side algebra (handled by the dedicated identity lemma above).
-  exact psi_levyKhintchine_algebra hr ξ hν hν_zero b_r σ_sq_r
+  exact psi_levyKhintchine_algebra hr ξ hν b_r σ_sq_r
 
 /-- **Main assembly.** The characteristic exponent `ψ` of `S` decomposes into the
 Lévy-Khintchine triple `(b, σ², ν)` where `ν` is the externally extracted Lévy
@@ -4614,11 +4597,11 @@ theorem psi_decomposition :
   -- σ_G² ≥ 0, so its `Real.toNNReal` coercion is honest (no truncation).
   have hr_pos : (0 : ℝ) < r := by linarith [hr_mem.1]
   have hnn : (0 : ℝ) ≤ (σ_sq_r : ℝ) - ∫ x in {x | |x| < r}, x ^ 2 ∂ν := by
-    have := S.smallBall_second_moment_nu_le hr_pos hν hν.1 hν_r hσ h_jump
+    have := S.smallBall_second_moment_nu_le hr_pos hν hν_r hσ h_jump
     linarith
   rw [show (↑(Real.toNNReal ((σ_sq_r : ℝ) - ∫ x in {x | |x| < r}, x ^ 2 ∂ν)) : ℝ)
         = (σ_sq_r : ℝ) - ∫ x in {x | |x| < r}, x ^ 2 ∂ν from Real.coe_toNNReal _ hnn]
-  exact S.psi_eq_levyKhintchine_formula hr_mem b_r σ_sq_r hν hν.1 hν_r ht_seq hb hσ h_jump ξ
+  exact S.psi_eq_levyKhintchine_formula hr_mem b_r σ_sq_r hν hν_r ht_seq hb hσ h_jump ξ
 
 end ConvolutionSemigroup
 
