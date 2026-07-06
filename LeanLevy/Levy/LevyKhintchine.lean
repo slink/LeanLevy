@@ -58,7 +58,7 @@ variable (T : LevyKhintchineTriple)
 theorem levyMeasure_zero : T.levyMeasure {0} = 0 :=
   T.levyMeasure_isLevyMeasure.zero_singleton
 
-theorem integrable_min_one_sq :
+theorem lintegral_min_one_sq_lt_top :
     ∫⁻ x, ENNReal.ofReal (min 1 (x ^ 2)) ∂T.levyMeasure < ⊤ :=
   T.levyMeasure_isLevyMeasure.lintegral_min_one_sq_lt_top
 

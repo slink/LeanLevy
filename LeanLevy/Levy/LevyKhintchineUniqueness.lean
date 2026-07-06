@@ -51,7 +51,7 @@ Lévy measure `ν` with `ν{0} = 0` this agrees `ν`-a.e. with the classical `1 
 
 ## Main results
 
-* `ProbabilityTheory.smearedMeasure_lintegral_lt_top` — the withDensity mass is finite.
+* `ProbabilityTheory.lintegral_one_sub_sinc_lt_top` — the withDensity mass is finite.
 * `ProbabilityTheory.smearedMeasure_isFiniteMeasure` — `ρ` is a finite measure.
 * `ProbabilityTheory.smearedMeasure_singleton_zero` — `ρ{0} = σ²/6`, so `σ² = 6·ρ{0}`.
 -/
@@ -86,7 +86,7 @@ theorem measurable_one_sub_sinc :
 
 /-- The mass of the jump (withDensity) piece of `smearedMeasure` is finite: it is dominated by
 `2 · ∫⁻ min(1, x²) dν`, which is finite for a Lévy measure via `one_sub_sinc_le_mul_min`. -/
-theorem smearedMeasure_lintegral_lt_top {ν : Measure ℝ} (hν : IsLevyMeasure ν) :
+theorem lintegral_one_sub_sinc_lt_top {ν : Measure ℝ} (hν : IsLevyMeasure ν) :
     ∫⁻ x, ENNReal.ofReal (1 - Real.sinc x) ∂ν < ⊤ := by
   have hmeas : Measurable fun x : ℝ => ENNReal.ofReal (min 1 (x ^ 2)) :=
     ENNReal.measurable_ofReal.comp (measurable_const.min (measurable_id'.pow_const 2))
@@ -100,13 +100,13 @@ theorem smearedMeasure_lintegral_lt_top {ν : Measure ℝ} (hν : IsLevyMeasure 
 
 /-- `smearedMeasure σ² ν` is a finite measure when `ν` is a Lévy measure: the Dirac piece has
 finite mass `σ²/6` and the withDensity piece has finite mass by
-`smearedMeasure_lintegral_lt_top`. -/
+`lintegral_one_sub_sinc_lt_top`. -/
 theorem smearedMeasure_isFiniteMeasure {ν : Measure ℝ} (hν : IsLevyMeasure ν) :
     IsFiniteMeasure (smearedMeasure σ_sq ν) := by
   refine ⟨?_⟩
   rw [smearedMeasure, Measure.add_apply, Measure.smul_apply, smul_eq_mul,
     withDensity_apply _ MeasurableSet.univ, Measure.restrict_univ]
-  refine ENNReal.add_lt_top.mpr ⟨?_, smearedMeasure_lintegral_lt_top hν⟩
+  refine ENNReal.add_lt_top.mpr ⟨?_, lintegral_one_sub_sinc_lt_top hν⟩
   exact ENNReal.mul_lt_top (by simp [ENNReal.div_lt_top]) (measure_lt_top _ _)
 
 /-- The atom of the smeared measure at the origin is `σ²/6`: the withDensity piece vanishes on
@@ -335,7 +335,7 @@ theorem charFun_smearedMeasure (hν : IsLevyMeasure ν) (σ_sq : ℝ≥0) (ξ : 
   haveI hBfin : IsFiniteMeasure (ν.withDensity (fun x => ENNReal.ofReal (1 - Real.sinc x))) := by
     refine ⟨?_⟩
     rw [withDensity_apply _ MeasurableSet.univ, Measure.restrict_univ]
-    exact smearedMeasure_lintegral_lt_top hν
+    exact lintegral_one_sub_sinc_lt_top hν
   -- Integrability of the charFun integrand against each piece.
   have hIntA : Integrable (fun x : ℝ => Complex.exp (↑ξ * ↑x * Complex.I))
       (((σ_sq : ℝ≥0∞) / 6) • Measure.dirac (0 : ℝ)) :=

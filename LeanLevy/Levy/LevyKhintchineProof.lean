@@ -556,8 +556,7 @@ theorem continuous_integral_levyCompensatedIntegrand {ν : Measure ℝ} (hν : I
 
 /-- Hermitian symmetry of the compensated integral: reflecting the frequency conjugates the
 integral, `∫ f(-ξ, x) ∂ν = conj (∫ f(ξ, x) ∂ν)`. -/
-theorem hermitian_integral_levyCompensatedIntegrand {ν : Measure ℝ}
-    (_hν : IsLevyMeasure ν) (ξ : ℝ) :
+theorem hermitian_integral_levyCompensatedIntegrand {ν : Measure ℝ} (ξ : ℝ) :
     ∫ x, levyCompensatedIntegrand (-ξ) x ∂ν =
       starRingEnd ℂ (∫ x, levyCompensatedIntegrand ξ x ∂ν) :=
   calc ∫ x, levyCompensatedIntegrand (-ξ) x ∂ν
@@ -1627,7 +1626,7 @@ private lemma integrable_charFun_integrand {μ : Measure ℝ} [IsFiniteMeasure �
   Integrable.of_bound
     ((Complex.continuous_ofReal.comp (continuous_const.mul continuous_id')).mul_const I
       |>.cexp.aestronglyMeasurable)
-    1 (ae_of_all _ fun x => le_of_eq (Complex.norm_exp_ofReal_mul_I _))
+    1 (ae_of_all _ fun _ => le_of_eq (Complex.norm_exp_ofReal_mul_I _))
 
 /-- `Re(1 - charFun μ ξ) = ∫ (1 - cos(ξ·x)) dμ` for probability measures.
 Proof: unfold charFun to ∫ exp(iξx), commute Re through the integral via `integral_re`,
@@ -2846,7 +2845,7 @@ lemma drift_limit
       ↑(t_seq n).val).im| ≤ |(S.exponent 1).im| + 1 := by
     have h := hIm_tend.eventually (Metric.ball_mem_nhds (S.exponent 1).im one_pos)
     filter_upwards [h] with n hn
-    simp only [Metric.mem_ball, Real.dist_eq] at hn
+    simp only [Real.dist_eq] at hn
     linarith [abs_sub_abs_le_abs_sub
       (((S.measure (t_seq n)).characteristicFun 1 - 1) / ↑(t_seq n).val).im
       (S.exponent 1).im]
@@ -2892,7 +2891,7 @@ lemma drift_limit
     -- Integrability lemmas
     have hint_sin : Integrable (fun x => Real.sin x) (S.measure (t_seq n) : Measure ℝ) :=
       Integrable.of_bound Real.continuous_sin.aestronglyMeasurable 1
-        (ae_of_all _ fun x => by simp [Real.abs_sin_le_abs, abs_le.mpr ⟨Real.neg_one_le_sin x,
+        (ae_of_all _ fun x => by simp [abs_le.mpr ⟨Real.neg_one_le_sin x,
           Real.sin_le_one x⟩])
     have hint_x_small : IntegrableOn (fun x => x) {x | |x| < r}
         (S.measure (t_seq n) : Measure ℝ) :=
@@ -4854,7 +4853,7 @@ private lemma psi_levyKhintchine_algebra
       exact absurd (mem_largeSet.mp hx') (not_le.mpr hx.2)
     have h_union : largeSet r = Bband ∪ largeSet 1 := by
       ext x
-      simp only [largeSet, hBband_def, Set.mem_setOf_eq, Set.mem_union, mem_largeSet]
+      simp only [largeSet, hBband_def, Set.mem_setOf_eq, Set.mem_union]
       constructor
       · intro hx
         rcases lt_or_ge (|x|) 1 with h | h
@@ -5232,7 +5231,7 @@ theorem LevyKhintchineTriple.exponent_cnd (T : LevyKhintchineTriple) :
 theorem LevyKhintchineTriple.exponent_hermitian (T : LevyKhintchineTriple) (ξ : ℝ) :
     T.exponent (-ξ) = starRingEnd ℂ (T.exponent ξ) := by
   simp only [LevyKhintchineTriple.exponent, map_add, map_sub,
-    hermitian_integral_levyCompensatedIntegrand T.levyMeasure_isLevyMeasure ξ,
+    hermitian_integral_levyCompensatedIntegrand ξ,
     Complex.ofReal_neg, map_mul, map_div₀, map_pow, map_ofNat, Complex.conj_ofReal,
     Complex.conj_I]
   ring
