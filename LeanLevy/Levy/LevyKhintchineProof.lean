@@ -2039,6 +2039,61 @@ lemma exists_atomFree_seq_tendsto_zero (ν : Measure ℝ) [IsFiniteMeasure ν] {
       tendsto_one_div_add_atTop_nhds_zero_nat (fun m => (hδ_mem m).1.le) (fun m => ?_)
     exact (hδ_mem m).2.trans (min_le_right _ _)
 
+/-! ### 3.2d — Atom-free radius selection for (possibly infinite) Lévy measures
+
+The finite-measure results above generalize to arbitrary `IsLevyMeasure ν`: although `ν` may
+have infinite total mass, every annulus `{x | ε ≤ |x|}` with `ε > 0` carries finite `ν`-mass
+(`IsLevyMeasure.measure_setOf_abs_ge_lt_top`), so the countable-sphere argument applies to the
+finite restriction of `ν` to a suitable annulus. -/
+
+/-- A Lévy measure restricted to the annulus `{x | ε ≤ |x|}` (`ε > 0`) is a finite measure. -/
+theorem IsLevyMeasure.isFiniteMeasure_restrict_largeSet {ν : Measure ℝ} (hν : IsLevyMeasure ν)
+    {ε : ℝ} (hε : 0 < ε) : IsFiniteMeasure (ν.restrict (largeSet ε)) :=
+  isFiniteMeasure_restrict.mpr (hν.measure_setOf_abs_ge_lt_top hε).ne
+
+/-- A Lévy measure charges at most countably many spheres `{|x| = ρ}` within each annulus
+bounded away from `0`, so every interval `Ioc a b` with `0 ≤ a < b` contains an atom-free
+radius. Generalizes `exists_atomFree_radius` from `IsFiniteMeasure` to `IsLevyMeasure`. -/
+theorem IsLevyMeasure.exists_atomFree_radius {ν : Measure ℝ} (hν : IsLevyMeasure ν) {a b : ℝ}
+    (ha : 0 ≤ a) (hab : a < b) : ∃ r ∈ Set.Ioc a b, ν {x | |x| = r} = 0 := by
+  have hb_pos : 0 < b := ha.trans_lt hab
+  -- Shrink to the sub-interval `Ioc (max a (b/2)) b`, whose radii all exceed `max a (b/2) > 0`.
+  have hc₀_pos : 0 < max a (b / 2) := lt_of_lt_of_le (by linarith) (le_max_right a (b / 2))
+  have hc₀_lt_b : max a (b / 2) < b := max_lt hab (by linarith)
+  have hc₀_ge_a : a ≤ max a (b / 2) := le_max_left a (b / 2)
+  haveI : IsFiniteMeasure (ν.restrict (largeSet (max a (b / 2) / 2))) :=
+    hν.isFiniteMeasure_restrict_largeSet (by linarith)
+  obtain ⟨r, hr_mem, hr_null⟩ :=
+    ProbabilityTheory.exists_atomFree_radius (ν.restrict (largeSet (max a (b / 2) / 2))) hc₀_lt_b
+  -- Every sphere `{|x| = r}` with `r > max a (b/2)` lies inside the restriction annulus,
+  -- so its `ν`-mass agrees with its mass under the restricted measure.
+  have hsub : {x : ℝ | |x| = r} ⊆ largeSet (max a (b / 2) / 2) := fun x hx => by
+    simp only [Set.mem_setOf_eq] at hx
+    simp only [mem_largeSet, hx]
+    linarith [hr_mem.1]
+  rw [Measure.restrict_apply' (measurableSet_largeSet _),
+    Set.inter_eq_self_of_subset_left hsub] at hr_null
+  exact ⟨r, ⟨hc₀_ge_a.trans_lt hr_mem.1, hr_mem.2⟩, hr_null⟩
+
+/-- Atom-free radii accumulating at `0`, each below the bound `c`, for a (possibly infinite)
+Lévy measure. Generalizes `exists_atomFree_seq_tendsto_zero` from `IsFiniteMeasure` to
+`IsLevyMeasure`. -/
+theorem IsLevyMeasure.exists_atomFree_seq_tendsto_zero {ν : Measure ℝ} (hν : IsLevyMeasure ν)
+    {c : ℝ} (hc : 0 < c) : ∃ δ : ℕ → ℝ, (∀ m, 0 < δ m) ∧ (∀ m, δ m < c) ∧
+      (∀ m, ν {x | |x| = δ m} = 0) ∧ Tendsto δ atTop (𝓝 0) := by
+  -- For each `m`, choose an atom-free radius in `(0, min (c/2) (1/(m+1))]`.
+  have hb : ∀ m : ℕ, (0 : ℝ) < min (c / 2) (1 / ((m : ℝ) + 1)) := fun m => by positivity
+  choose δ hδ_mem hδ_null using fun m => hν.exists_atomFree_radius le_rfl (hb m)
+  refine ⟨δ, fun m => (hδ_mem m).1, fun m => ?_, hδ_null, ?_⟩
+  · -- `δ m ≤ min (c/2) (1/(m+1)) ≤ c/2 < c`.
+    calc δ m ≤ min (c / 2) (1 / ((m : ℝ) + 1)) := (hδ_mem m).2
+      _ ≤ c / 2 := min_le_left _ _
+      _ < c := by linarith
+  · -- `0 < δ m ≤ 1/(m+1) → 0` squeezes `δ` to `0`.
+    refine tendsto_of_tendsto_of_tendsto_of_le_of_le tendsto_const_nhds
+      tendsto_one_div_add_atTop_nhds_zero_nat (fun m => (hδ_mem m).1.le) (fun m => ?_)
+    exact (hδ_mem m).2.trans (min_le_right _ _)
+
 namespace ConvolutionSemigroup
 
 variable (S : ConvolutionSemigroup)
