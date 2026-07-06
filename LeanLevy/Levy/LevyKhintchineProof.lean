@@ -1135,15 +1135,19 @@ lemma smallSet_eq_compl_largeSet : smallSet = (largeSet 1)ᶜ := by
 /-! ## Phase 3: Compactness on large jumps + Lévy measure construction
 
 This section develops the compactness machinery for extracting the Lévy measure
-from the convolution semigroup `{μ_t}_{t>0}`, using the finite-ν pivot approach.
+from the convolution semigroup `{μ_t}_{t>0}`, using the canonical-measure (tilted)
+extraction — no activity hypothesis is required.
 
 **Overview:**
 1. The scaled measures `(1/t)·μ_t` restricted to `{|x| ≥ ε}` have uniformly bounded mass
    (`scaled_mass_bound_real`).
-2. By a single Prokhorov extraction on all of ℝ followed by restriction to `{0}ᶜ`,
-   a subsequential weak limit ν is obtained directly as a Lévy measure on ℝ\{0}
-   (`exists_levyMeasure`). No per-cutoff extractions, no cross-cutoff
-   consistency, no shell gluing.
+2. The `min(1,x²)`-tilted scaled measures `tiltedScaledMeasure t` are uniformly bounded
+   in total mass and tight, with no hypothesis on `μ_t` (`tiltedScaledMeasure_mass_eventually_le`,
+   `tiltedScaledMeasure_largeSet_le`). A single Prokhorov extraction on these tilted
+   measures produces Khintchine's canonical measure `η` (`exists_canonicalMeasure`),
+   which is then untilted (`withDensity` by the pointwise inverse of `min(1,x²)`) to give
+   a σ-finite Lévy measure ν on ℝ\{0} (`exists_levyMeasure`). No per-cutoff extractions,
+   no cross-cutoff consistency, no shell gluing.
 3. The `smallSet`/`largeSet` partition and the scaled-measure infrastructure support
    both the mass bound argument and the single-extraction route.
 -/
@@ -4207,10 +4211,9 @@ private lemma scaled_smallBall_compensated_tendsto
 
 /-! ### Final assembly of the Lévy-Khintchine triple
 
-Following the 2026-05-20 pivot to the compound-Poisson + Gaussian intermediate, the
-assembly is structured around `exists_drift_variance_jumpMeasure_along_seq`, which
-produces all three witnesses `(b, σ², ν)` along a *single* subsequence. The key
-downstream lemmas are:
+The assembly is structured around `exists_drift_variance_jumpMeasure_along_seq`, which
+produces all three witnesses `(b, σ², ν)` along a *single* subsequence, via the
+canonical-measure (tilted) extraction of ν. The key downstream lemmas are:
 
 * `exists_drift_variance_jumpMeasure_along_seq` — the diagonal extraction.
 * `psi_eq_levyKhintchine_formula` — given the diagonal tuple, the formula holds for ψ.
