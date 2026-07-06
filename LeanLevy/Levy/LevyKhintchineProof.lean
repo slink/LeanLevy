@@ -31,8 +31,7 @@ An infinitely divisible characteristic function has a unique continuous logarith
 The logarithm of an infinitely divisible char function is conditionally negative definite.
 
 ## Sub-lemma 4: Integral representation
-**Lévy-Khintchine assembly (finite-ν pivot)**: under the finite-small-mass
-hypothesis, extract `(b, σ², ν)` along a single subsequence
+**Lévy-Khintchine assembly**: extract `(b, σ², ν)` along a single subsequence
 (`exists_drift_variance_jumpMeasure_along_seq`) and identify the limit of
 `t⁻¹(charFun μ_t − 1)` with the canonical formula
 (`psi_eq_levyKhintchine_formula`).
@@ -1142,8 +1141,8 @@ from the convolution semigroup `{μ_t}_{t>0}`, using the finite-ν pivot approac
 1. The scaled measures `(1/t)·μ_t` restricted to `{|x| ≥ ε}` have uniformly bounded mass
    (`scaled_mass_bound_real`).
 2. By a single Prokhorov extraction on all of ℝ followed by restriction to `{0}ᶜ`,
-   a subsequential weak limit ν is obtained directly as a finite measure on ℝ\{0}
-   (`exists_levyMeasure_finite`). No per-cutoff extractions, no cross-cutoff
+   a subsequential weak limit ν is obtained directly as a Lévy measure on ℝ\{0}
+   (`exists_levyMeasure`). No per-cutoff extractions, no cross-cutoff
    consistency, no shell gluing.
 3. The `smallSet`/`largeSet` partition and the scaled-measure infrastructure support
    both the mass bound argument and the single-extraction route.
@@ -1645,357 +1644,6 @@ private lemma scaled_largeSet_mass_le_of_large_radius (ε : ℝ) (hε : 0 < ε) 
   calc t.val⁻¹ * ((S.measure t : Measure ℝ) (largeSet R)).toReal
       ≤ 4 * (ε/4) := S.scaled_mass_bound_real_with_max R hR_pos (ε/4) (by positivity) hM_bound t
     _ = ε := by ring
-
-/-! ### 3.2b — Finite Lévy measure on `ℝ \ {0}` under uniform small-jump mass
-
-Under the additional hypothesis that the scaled mass on `smallSet` is uniformly bounded
-(captured here by `h_finite_small_mass`), the entire scaled measure `(1/t) · μ_t` has
-uniformly bounded total mass on `ℝ`. Combining with the large-jump tightness bound, we
-extract a **single** finite measure `ν` on `ℝ` with `ν {0} = 0`, against which the scaled
-measures converge weakly on test functions vanishing in a neighbourhood of `0`. -/
-
-/-- **Extraction of a finite Lévy measure on `ℝ \ {0}` from a uniform small-jump bound.**
-
-Under the hypothesis `h_finite_small_mass` that `t⁻¹ · μ_t(smallSet)` is uniformly bounded,
-the scaled measures `(1/t)·μ_t` have uniformly bounded total mass on `ℝ`. Combined with the
-existing large-jump tightness from `scaled_mass_bound_real_with_max`, this gives tightness
-on `ℝ`. Applying Prokhorov, we obtain a subsequential weak limit `P_inf` on `ℝ`; restricting
-to `{0}ᶜ` strips any atom at the origin and yields the desired finite Lévy measure.
-
-The test class is BCFs that vanish in some neighbourhood of `0`; this is necessary because
-the limit may charge `{0}` (which is then projected out via the `.restrict {0}ᶜ` step).
-For such `f`, `f(0) = 0`, so the projection does not change integrals: weak convergence on
-`ℝ` against `f` transfers directly to the restricted measure. -/
-theorem exists_levyMeasure_finite
-    (h_finite_small_mass : ∃ C : ℝ≥0, ∀ t : {t : ℝ // 0 < t},
-        t.val⁻¹ * ((S.measure t : Measure ℝ) smallSet).toReal ≤ ↑C) :
-    ∃ (ν : Measure ℝ) (_ : IsFiniteMeasure ν) (t_seq : ℕ → {t : ℝ // 0 < t}),
-      Tendsto (fun n => (t_seq n).val) atTop (𝓝 0) ∧
-      ν {0} = 0 ∧
-      (∀ (f : BoundedContinuousFunction ℝ ℝ), (∃ r > 0, ∀ x, |x| < r → f x = 0) →
-        Tendsto (fun n => (t_seq n).val⁻¹ *
-            ∫ x, f x ∂(S.measure (t_seq n) : Measure ℝ))
-          atTop (𝓝 (∫ x, f x ∂ν))) := by
-  -- Step 1: Choose the natural sequence t_n := 1/(n+2).
-  set t_seq : ℕ → {t : ℝ // 0 < t} := fun n => ⟨1/(n+2), by positivity⟩ with ht_seq_def
-  have ht_seq_tendsto : Tendsto (fun n => (t_seq n).val) atTop (𝓝 0) := by
-    have : Tendsto (fun n : ℕ => 1 / ((n : ℝ) + 1)) atTop (𝓝 0) :=
-      tendsto_one_div_add_atTop_nhds_zero_nat
-    have h2 := this.comp (tendsto_add_atTop_nat 1)
-    refine h2.congr (fun n => ?_)
-    simp [t_seq, Nat.cast_add, Nat.cast_one]
-    ring
-  -- Step 2: Bounds on small and large jump masses (uniform in t).
-  obtain ⟨C_small, hC_small⟩ := h_finite_small_mass
-  obtain ⟨C_large, hC_large⟩ := S.scaled_mass_bound_real 1 one_pos
-  -- Define the scaled measures (unrestricted now).
-  set ν : ℕ → Measure ℝ := fun n => S.scaledMeasure (t_seq n) with hν_def
-  have hν_finite : ∀ n, IsFiniteMeasure (ν n) := fun n => by
-    constructor
-    rw [hν_def, S.scaledMeasure_apply (t_seq n) Set.univ]
-    exact ENNReal.mul_lt_top ENNReal.ofReal_lt_top (measure_lt_top _ _)
-  -- Total mass bound: ν n Set.univ ≤ C_small + C_large (as reals).
-  have hν_mass_real : ∀ n, (ν n Set.univ).toReal ≤ (C_small : ℝ) + (C_large : ℝ) := fun n => by
-    have ht_pos := (t_seq n).prop
-    have ht_inv_nn : 0 ≤ (t_seq n).val⁻¹ := le_of_lt (inv_pos.mpr ht_pos)
-    have hfin_univ : (S.measure (t_seq n) : Measure ℝ) Set.univ ≠ ⊤ := measure_ne_top _ _
-    -- Split univ = smallSet ∪ largeSet 1.
-    have h_split_univ : (Set.univ : Set ℝ) = smallSet ∪ largeSet 1 := by
-      ext x
-      simp only [Set.mem_univ, Set.mem_union, mem_smallSet, mem_largeSet, true_iff]
-      exact lt_or_ge _ _
-    have hν_univ_eq : ν n Set.univ =
-        ENNReal.ofReal (t_seq n).val⁻¹ * (S.measure (t_seq n) : Measure ℝ) Set.univ := by
-      simp [hν_def, S.scaledMeasure_apply]
-    rw [hν_univ_eq]
-    have h_disj : Disjoint smallSet (largeSet 1) := by
-      rw [Set.disjoint_iff]
-      intro x ⟨hsmall, hlarge⟩
-      have hs : |x| < 1 := mem_smallSet.mp hsmall
-      have hl : 1 ≤ |x| := mem_largeSet.mp hlarge
-      linarith
-    have h_meas_union : (S.measure (t_seq n) : Measure ℝ) Set.univ =
-        (S.measure (t_seq n) : Measure ℝ) smallSet +
-          (S.measure (t_seq n) : Measure ℝ) (largeSet 1) := by
-      conv_lhs => rw [h_split_univ]
-      exact measure_union h_disj (measurableSet_largeSet 1)
-    have hfin_s : (S.measure (t_seq n) : Measure ℝ) smallSet ≠ ⊤ := measure_ne_top _ _
-    have hfin_l : (S.measure (t_seq n) : Measure ℝ) (largeSet 1) ≠ ⊤ := measure_ne_top _ _
-    have hbound_s : (t_seq n).val⁻¹ *
-        ((S.measure (t_seq n) : Measure ℝ) smallSet).toReal ≤ C_small := hC_small (t_seq n)
-    have hbound_l : (t_seq n).val⁻¹ *
-        ((S.measure (t_seq n) : Measure ℝ) (largeSet 1)).toReal ≤ C_large := hC_large (t_seq n)
-    have hmass_s_nn : 0 ≤ ((S.measure (t_seq n) : Measure ℝ) smallSet).toReal :=
-      ENNReal.toReal_nonneg
-    have hmass_l_nn : 0 ≤ ((S.measure (t_seq n) : Measure ℝ) (largeSet 1)).toReal :=
-      ENNReal.toReal_nonneg
-    rw [h_meas_union]
-    rw [ENNReal.toReal_mul, ENNReal.toReal_ofReal ht_inv_nn,
-        ENNReal.toReal_add hfin_s hfin_l]
-    nlinarith
-  -- Total-mass bound `Mass`.
-  set Mass : ℝ≥0 := C_small + C_large + 1 with hMass_def
-  have hMass_pos : (0 : ℝ) < Mass := by
-    rw [hMass_def]; push_cast
-    have h1 : (0 : ℝ) ≤ C_small := NNReal.coe_nonneg C_small
-    have h2 : (0 : ℝ) ≤ C_large := NNReal.coe_nonneg C_large
-    linarith
-  have hν_mass_le_Mass : ∀ n, ν n Set.univ ≤ ENNReal.ofReal Mass := fun n => by
-    have h1 : (ν n Set.univ).toReal ≤ (C_small : ℝ) + (C_large : ℝ) := hν_mass_real n
-    have hne_top : ν n Set.univ ≠ ⊤ := (hν_finite n).measure_univ_lt_top.ne
-    rw [show ν n Set.univ = ENNReal.ofReal (ν n Set.univ).toReal from
-      (ENNReal.ofReal_toReal hne_top).symm]
-    apply ENNReal.ofReal_le_ofReal
-    have h2 : (C_small : ℝ) + (C_large : ℝ) ≤ Mass := by
-      rw [hMass_def]; push_cast; linarith
-    linarith
-  -- Step 3: Top-up to probability measures via a Dirac at 0.
-  set p_meas : ℕ → Measure ℝ := fun n =>
-    (ENNReal.ofReal Mass⁻¹) • ν n +
-      (ENNReal.ofReal Mass⁻¹ * (ENNReal.ofReal Mass - ν n Set.univ)) • Measure.dirac 0
-    with hp_meas_def
-  have hp_prob : ∀ n, IsProbabilityMeasure (p_meas n) := by
-    intro n
-    refine ⟨?_⟩
-    have hM_inv_nn : (0 : ℝ) ≤ Mass⁻¹ := le_of_lt (inv_pos.mpr hMass_pos)
-    have hν_uniν_ne : ν n Set.univ ≠ ⊤ := (hν_finite n).measure_univ_lt_top.ne
-    have h_sum_eq : ν n Set.univ + (ENNReal.ofReal Mass - ν n Set.univ) =
-        ENNReal.ofReal Mass :=
-      add_tsub_cancel_of_le (hν_mass_le_Mass n)
-    calc p_meas n Set.univ
-        = (ENNReal.ofReal Mass⁻¹) * ν n Set.univ +
-            (ENNReal.ofReal Mass⁻¹ * (ENNReal.ofReal Mass - ν n Set.univ)) *
-              Measure.dirac (0 : ℝ) Set.univ := by
-          simp only [hp_meas_def, Measure.add_apply, Measure.smul_apply, smul_eq_mul]
-      _ = (ENNReal.ofReal Mass⁻¹) * ν n Set.univ +
-            (ENNReal.ofReal Mass⁻¹ * (ENNReal.ofReal Mass - ν n Set.univ)) * 1 := by
-          rw [show Measure.dirac (0 : ℝ) Set.univ = 1 from by
-            rw [Measure.dirac_apply' _ MeasurableSet.univ]
-            simp]
-      _ = ENNReal.ofReal Mass⁻¹ *
-            (ν n Set.univ + (ENNReal.ofReal Mass - ν n Set.univ)) := by
-          rw [mul_one]; ring
-      _ = ENNReal.ofReal Mass⁻¹ * ENNReal.ofReal Mass := by rw [h_sum_eq]
-      _ = ENNReal.ofReal ((Mass : ℝ)⁻¹ * (Mass : ℝ)) := (ENNReal.ofReal_mul hM_inv_nn).symm
-      _ = ENNReal.ofReal 1 := by rw [inv_mul_cancel₀ hMass_pos.ne']
-      _ = 1 := ENNReal.ofReal_one
-  set P : ℕ → ProbabilityMeasure ℝ := fun n => ⟨p_meas n, hp_prob n⟩ with hP_def
-  -- Step 4: Tightness of {P n} on ℝ via the uniform mass bound and an Icc(-R,R) argument.
-  have h_tight : IsTightMeasureSet {((μ : ProbabilityMeasure ℝ) : Measure ℝ) | μ ∈ Set.range P} := by
-    rw [isTightMeasureSet_iff_exists_isCompact_measure_compl_le]
-    intro η hη
-    by_cases hη_top : η = ⊤
-    · exact ⟨∅, isCompact_empty, fun _ _ => hη_top ▸ le_top⟩
-    set δ := η.toReal with hδ_def
-    have hδ_pos : 0 < δ := ENNReal.toReal_pos hη.ne' hη_top
-    have hδ_le : ENNReal.ofReal δ ≤ η := by
-      rw [hδ_def, ENNReal.ofReal_toReal hη_top]
-    have hξ_exist : ∃ r : ℝ, 0 < r ∧ ∀ ξ, |ξ| < r → ‖S.exponent ξ‖ < δ/8 := by
-      have htend : Tendsto (fun ξ : ℝ => ‖S.exponent ξ‖) (𝓝 0) (𝓝 0) := by
-        have h1 : Tendsto S.exponent (𝓝 0) (𝓝 0) := by
-          have := S.exponent_continuous.tendsto 0
-          rw [S.exponent_zero] at this
-          exact this
-        have h2 : Tendsto (fun z : ℂ => ‖z‖) (𝓝 0) (𝓝 0) := by
-          have := (continuous_norm (E := ℂ)).tendsto 0
-          simpa using this
-        exact h2.comp h1
-      have hnhds : ∀ᶠ ξ in 𝓝 (0 : ℝ), ‖S.exponent ξ‖ < δ/8 :=
-        htend.eventually (Iio_mem_nhds (by linarith))
-      rw [Metric.eventually_nhds_iff] at hnhds
-      obtain ⟨r, hr_pos, hr⟩ := hnhds
-      exact ⟨r, hr_pos, fun ξ hξ => hr (by simpa [Real.dist_eq, sub_zero] using hξ)⟩
-    obtain ⟨ξ_bound, hξ_bound_pos, hξ_bound⟩ := hξ_exist
-    set R := max (1 : ℝ) (2 / ξ_bound + 1) with hR_def
-    have hR_pos : 0 < R := lt_of_lt_of_le one_pos (le_max_left _ _)
-    have hR_inv : 2 / R < ξ_bound := by
-      have h_denom_pos : (0 : ℝ) < 2 / ξ_bound + 1 := by positivity
-      have h1 : 2 / R ≤ 2 / (2 / ξ_bound + 1) := by
-        apply div_le_div_of_nonneg_left (by norm_num) h_denom_pos (le_max_right _ _)
-      have h2 : 2 / (2 / ξ_bound + 1) < ξ_bound := by
-        rw [div_lt_iff₀ h_denom_pos]
-        have h3 : (2 / ξ_bound + 1) * ξ_bound = 2 + ξ_bound := by field_simp
-        linarith [h3]
-      linarith
-    have hM_bound : ∀ ξ ∈ Set.Icc (0:ℝ) (2/R), ‖S.exponent ξ‖ ≤ δ/8 := by
-      intro ξ hξ
-      have h1 : |ξ| < ξ_bound := by
-        rw [abs_of_nonneg hξ.1]
-        exact lt_of_le_of_lt hξ.2 hR_inv
-      exact le_of_lt (hξ_bound ξ h1)
-    have hbound : ∀ t : {t : ℝ // 0 < t},
-        t.val⁻¹ * ((S.measure t : Measure ℝ) (largeSet R)).toReal ≤ δ/2 := by
-      intro t
-      have h_aux := S.scaled_mass_bound_real_with_max R hR_pos (δ/8)
-        (by linarith) hM_bound t
-      linarith
-    refine ⟨Set.Icc (-R) R, isCompact_Icc, ?_⟩
-    intro μ' hμ'
-    obtain ⟨ν', hν'_range, hν'_eq⟩ := hμ'
-    obtain ⟨n, hPn⟩ := hν'_range
-    rw [← hν'_eq, ← hPn]
-    have hP_unfold : ((P n : ProbabilityMeasure ℝ) : Measure ℝ) = p_meas n := rfl
-    rw [hP_unfold]
-    have h0_in_K : (0 : ℝ) ∈ Set.Icc (-R) R := ⟨by linarith, by linarith⟩
-    have hdirac0 : Measure.dirac 0 (Set.Icc (-R) R)ᶜ = 0 := by
-      rw [Measure.dirac_apply' _ isClosed_Icc.measurableSet.compl, Set.indicator_apply]
-      simp [h0_in_K]
-    have hKc_measurable : MeasurableSet (Set.Icc (-R) R)ᶜ :=
-      isClosed_Icc.measurableSet.compl
-    have hKc_sub : (Set.Icc (-R) R)ᶜ ⊆ largeSet R := by
-      intro x hx
-      simp only [Set.mem_compl_iff, Set.mem_Icc, not_and_or, not_le] at hx
-      simp only [mem_largeSet]
-      rcases hx with hx | hx
-      · have h_neg : x < 0 := lt_of_lt_of_le hx (neg_nonpos_of_nonneg hR_pos.le)
-        rw [abs_of_neg h_neg]; linarith
-      · have h_pos : 0 < x := lt_of_le_of_lt hR_pos.le hx
-        rw [abs_of_pos h_pos]; linarith
-    have hν_n_Kc : ν n (Set.Icc (-R) R)ᶜ ≤ S.scaledMeasure (t_seq n) (largeSet R) := by
-      rw [hν_def]
-      exact measure_mono hKc_sub
-    have hsm_R : S.scaledMeasure (t_seq n) (largeSet R) ≤ ENNReal.ofReal (δ/2) := by
-      rw [S.scaledMeasure_apply]
-      have h1 := hbound (t_seq n)
-      have hfin : (S.measure (t_seq n) : Measure ℝ) (largeSet R) ≠ ⊤ := measure_ne_top _ _
-      have ht_inv_nn : 0 ≤ (t_seq n).val⁻¹ := le_of_lt (inv_pos.mpr (t_seq n).prop)
-      calc ENNReal.ofReal (t_seq n).val⁻¹ * (S.measure (t_seq n) : Measure ℝ) (largeSet R)
-          = ENNReal.ofReal ((t_seq n).val⁻¹ *
-            ((S.measure (t_seq n) : Measure ℝ) (largeSet R)).toReal) := by
-            conv_lhs => rw [← ENNReal.ofReal_toReal hfin]
-            rw [← ENNReal.ofReal_mul ht_inv_nn]
-        _ ≤ ENNReal.ofReal (δ/2) := ENNReal.ofReal_le_ofReal h1
-    have hp_Kc : p_meas n (Set.Icc (-R) R)ᶜ ≤ ENNReal.ofReal Mass⁻¹ * ENNReal.ofReal (δ/2) := by
-      simp only [hp_meas_def, Measure.add_apply, Measure.smul_apply, smul_eq_mul, hdirac0,
-        mul_zero, add_zero]
-      exact mul_le_mul_left' (le_trans hν_n_Kc hsm_R) (ENNReal.ofReal Mass⁻¹)
-    have hM_pos_ge_one : (1 : ℝ) ≤ Mass := by
-      rw [hMass_def]; push_cast
-      have h1 : (0 : ℝ) ≤ C_small := NNReal.coe_nonneg C_small
-      have h2 : (0 : ℝ) ≤ C_large := NNReal.coe_nonneg C_large
-      linarith
-    have hM_inv_le_one : Mass⁻¹ ≤ 1 := by
-      rw [inv_le_one_iff₀]; right; exact hM_pos_ge_one
-    have hM_inv_nn : (0 : ℝ) ≤ Mass⁻¹ := le_of_lt (inv_pos.mpr hMass_pos)
-    have hfinal_real : Mass⁻¹ * (δ/2) ≤ δ := by
-      calc Mass⁻¹ * (δ/2) ≤ 1 * (δ/2) :=
-            mul_le_mul_of_nonneg_right hM_inv_le_one (by linarith)
-        _ = δ/2 := one_mul _
-        _ ≤ δ := by linarith
-    have hfinal_ennreal : ENNReal.ofReal Mass⁻¹ * ENNReal.ofReal (δ/2) ≤ ENNReal.ofReal δ := by
-      have heq : ENNReal.ofReal Mass⁻¹ * ENNReal.ofReal (δ/2) =
-          ENNReal.ofReal (Mass⁻¹ * (δ/2)) :=
-        (ENNReal.ofReal_mul hM_inv_nn).symm
-      rw [heq]
-      exact ENNReal.ofReal_le_ofReal hfinal_real
-    calc p_meas n (Set.Icc (-R) R)ᶜ
-        ≤ ENNReal.ofReal Mass⁻¹ * ENNReal.ofReal (δ/2) := hp_Kc
-      _ ≤ ENNReal.ofReal δ := hfinal_ennreal
-      _ ≤ η := hδ_le
-  -- Step 5: Prokhorov — extract a subsequential limit.
-  have h_compact : IsCompact (closure (Set.range P)) :=
-    isCompact_closure_of_isTightMeasureSet h_tight
-  have h_in_range : ∀ n, P n ∈ closure (Set.range P) :=
-    fun n => subset_closure (Set.mem_range_self n)
-  obtain ⟨P_inf, _, φ, hφ_mono, hP_tendsto⟩ := h_compact.tendsto_subseq h_in_range
-  -- Step 6: Define ν := Mass · P_inf restricted to {0}ᶜ. This strips any atom at 0.
-  let ν_out : Measure ℝ := (ENNReal.ofReal Mass) • ((P_inf : Measure ℝ).restrict {0}ᶜ)
-  have hν_out_fin : IsFiniteMeasure ν_out := by
-    constructor
-    simp only [ν_out, Measure.smul_apply, Measure.restrict_apply MeasurableSet.univ,
-      Set.univ_inter, smul_eq_mul]
-    calc ENNReal.ofReal Mass * (P_inf : Measure ℝ) ({0}ᶜ)
-        ≤ ENNReal.ofReal Mass * 1 := by gcongr; exact prob_le_one
-      _ = ENNReal.ofReal Mass := by rw [mul_one]
-      _ < ⊤ := ENNReal.ofReal_lt_top
-  -- ν_out {0} = 0 (singleton ∩ {0}ᶜ = ∅).
-  have hν_out_zero_singleton : ν_out {0} = 0 := by
-    simp only [ν_out, Measure.smul_apply, smul_eq_mul]
-    rw [Measure.restrict_apply (measurableSet_singleton 0)]
-    have h_inter : ({(0 : ℝ)} : Set ℝ) ∩ ({0} : Set ℝ)ᶜ = ∅ := by
-      ext x; simp
-    rw [h_inter, measure_empty, mul_zero]
-  refine ⟨ν_out, hν_out_fin, t_seq ∘ φ, ?_, hν_out_zero_singleton, ?_⟩
-  · exact ht_seq_tendsto.comp hφ_mono.tendsto_atTop
-  -- Convergence of integrals against BCFs vanishing near 0.
-  intro f hf_vanish_near_zero
-  obtain ⟨r, hr_pos, hf_zero⟩ := hf_vanish_near_zero
-  have hP_int := (ProbabilityMeasure.tendsto_iff_forall_integral_tendsto.mp hP_tendsto) f
-  simp only [Function.comp_apply, P, ProbabilityMeasure.coe_mk] at hP_int
-  have hf_continuous : Continuous f := f.continuous
-  have hf0 : f 0 = 0 := hf_zero 0 (by simp [abs_zero, hr_pos])
-  set MR : ℝ := (Mass : ℝ) with hMR_def
-  have hMR_pos : 0 < MR := hMass_pos
-  -- ∫ f dP_inf = ∫_{≠0} f dP_inf + f(0)·P_inf({0}) = ∫_{≠0} f dP_inf + 0.
-  have hP_inf_split : ∫ x, f x ∂(P_inf : Measure ℝ) =
-      ∫ x in {0}ᶜ, f x ∂(P_inf : Measure ℝ) +
-      ∫ x in {(0 : ℝ)}, f x ∂(P_inf : Measure ℝ) := by
-    rw [← integral_add_compl (measurableSet_singleton 0)
-        (f.integrable (P_inf : Measure ℝ))]
-    ring
-  have hP_inf_dirac : ∫ x in {(0 : ℝ)}, f x ∂(P_inf : Measure ℝ) = 0 := by
-    rw [integral_singleton]
-    simp [hf0]
-  have hP_inf_eq : ∫ x, f x ∂(P_inf : Measure ℝ) =
-      ∫ x in {0}ᶜ, f x ∂(P_inf : Measure ℝ) := by
-    rw [hP_inf_split, hP_inf_dirac, add_zero]
-  have h_int_ν_out : ∫ x, f x ∂ν_out = MR * ∫ x, f x ∂(P_inf : Measure ℝ) := by
-    show ∫ x, f x ∂((ENNReal.ofReal Mass) •
-        ((P_inf : Measure ℝ).restrict {0}ᶜ)) = MR * _
-    rw [integral_smul_measure, ENNReal.toReal_ofReal hMass_pos.le]
-    show MR • ∫ x in {0}ᶜ, f x ∂(P_inf : Measure ℝ) = _
-    rw [smul_eq_mul, ← hP_inf_eq]
-  -- ∫ f d(p_meas n) = MR⁻¹ * ∫ f dν n  (Dirac at 0 contributes 0 since f(0)=0).
-  have h_int_P_eq : ∀ n, ∫ x, f x ∂(p_meas n) = MR⁻¹ * ∫ x, f x ∂(ν n) := by
-    intro n
-    haveI : IsFiniteMeasure (ν n) := hν_finite n
-    have h_integrable_ν : Integrable f (ν n) := f.integrable (ν n)
-    have h_integrable_dirac : Integrable f (Measure.dirac (0 : ℝ)) :=
-      integrable_dirac (by rw [hf0]; simp)
-    have h_int1 : Integrable f (ENNReal.ofReal Mass⁻¹ • ν n) :=
-      Integrable.smul_measure h_integrable_ν ENNReal.ofReal_ne_top
-    have hcoeff_finite : ENNReal.ofReal Mass⁻¹ * (ENNReal.ofReal Mass - ν n Set.univ) ≠ ⊤ := by
-      apply ENNReal.mul_ne_top ENNReal.ofReal_ne_top
-      exact ne_top_of_le_ne_top ENNReal.ofReal_ne_top tsub_le_self
-    have h_int2 : Integrable f ((ENNReal.ofReal Mass⁻¹ *
-        (ENNReal.ofReal Mass - ν n Set.univ)) • Measure.dirac (0 : ℝ)) :=
-      Integrable.smul_measure h_integrable_dirac hcoeff_finite
-    show ∫ x, f x ∂(((ENNReal.ofReal Mass⁻¹) • ν n) +
-        ((ENNReal.ofReal Mass⁻¹ * (ENNReal.ofReal Mass - ν n Set.univ)) •
-          Measure.dirac (0 : ℝ))) = MR⁻¹ * _
-    rw [integral_add_measure h_int1 h_int2]
-    rw [integral_smul_measure, integral_smul_measure, integral_dirac _ _]
-    simp only [smul_eq_mul, hf0, mul_zero, add_zero]
-    have hMR_inv_nn : (0 : ℝ) ≤ (MR : ℝ)⁻¹ := le_of_lt (inv_pos.mpr hMR_pos)
-    rw [show (ENNReal.ofReal (Mass : ℝ)⁻¹).toReal = MR⁻¹ from
-      ENNReal.toReal_ofReal hMR_inv_nn]
-  -- ∫ f dν n = MR * ∫ f d(p_meas n) (rearranged).
-  have h_int_ν_subseq : Tendsto (fun k => ∫ x, f x ∂(ν (φ k))) atTop
-      (𝓝 (MR * ∫ x, f x ∂(P_inf : Measure ℝ))) := by
-    have hP_seq : Tendsto (fun k => ∫ x, f x ∂(p_meas (φ k))) atTop
-        (𝓝 (∫ x, f x ∂(P_inf : Measure ℝ))) := hP_int
-    have h_eq : ∀ k, ∫ x, f x ∂(p_meas (φ k)) = MR⁻¹ * ∫ x, f x ∂(ν (φ k)) :=
-      fun k => h_int_P_eq (φ k)
-    have h_eq' : (fun k => ∫ x, f x ∂(p_meas (φ k))) =
-        (fun k => MR⁻¹ * ∫ x, f x ∂(ν (φ k))) := funext h_eq
-    rw [h_eq'] at hP_seq
-    have h_mul : Tendsto (fun k => MR * (MR⁻¹ * ∫ x, f x ∂(ν (φ k)))) atTop
-        (𝓝 (MR * ∫ x, f x ∂(P_inf : Measure ℝ))) :=
-      hP_seq.const_mul MR
-    refine h_mul.congr (fun k => ?_)
-    rw [← mul_assoc, mul_inv_cancel₀ hMR_pos.ne', one_mul]
-  -- Now: t⁻¹ · ∫ f dμ_t = ∫ f d(scaledMeasure t) = ∫ f d(ν n).
-  rw [Function.comp_def]
-  show Tendsto (fun k => ((t_seq (φ k)).val)⁻¹ *
-      ∫ x, f x ∂(S.measure (t_seq (φ k)) : Measure ℝ)) atTop (𝓝 _)
-  have h_scaled_eq : ∀ k, ((t_seq (φ k)).val)⁻¹ *
-      ∫ x, f x ∂(S.measure (t_seq (φ k)) : Measure ℝ) = ∫ x, f x ∂(ν (φ k)) := by
-    intro k
-    rw [hν_def]
-    rw [S.integral_scaledMeasure, smul_eq_mul]
-  simp_rw [h_scaled_eq]
-  rw [h_int_ν_out]
-  exact h_int_ν_subseq
 
 end ConvolutionSemigroup
 
@@ -4557,12 +4205,12 @@ private lemma scaled_smallBall_compensated_tendsto
   rw [← hRHS]
   exact hlim
 
-/-! ### Final assembly of the Lévy-Khintchine triple (finite-ν pivot)
+/-! ### Final assembly of the Lévy-Khintchine triple
 
 Following the 2026-05-20 pivot to the compound-Poisson + Gaussian intermediate, the
 assembly is structured around `exists_drift_variance_jumpMeasure_along_seq`, which
-produces all three witnesses `(b, σ², ν)` along a *single* subsequence under the
-finite-small-mass hypothesis. The key downstream lemmas are:
+produces all three witnesses `(b, σ², ν)` along a *single* subsequence. The key
+downstream lemmas are:
 
 * `exists_drift_variance_jumpMeasure_along_seq` — the diagonal extraction.
 * `psi_eq_levyKhintchine_formula` — given the diagonal tuple, the formula holds for ψ.
@@ -4939,16 +4587,14 @@ theorem psi_eq_levyKhintchine_formula
   -- B6: ν-side algebra (handled by the dedicated identity lemma above).
   exact psi_levyKhintchine_algebra hr ξ hν hν_zero b_r σ_sq_r
 
-/-- **Main assembly (finite-ν pivot).** Under the finite-small-mass hypothesis, the
-characteristic exponent `ψ` of `S` decomposes into the Lévy-Khintchine triple
-`(b, σ², ν)` where `ν` is the externally extracted finite Lévy measure on `ℝ\{0}`.
+/-- **Main assembly.** The characteristic exponent `ψ` of `S` decomposes into the
+Lévy-Khintchine triple `(b, σ², ν)` where `ν` is the externally extracted Lévy
+measure on `ℝ\{0}`.
 
 The diagonal extraction `exists_drift_variance_jumpMeasure_along_seq` produces all
 three witnesses along a single subsequence; the formula then follows from
 `psi_eq_levyKhintchine_formula`. -/
-theorem psi_decomposition
-    (_h_finite_small_mass : ∃ C : ℝ≥0, ∀ t : {t : ℝ // 0 < t},
-        t.val⁻¹ * ((S.measure t : Measure ℝ) smallSet).toReal ≤ ↑C) :
+theorem psi_decomposition :
     ∃ (b : ℝ) (σ_sq : ℝ≥0) (ν : Measure ℝ),
       IsLevyMeasure ν ∧
       ∀ ξ : ℝ,
@@ -5046,53 +4692,43 @@ theorem convolutionSemigroupOfMeasure_one_coe
   rw [convolutionSemigroupOfMeasure_one]
   rfl
 
-/-! ## Sub-lemma 4: Integral representation (finite-ν pivot) -/
+/-! ## Sub-lemma 4: Integral representation -/
 
 /-- A continuous, conditionally negative definite function `ψ : ℝ → ℂ` with `ψ(0) = 0`
-has the Lévy-Khintchine integral representation in the **finite-ν case**, under the
-hypothesis that the constructed convolution semigroup `S` satisfies a uniform bound
-on the scaled small-jump mass `t⁻¹·μ_t({|x|<1}) ≤ C` (equivalent to ν being finite).
+has the Lévy-Khintchine integral representation.
 
 **Proof:**
 1. By Schoenberg, `exp(tψ)` is PD, continuous, with value 1 at 0 for each `t > 0`.
 2. By Bochner, there exists probability measure `μ_t` with `charFun(μ_t) = exp(tψ)`.
 3. The family `{μ_t}` forms a convolution semigroup (see `convolutionSemigroupOfCND`).
-4. Under `h_finite_small_mass`, the diagonal extraction yields `(b, σ², ν)` on a single
-   subsequence and `psi_decomposition` packages them into the triple. -/
-theorem levyKhintchine_of_cnd_finite
+4. The diagonal extraction yields `(b, σ², ν)` on a single subsequence and
+   `psi_decomposition` packages them into the triple. -/
+theorem levyKhintchine_of_cnd
     {ψ : ℝ → ℂ} (hψ_cont : Continuous ψ) (hψ_zero : ψ 0 = 0)
     (hψ_cnd : IsConditionallyNegativeDefinite ψ)
-    (hψ_herm : ∀ ξ, ψ (-ξ) = starRingEnd ℂ (ψ ξ))
-    (h_finite_small_mass : ∃ C : ℝ≥0, ∀ t : {t : ℝ // 0 < t},
-        t.val⁻¹ * (((convolutionSemigroupOfCND hψ_cont hψ_zero hψ_cnd hψ_herm).measure t :
-            Measure ℝ) smallSet).toReal ≤ ↑C) :
+    (hψ_herm : ∀ ξ, ψ (-ξ) = starRingEnd ℂ (ψ ξ)) :
     ∃ T : LevyKhintchineTriple, ∀ ξ : ℝ,
       ψ ξ = ↑T.drift * ↑ξ * I
         - ↑(T.gaussianVariance : ℝ) * ↑ξ ^ 2 / 2
         + ∫ x, levyCompensatedIntegrand ξ x ∂T.levyMeasure := by
   set S := convolutionSemigroupOfCND hψ_cont hψ_zero hψ_cnd hψ_herm
-  obtain ⟨b, σ_sq, ν, hν_levy, hψ_eq⟩ := S.psi_decomposition h_finite_small_mass
+  obtain ⟨b, σ_sq, ν, hν_levy, hψ_eq⟩ := S.psi_decomposition
   exact ⟨⟨b, σ_sq, ν, hν_levy⟩, hψ_eq⟩
 
-/-! ## Assembly: Lévy-Khintchine representation (finite-ν pivot) -/
+/-! ## Assembly: Lévy-Khintchine representation -/
 
-/-- **Lévy-Khintchine representation theorem (finite-ν pivot)**: every infinitely
-divisible probability measure `μ` on `ℝ` whose associated convolution semigroup
-satisfies the uniform finite-small-mass bound has a characteristic function of the
+/-- **Lévy-Khintchine representation theorem**: every infinitely
+divisible probability measure `μ` on `ℝ` has a characteristic function of the
 form `exp(ibξ − σ²ξ²/2 + ∫ f(ξ,x) dν(x))` with `f = exp(ixξ) − 1 − ixξ·1_{|x|<1}`
-and `ν` a finite Lévy measure.
+and `ν` a Lévy measure.
 
 **Proof via sub-lemmas:**
 1. `charFun_ne_zero` — characteristic function never vanishes.
 2. `exists_continuous_log` — continuous logarithm `ψ` with `charFun μ = exp ψ`.
 3. `isConditionallyNegativeDefinite_log` — `ψ` is CND.
-4. `levyKhintchine_of_cnd_finite` — under the finite-small-mass hypothesis, `ψ` has the
-   integral representation. -/
-theorem levyKhintchine_representation_finite
-    {μ : Measure ℝ} [IsProbabilityMeasure μ] (h : IsInfinitelyDivisible μ)
-    (h_finite_small_mass : ∃ C : ℝ≥0, ∀ t : {t : ℝ // 0 < t},
-        t.val⁻¹ * (((convolutionSemigroupOfMeasure μ h).measure t :
-            Measure ℝ) smallSet).toReal ≤ ↑C) :
+4. `levyKhintchine_of_cnd` — `ψ` has the integral representation. -/
+theorem levyKhintchine_representation
+    {μ : Measure ℝ} [IsProbabilityMeasure μ] (h : IsInfinitelyDivisible μ) :
     ∃ T : LevyKhintchineTriple, ∀ ξ : ℝ,
       charFun μ ξ = exp (
         ↑T.drift * ↑ξ * I
@@ -5100,9 +4736,9 @@ theorem levyKhintchine_representation_finite
         + ∫ x, levyCompensatedIntegrand ξ x ∂T.levyMeasure) := by
   -- Note: we route through psi_decomposition on `convolutionSemigroupOfMeasure μ h`
   -- (rather than on the Bochner-built `convolutionSemigroupOfCND` directly) so that
-  -- the t=1 member is literally μ, matching the user-supplied hypothesis.
+  -- the t=1 member is literally μ.
   set S := convolutionSemigroupOfMeasure μ h
-  obtain ⟨b, σ_sq, ν, hν_levy, hψ_eq⟩ := S.psi_decomposition h_finite_small_mass
+  obtain ⟨b, σ_sq, ν, hν_levy, hψ_eq⟩ := S.psi_decomposition
   refine ⟨⟨b, σ_sq, ν, hν_levy⟩, fun ξ => ?_⟩
   -- charFun μ ξ = exp((1 : ℂ) * S.exponent ξ) via the t=1 patch.
   have hcharFun_one : (S.measure ⟨1, one_pos⟩ : MeasureTheory.ProbabilityMeasure ℝ) =

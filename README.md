@@ -83,7 +83,7 @@ A Lean 4 formalization of Lévy processes, built on top of mathlib.
 - Sub-lemmas 1–3 fully proved: non-vanishing, continuous logarithm, conditional negative definiteness
 - Schoenberg helper lemmas, convolution semigroup structure
 - Sub-lemma 4: Schoenberg's theorem proved via kernel factorization + spectral decomposition; convolution semigroup construction complete
-- Lévy–Khintchine assembly uses the finite-ν pivot: the triple `(b, σ², ν)` is extracted along a single subsequence via `exists_drift_variance_jumpMeasure_along_seq`, and the representation theorem (`levyKhintchine_representation_finite`) is fully proved
+- Lévy–Khintchine assembly uses the finite-ν pivot: the triple `(b, σ², ν)` is extracted along a single subsequence via `exists_drift_variance_jumpMeasure_along_seq`, and the representation theorem (`levyKhintchine_representation`) is fully proved
 - Analytic limit identification (`psi_eq_levyKhintchine_formula`) fully proved: it identifies `t⁻¹(charFun μ_t − 1) → Ψ(ξ)` by chaining four subsequential limits — the drift term, the small-jump compensated limit (3rd-order Taylor remainder + δ-truncation), and the complex large-jump limit (smooth-cutoff approximation) — against `charFun_scaled_limit` via uniqueness of limits
 - The formula is stated at an **extracted atom-free split radius** `r ∈ (1/2, 1]`: the Gaussian variance is `σ² = lim t⁻¹∫_{|x|<r} x² dμ_t − ∫_{|x|<r} x² dν` (subtracting the small-jump second moment that the compensated integral already carries) and the drift is recovered at the ν level as `b + ∫_{r≤|x|<1} x dν`. This normalization is what makes the formula correct — a naive radius-1 statement double-counts the small-jump second moment
 

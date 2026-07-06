@@ -21,14 +21,13 @@ where `(b, σ², ν)` is the Lévy-Khintchine triple.
 
 ## Main results
 
-* `ProbabilityTheory.levyKhintchine_representation_finite` — the representation theorem
-  in the finite-ν case (compound-Poisson + Gaussian pivot), under a uniform
-  finite-small-mass hypothesis on the associated convolution semigroup. Fully proved.
+* `ProbabilityTheory.levyKhintchine_representation` — the representation theorem
+  for every infinitely divisible probability measure on `ℝ`. Fully proved.
 
 ## Proof structure
 
 The representation theorem chains through four sub-lemmas to
-`levyKhintchine_of_cnd_finite`, which uses Schoenberg + Bochner together with the
+`levyKhintchine_of_cnd`, which uses Schoenberg + Bochner together with the
 diagonal extraction `exists_drift_variance_jumpMeasure_along_seq`. The analytic
 limit-identification core `psi_eq_levyKhintchine_formula` (the small-jump + large-jump
 limit identifications) is fully proved. See `LevyKhintchineProof.lean` and `Bochner.lean`.
