@@ -263,11 +263,9 @@ private theorem tent_integral_eq_fubini (g : ℝ → ℂ) (hg_cont : Continuous 
           ∫ t in (-u)..N, (1 : ℝ) from
           intervalIntegral.integral_congr fun t ht => by
             rw [Set.uIcc_of_le hnu_le_N] at ht
-            simp [Set.indicator_apply, Set.mem_Icc, ht.1,
+            simp [Set.mem_Icc, ht.1,
                   show t ≤ N - u from by linarith [hu0, ht.2]]]
-      have hNu_nn : (0 : ℝ) ≤ N - (-u) := by linarith [hnu_le_N]
-      simp [intervalIntegral.integral_const, abs_of_nonpos hu0,
-            Real.norm_of_nonneg hNu_nn]
+      simp [intervalIntegral.integral_const, abs_of_nonpos hu0]
     · -- u > 0: interval is [-u, N-u] ∩ [0,N] = [0, N-u], length = N-u = N-|u|
       have huN : u ≤ N := by
         rw [abs_of_pos hu0] at huN_bound; exact huN_bound
@@ -283,7 +281,7 @@ private theorem tent_integral_eq_fubini (g : ℝ → ℂ) (hg_cont : Continuous 
           ∫ t in (0 : ℝ)..(N - u), (1 : ℝ) from
           intervalIntegral.integral_congr fun t ht => by
             rw [Set.uIcc_of_le (by linarith [huN])] at ht
-            simp [Set.indicator_apply, Set.mem_Icc,
+            simp [Set.mem_Icc,
                   show -u ≤ t from by linarith [ht.1, hu0.le], ht.2]]
       rw [show ∫ t in (N - u)..N,
               Set.indicator (Set.Icc (-u) (N - u)) (1 : ℝ → ℝ) t = 0 from
@@ -291,7 +289,6 @@ private theorem tent_integral_eq_fubini (g : ℝ → ℂ) (hg_cont : Continuous 
             rw [Set.uIoo_of_le (by linarith [huN])] at ht
             simp [Set.mem_Icc, show ¬(t ≤ N - u) from by
               linarith [ht.1]]]
-      have hNu_nn : (0 : ℝ) ≤ N - u := by linarith [huN]
       simp [intervalIntegral.integral_const, abs_of_pos hu0]
   -- Step 3: Combine LHS with hfub
   rw [hfub, ← integral_const_mul]
@@ -1208,8 +1205,7 @@ private theorem integrable_inverseFourierDensity (ψ : ℝ → ℂ) (hψc : Cont
     ENNReal.ofReal (inverseFourierDensity ψ x * Real.exp (-(x ^ 2 / (2 * (↑n + 1)))))
   -- gn is monotone increasing to ENNReal.ofReal (ρ x)
   have hgn_mono : ∀ᵐ x ∂volume, Monotone (fun n => gn n x) := by
-    apply ae_of_all; intro x
-    intro m n hmn
+    apply ae_of_all; intro x m n hmn
     apply ENNReal.ofReal_le_ofReal
     apply mul_le_mul_of_nonneg_left
     · apply Real.exp_le_exp_of_le

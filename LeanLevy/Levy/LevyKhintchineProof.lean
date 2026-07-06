@@ -2858,9 +2858,9 @@ lemma drift_limit
     set μ : Measure ℝ := (S.measure (t_seq n) : Measure ℝ)
     haveI : IsProbabilityMeasure μ := (S.measure (t_seq n)).prop
     have hcf : charFun μ (1 : ℝ) = ∫ x : ℝ, Complex.exp (↑x * I) ∂μ := by
-      rw [charFun_apply_real]; congr 1; ext x; push_cast; ring
+      rw [charFun_apply_real]; congr 1; ext x; push_cast; ring_nf
     have hint1 : Integrable (fun x : ℝ => Complex.exp (↑x * I)) μ := by
-      convert integrable_charFun_integrand (μ := μ) 1 using 2; push_cast; ring
+      convert integrable_charFun_integrand (μ := μ) 1 using 2; push_cast; ring_nf
     have hnum : charFun μ (1 : ℝ) - 1 = ∫ x : ℝ, (Complex.exp (↑x * I) - 1) ∂μ := by
       rw [hcf]
       conv_lhs => rw [show (1 : ℂ) = ∫ _ : ℝ, (1 : ℂ) ∂μ by simp [integral_const]]
@@ -3057,7 +3057,7 @@ private lemma charFun_sub_one_div_decomp (t : {t : ℝ // 0 < t}) (ξ : ℝ)
   have hexp_int : Integrable (fun x : ℝ => exp ((↑x : ℂ) * ↑ξ * I)) μ := by
     refine (integrable_charFun_integrand (μ := μ) ξ).congr ?_
     refine Filter.Eventually.of_forall (fun x => ?_)
-    push_cast; ring
+    push_cast; ring_nf
   -- Integrability of x ↦ exp(↑x*↑ξ*I) − 1.
   have hsub_int : Integrable (fun x : ℝ => exp ((↑x : ℂ) * ↑ξ * I) - 1) μ :=
     hexp_int.sub (integrable_const _)

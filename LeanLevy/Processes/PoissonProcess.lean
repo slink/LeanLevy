@@ -356,7 +356,7 @@ private theorem poissonMeasure_conv_singleton (a b : ℝ≥0) (m : ℕ) :
     ext ⟨a', b'⟩
     simp only [Set.mem_preimage, Set.mem_singleton_iff, Set.mem_iUnion]
     constructor
-    · intro hab; exact ⟨a', by rw [if_pos (by omega)]; ext <;> simp <;> omega⟩
+    · intro hab; exact ⟨a', by rw [if_pos (by omega)]; ext <;> simp; omega⟩
     · rintro ⟨n, hn⟩
       by_cases hle : n ≤ m
       · rw [if_pos hle] at hn; obtain ⟨rfl, rfl⟩ := Prod.mk.inj hn; omega
@@ -577,7 +577,7 @@ private theorem poissonProcessFDD_erase (rate : ℝ≥0) (I : Finset ℝ≥0) (t
             ∑ j : Fin (posJ.val + 2), d ⟨j.val, by omega⟩ from
           Fintype.sum_equiv (finCongr hlen)
             (fun j => d ⟨j.val, by omega⟩) (fun j => d ⟨j.val, by omega⟩)
-            (fun j => by simp [finCongr_apply_mk])]
+            (fun j => by simp)]
         exact Fin.sum_univ_succAbove (fun j : Fin (posJ.val + 2) => d ⟨j.val, by omega⟩) kk
       rw [hlhs]
       -- Goal: d(k) + ∑ d(succAbove j) = ∑ ψ d j
@@ -616,7 +616,7 @@ private theorem poissonProcessFDD_erase (rate : ℝ≥0) (I : Finset ℝ≥0) (t
             subst hjk2
             rw [dif_neg (lt_irrefl _), if_pos rfl, if_pos (show (⟨k.val, hj⟩ : Fin _) = kJ from rfl)]
             have hsa_eq : (kk.succAbove ⟨k.val, hj⟩).val = k.val + 1 := by
-              rw [hsa_val]; simp [lt_irrefl k.val]
+              rw [hsa_val]; simp
             rw [show d ⟨(kk.succAbove ⟨k.val, hj⟩).val, hsa_bound ⟨k.val, hj⟩⟩ =
               d ⟨k.val + 1, by omega⟩ from congr_arg d (Fin.ext hsa_eq)]
             exact add_comm _ _

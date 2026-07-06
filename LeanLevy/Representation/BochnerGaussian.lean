@@ -65,6 +65,6 @@ lemma bochner_identity
   exact ⟨μ, fun t => by
     have h := (hμ t).symm
     simp only [MeasureTheory.ProbabilityMeasure.characteristicFun_def, charFun_apply_real] at h
-    rw [h]; congr 1; ext x; ring⟩
+    rw [h]; congr 1; ext x; ring_nf⟩
 
 end ProbabilityTheory

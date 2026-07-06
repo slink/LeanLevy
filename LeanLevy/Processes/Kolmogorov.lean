@@ -47,6 +47,7 @@ variable {ι : Type*} {α : ι → Type*}
 
 /-! ### Auxiliary lemmas -/
 
+omit [∀ i, TopologicalSpace (α i)] [∀ i, PolishSpace (α i)] [∀ i, BorelSpace (α i)] in
 /-- Each `α i` is nonempty when there is a projective family. -/
 theorem nonempty_of_projective (pf : ProjectiveFamily ι α) (i : ι) : Nonempty (α i) := by
   haveI := pf.prob {i}
