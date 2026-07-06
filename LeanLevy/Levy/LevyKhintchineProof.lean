@@ -4309,7 +4309,7 @@ private lemma remainder_ball_split
 `scaled_band_integral_tendsto` (Re/Im); ν-tail by dominated convergence as `δ → 0`. -/
 private lemma scaled_smallBall_remainder_tendsto
     {r : ℝ} (hr : 0 < r) (hr1 : r ≤ 1) (ξ : ℝ)
-    {ν : Measure ℝ} (hν : IsLevyMeasure ν) (_hν_zero : ν {0} = 0)
+    {ν : Measure ℝ} (hν : IsLevyMeasure ν)
     (hν_r : ν {x | |x| = r} = 0)
     {t_seq : ℕ → {t : ℝ // 0 < t}}
     (hσ_bdd : ∃ C : ℝ, ∀ k, (t_seq k).val⁻¹ *
@@ -4464,7 +4464,7 @@ private lemma scaled_smallBall_remainder_tendsto
 assembly, where the `−σ_G²ξ²/2` regrouping is done once. -/
 private lemma scaled_smallBall_compensated_tendsto
     {r : ℝ} (hr : 0 < r) (hr1 : r ≤ 1) (ξ : ℝ)
-    {ν : Measure ℝ} (hν : IsLevyMeasure ν) (hν_zero : ν {0} = 0)
+    {ν : Measure ℝ} (hν : IsLevyMeasure ν) (_hν_zero : ν {0} = 0)
     (hν_r : ν {x | |x| = r} = 0)
     {t_seq : ℕ → {t : ℝ // 0 < t}} {σ_sq_r : ℝ}
     (hσ : Tendsto (fun k => (t_seq k).val⁻¹ *
@@ -4485,7 +4485,7 @@ private lemma scaled_smallBall_compensated_tendsto
     obtain ⟨C, hC⟩ := bddAbove_def.mp hσ.isBoundedUnder_le.bddAbove_range
     exact ⟨C, fun k => hC _ ⟨k, rfl⟩⟩
   -- Remainder limit from lemma 1.
-  have hrem := S.scaled_smallBall_remainder_tendsto hr hr1 ξ hν hν_zero hν_r hσ_bdd h_jump
+  have hrem := S.scaled_smallBall_remainder_tendsto hr hr1 ξ hν hν_r hσ_bdd h_jump
   -- The quadratic-correction limit: `↑ξ²/2 · ↑(t⁻¹·∫x²dμ_k) → ↑ξ²/2 · ↑σ_sq_r`.
   have hquad : Tendsto (fun k => (↑ξ ^ 2 / 2 : ℂ) *
       (↑((t_seq k).val⁻¹ * ∫ x in {x | |x| < r}, x ^ 2
@@ -4673,7 +4673,7 @@ own second moment `∫_{|x|<r} x² dν`; the `largeSet r` integral splits into a
 as the compensated `exp−1−ixξ` plus the drift correction `∫_{r≤|x|<1} x dν`. -/
 private lemma psi_levyKhintchine_algebra
     {r : ℝ} (hr : r ∈ Set.Ioc (1/2 : ℝ) 1) (ξ : ℝ)
-    {ν : Measure ℝ} [IsFiniteMeasure ν] (hν_zero : ν {0} = 0) (b_r : ℝ) (σ_sq_r : ℝ≥0) :
+    {ν : Measure ℝ} (hν : IsLevyMeasure ν) (_hν_zero : ν {0} = 0) (b_r : ℝ) (σ_sq_r : ℝ≥0) :
     (↑b_r * ↑ξ * I
       + (-(↑(σ_sq_r : ℝ) * ↑ξ ^ 2 / 2)
           + ∫ x in {x | |x| < r},
@@ -4684,8 +4684,8 @@ private lemma psi_levyKhintchine_algebra
       + ∫ x, levyCompensatedIntegrand ξ x ∂ν := by
   have hr_pos : (0 : ℝ) < r := by linarith [hr.1]
   have hr1 : r ≤ 1 := hr.2
-  -- ν is a Lévy measure (finite + ν{0}=0).
-  have hν_levy : IsLevyMeasure ν := IsLevyMeasure.of_isFiniteMeasure hν_zero
+  -- ν is a Lévy measure.
+  have hν_levy : IsLevyMeasure ν := hν
   -- Abbreviations for the sets.
   set Bball : Set ℝ := {x | |x| < r} with hBball_def
   set Bband : Set ℝ := {x | r ≤ |x| ∧ |x| < 1} with hBband_def
@@ -4706,13 +4706,19 @@ private lemma psi_levyKhintchine_algebra
     calc ‖exp ((↑(x * ξ) : ℂ) * I) - 1‖
         ≤ ‖exp ((↑(x * ξ) : ℂ) * I)‖ + ‖(1 : ℂ)‖ := norm_sub_le _ _
       _ = 2 := by rw [Complex.norm_exp_ofReal_mul_I, norm_one]; norm_num
-  -- `exp(ixξ)−1` is integrable on ν and any subset.
-  have hg_intOn : ∀ s : Set ℝ, IntegrableOn (fun x : ℝ => exp ((↑x : ℂ) * ↑ξ * I) - 1) s ν :=
-    fun s => integrableOn_of_bounded hg_cont hg_bnd
-  -- `ixξ` is integrableOn any set contained in {|x|<1} (bounded by |ξ|).
-  have hxi_intOn : ∀ s : Set ℝ, MeasurableSet s → s ⊆ {x : ℝ | |x| < 1} →
+  -- Finite ν-mass on the band and the outer tail (Lévy measure).
+  have hν_band_lt : ν Bband < ⊤ :=
+    lt_of_le_of_lt (measure_mono (fun x hx => hx.1)) (hν.measure_setOf_abs_ge_lt_top hr_pos)
+  have hν_ge1_lt : ν (largeSet 1) < ⊤ := hν.measure_setOf_abs_ge_lt_top one_pos
+  -- `exp(ixξ)−1` is integrable on any set of finite ν-mass (bounded by 2).
+  have hexp_int : ∀ s : Set ℝ, ν s < ⊤ →
+      IntegrableOn (fun x : ℝ => exp ((↑x : ℂ) * ↑ξ * I) - 1) s ν :=
+    fun s hs => integrableOn_of_bounded_of_measure_lt_top hs hg_cont hg_bnd
+  -- `ixξ` is integrableOn any finite-mass set contained in {|x|<1} (bounded by |ξ|).
+  have hxi_intOn : ∀ s : Set ℝ, MeasurableSet s → s ⊆ {x : ℝ | |x| < 1} → ν s < ⊤ →
       IntegrableOn (fun x : ℝ => (↑x : ℂ) * ↑ξ * I) s ν := by
-    intro s hs hsub
+    intro s hs hsub hfin
+    haveI : IsFiniteMeasure (ν.restrict s) := isFiniteMeasure_restrict.mpr hfin.ne
     refine (integrable_const (|ξ|)).mono' ?_ ?_
     · exact ((Complex.measurable_ofReal.mul measurable_const).mul
         measurable_const).aestronglyMeasurable
@@ -4731,29 +4737,23 @@ private lemma psi_levyKhintchine_algebra
   set Ctail : ℂ := ∫ x in largeSet 1, (exp ((↑x : ℂ) * ↑ξ * I) - 1) ∂ν with hCtail_def
   set Pball : ℝ := ∫ x in Bball, x ^ 2 ∂ν with hPball_def
   set Pbar : ℝ := ∫ x in Bband, x ∂ν with hPbar_def
-  -- Identity 1: remainder split on the ball.
-  have hball_sub : Bball ⊆ {x : ℝ | |x| < 1} :=
-    fun x hx => lt_of_lt_of_le hx hr1
-  have hxi_ball : IntegrableOn (fun x : ℝ => (↑x : ℂ) * ↑ξ * I) Bball ν :=
-    hxi_intOn Bball hmeas_ball hball_sub
-  have hcomp_ball : IntegrableOn
-      (fun x : ℝ => exp ((↑x : ℂ) * ↑ξ * I) - 1 - (↑x : ℂ) * ↑ξ * I) Bball ν :=
-    (hg_intOn Bball).sub hxi_ball
+  -- Identity 1: remainder split on the ball. The quadratic term is ν-integrable on the ball
+  -- via `sq_integrableOn_ball_levy`; the compensated integrand is the cubic Taylor remainder
+  -- minus the quadratic term (both ν-integrable on the ball for a Lévy measure).
   have hquad_ball : IntegrableOn (fun x : ℝ => ((↑x : ℂ) * ↑ξ) ^ 2 / 2) Bball ν := by
-    refine (integrable_const (r ^ 2 * ξ ^ 2 / 2 : ℝ)).mono' ?_ ?_
-    · exact (((Complex.measurable_ofReal.mul measurable_const).pow_const 2).div_const 2).aestronglyMeasurable
-    · refine (ae_restrict_iff' hmeas_ball).mpr (Filter.Eventually.of_forall (fun x hx => ?_))
-      have hx_r : |x| < r := hx
-      have hnorm : ‖((↑x : ℂ) * ↑ξ) ^ 2 / 2‖ = x ^ 2 * ξ ^ 2 / 2 := by
-        rw [norm_div, show ((↑x : ℂ) * ↑ξ) ^ 2 = ((↑(x ^ 2 * ξ ^ 2) : ℂ)) from by push_cast; ring,
-          Complex.norm_real, Real.norm_eq_abs, abs_of_nonneg (by positivity),
-          show ‖(2 : ℂ)‖ = 2 from by norm_num]
-      rw [hnorm]
-      have hx2 : x ^ 2 ≤ r ^ 2 := by
-        rw [← sq_abs x]; exact pow_le_pow_left₀ (abs_nonneg x) (le_of_lt hx_r) 2
-      have : x ^ 2 * ξ ^ 2 ≤ r ^ 2 * ξ ^ 2 :=
-        mul_le_mul_of_nonneg_right hx2 (by positivity)
-      linarith
+    have hrw : (fun x : ℝ => ((↑x : ℂ) * ↑ξ) ^ 2 / 2) =
+        fun x : ℝ => (↑((x ^ 2 * (ξ ^ 2 / 2) : ℝ)) : ℂ) := by
+      funext x; push_cast; ring
+    rw [hrw]
+    exact ((sq_integrableOn_ball_levy hν r).mul_const (ξ ^ 2 / 2)).ofReal
+  have hcomp_ball : IntegrableOn
+      (fun x : ℝ => exp ((↑x : ℂ) * ↑ξ * I) - 1 - (↑x : ℂ) * ↑ξ * I) Bball ν := by
+    have hrem : IntegrableOn (fun x : ℝ =>
+        exp ((↑x : ℂ) * ↑ξ * I) - 1 - (↑x : ℂ) * ↑ξ * I + ((↑x : ℂ) * ↑ξ) ^ 2 / 2) Bball ν :=
+      remainder_integrableOn_ball_levy hr1 ξ hν
+    refine (hrem.sub hquad_ball).congr (Filter.Eventually.of_forall (fun x => ?_))
+    simp only [Pi.sub_apply]
+    ring
   have h_id1 : (∫ x in Bball,
       (exp ((↑x : ℂ) * ↑ξ * I) - 1 - (↑x : ℂ) * ↑ξ * I + ((↑x : ℂ) * ↑ξ) ^ 2 / 2) ∂ν)
       = A + (↑Pball : ℂ) * ↑ξ ^ 2 / 2 := by
@@ -4788,14 +4788,15 @@ private lemma psi_levyKhintchine_algebra
         · exact h
         · exact le_trans hr1 h
     rw [hCtail_def, h_union,
-      setIntegral_union h_disj hmeas_ge1 (hg_intOn Bband) (hg_intOn (largeSet 1))]
+      setIntegral_union h_disj hmeas_ge1 (hexp_int Bband hν_band_lt)
+        (hexp_int (largeSet 1) hν_ge1_lt)]
   -- Identity 3: band uncompensated = compensated + drift correction.
   have hband_sub : Bband ⊆ {x : ℝ | |x| < 1} := fun x hx => hx.2
   have hxi_band : IntegrableOn (fun x : ℝ => (↑x : ℂ) * ↑ξ * I) Bband ν :=
-    hxi_intOn Bband hmeas_band hband_sub
+    hxi_intOn Bband hmeas_band hband_sub hν_band_lt
   have hcomp_band : IntegrableOn
       (fun x : ℝ => exp ((↑x : ℂ) * ↑ξ * I) - 1 - (↑x : ℂ) * ↑ξ * I) Bband ν :=
-    (hg_intOn Bband).sub hxi_band
+    (hexp_int Bband hν_band_lt).sub hxi_band
   have h_id3 : (∫ x in Bband, (exp ((↑x : ℂ) * ↑ξ * I) - 1) ∂ν)
       = Bcpx + (↑Pbar : ℂ) * ↑ξ * I := by
     have hsplit : (∫ x in Bband, (exp ((↑x : ℂ) * ↑ξ * I) - 1) ∂ν)
@@ -4863,8 +4864,9 @@ private lemma psi_levyKhintchine_algebra
   push_cast
   ring
 
-/-- **The Lévy-Khintchine formula for ψ (finite-ν pivot).** Given the drift `b`, the
-Gaussian variance `σ²`, and the externally-provided finite Lévy measure `ν` on `ℝ\{0}`,
+/-- **The Lévy-Khintchine formula for ψ.** Given the drift `b`, the Gaussian variance
+`σ²`, and an externally-provided Lévy measure `ν` on `ℝ\{0}` (σ-finite with
+`∫ min(1, x²) dν < ∞`, atom-free at the split radius `r`),
 together with the three subsequential limits from
 `exists_drift_variance_jumpMeasure_along_seq`, the exponent `ψ` admits the canonical
 Lévy-Khintchine decomposition.
@@ -4893,7 +4895,7 @@ two limits; `psi_levyKhintchine_algebra` then reorganizes the ν-side integrals 
 canonical triple. -/
 theorem psi_eq_levyKhintchine_formula
     {r : ℝ} (hr : r ∈ Set.Ioc (1/2 : ℝ) 1)
-    (b_r : ℝ) (σ_sq_r : ℝ≥0) {ν : Measure ℝ} [IsFiniteMeasure ν]
+    (b_r : ℝ) (σ_sq_r : ℝ≥0) {ν : Measure ℝ} (hν : IsLevyMeasure ν)
     (hν_zero : ν {0} = 0) (hν_r : ν {x | |x| = r} = 0)
     {t_seq : ℕ → {t : ℝ // 0 < t}}
     (ht_seq : Tendsto (fun n => (t_seq n).val) atTop (𝓝 0))
@@ -4925,9 +4927,9 @@ theorem psi_eq_levyKhintchine_formula
   -- B3: the three term-limits (types inferred from the respective lemmas).
   have hT1 := S.drift_term ξ ht_seq hb
   have hT2 := S.scaled_smallBall_compensated_tendsto hr_pos hr.2 ξ
-    (IsLevyMeasure.of_isFiniteMeasure hν_zero) hν_zero hν_r hσ h_jump
+    hν hν_zero hν_r hσ h_jump
   have hT3 := S.scaled_largeSet_charFun_tendsto hr_pos ξ
-    (IsLevyMeasure.of_isFiniteMeasure hν_zero) hν_r h_jump
+    hν hν_r h_jump
   -- B4: sum of the three limits (matching the per-`n` decomposition pointwise).
   have hRHS_lim := (hT1.add hT2).add hT3
   -- B2 + B5: the LHS quotient equals the per-`n` sum; uniqueness of limits.
@@ -4937,7 +4939,7 @@ theorem psi_eq_levyKhintchine_formula
   have h_eq := tendsto_nhds_unique hLHS_sum hRHS_lim
   rw [h_eq]
   -- B6: ν-side algebra (handled by the dedicated identity lemma above).
-  exact psi_levyKhintchine_algebra hr ξ hν_zero b_r σ_sq_r
+  exact psi_levyKhintchine_algebra hr ξ hν hν_zero b_r σ_sq_r
 
 /-- **Main assembly (finite-ν pivot).** Under the finite-small-mass hypothesis, the
 characteristic exponent `ψ` of `S` decomposes into the Lévy-Khintchine triple
@@ -4971,6 +4973,7 @@ theorem psi_decomposition
       _ = ν Set.univ := lintegral_one
       _ < ⊤ := hν_fin.measure_univ_lt_top
   · intro ξ
+    haveI := hν_fin
     -- σ_G² ≥ 0, so its `Real.toNNReal` coercion is honest (no truncation).
     have hr_pos : (0 : ℝ) < r := by linarith [hr_mem.1]
     have hnn : (0 : ℝ) ≤ (σ_sq_r : ℝ) - ∫ x in {x | |x| < r}, x ^ 2 ∂ν := by
@@ -4980,7 +4983,8 @@ theorem psi_decomposition
       linarith
     rw [show (↑(Real.toNNReal ((σ_sq_r : ℝ) - ∫ x in {x | |x| < r}, x ^ 2 ∂ν)) : ℝ)
           = (σ_sq_r : ℝ) - ∫ x in {x | |x| < r}, x ^ 2 ∂ν from Real.coe_toNNReal _ hnn]
-    exact S.psi_eq_levyKhintchine_formula hr_mem b_r σ_sq_r hν_zero hν_r ht_seq hb hσ h_jump ξ
+    exact S.psi_eq_levyKhintchine_formula hr_mem b_r σ_sq_r
+      (IsLevyMeasure.of_isFiniteMeasure hν_zero) hν_zero hν_r ht_seq hb hσ h_jump ξ
 
 end ConvolutionSemigroup
 
