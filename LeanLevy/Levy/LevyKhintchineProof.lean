@@ -3361,7 +3361,7 @@ private lemma scaled_largeSet_integral_tendsto
     {ρ : ℝ} (hρ : 0 < ρ)
     (g : ℝ → ℝ) (hg_cont : Continuous g) {M : ℝ} (hM_nn : 0 ≤ M)
     (hg_bnd : ∀ x, |g x| ≤ M)
-    {ν : Measure ℝ} [IsFiniteMeasure ν] (hν_atom : ν {x | |x| = ρ} = 0)
+    {ν : Measure ℝ} (hν : IsLevyMeasure ν) (hν_atom : ν {x | |x| = ρ} = 0)
     {t_seq : ℕ → {t : ℝ // 0 < t}}
     (h_jump : ∀ (f : BoundedContinuousFunction ℝ ℝ),
         (∃ r > 0, ∀ x, |x| < r → f x = 0) →
@@ -3373,42 +3373,87 @@ private lemma scaled_largeSet_integral_tendsto
   -- Composite BCFs `largeUpperBCF ρ n · g` for each n.
   set φg : ℕ → BoundedContinuousFunction ℝ ℝ :=
     fun n => largeUpperMulBCF ρ hρ n g hg_cont M hg_bnd with hφg_def
-  -- DCT on ν for the BCFs: ∫ φg n dν → ∫_{largeSet ρ} g dν.
+  -- DCT on ν for the BCFs: ∫ φg n dν → ∫_{largeSet ρ} g dν. For a (possibly σ-finite) Lévy
+  -- measure the constant bound `M` is not integrable, so we dominate the tail `n ≥ 1` (where
+  -- `φg n` vanishes on `{|x| < ρ/2}`) by `M · 1_{largeSet (ρ/2)}` and transfer via a shift.
   have h_dct_φg : Tendsto (fun n => ∫ x, φg n x ∂ν) atTop
       (𝓝 (∫ x in largeSet ρ, g x ∂ν)) := by
-    have h_lim : Tendsto (fun n => ∫ x, φg n x ∂ν) atTop
+    have hρ2 : (0 : ℝ) < ρ / 2 := by positivity
+    have h_bound_int : Integrable (Set.indicator (largeSet (ρ / 2)) (fun _ => M)) ν := by
+      haveI := hν.isFiniteMeasure_restrict_largeSet hρ2
+      exact (integrable_indicator_iff (measurableSet_largeSet (ρ / 2))).mpr (integrable_const M)
+    have h_shift : Tendsto (fun n => ∫ x, φg (n + 1) x ∂ν) atTop
         (𝓝 (∫ x, Set.indicator (largeSet ρ) g x ∂ν)) := by
-      refine MeasureTheory.tendsto_integral_of_dominated_convergence (bound := fun _ => M)
-        (fun n => (φg n).continuous.aestronglyMeasurable)
-        (integrable_const M)
-        (fun n => Filter.Eventually.of_forall (fun x => by
-          rw [Real.norm_eq_abs]
-          exact largeUpperMulBCF_abs_le ρ hρ n g hg_cont M hg_bnd x))
-        (Filter.Eventually.of_forall
-          (fun x => largeUpperMulBCF_tendsto_indicator ρ hρ g hg_cont M hg_bnd x))
+      refine MeasureTheory.tendsto_integral_of_dominated_convergence
+        (bound := Set.indicator (largeSet (ρ / 2)) (fun _ => M))
+        (fun n => (φg (n + 1)).continuous.aestronglyMeasurable)
+        h_bound_int
+        (fun n => Filter.Eventually.of_forall (fun x => ?_))
+        (Filter.Eventually.of_forall (fun x =>
+          (tendsto_add_atTop_iff_nat 1).mpr
+            (largeUpperMulBCF_tendsto_indicator ρ hρ g hg_cont M hg_bnd x)))
+      rw [Real.norm_eq_abs]
+      by_cases hx : x ∈ largeSet (ρ / 2)
+      · rw [Set.indicator_of_mem hx]
+        exact largeUpperMulBCF_abs_le ρ hρ (n + 1) g hg_cont M hg_bnd x
+      · rw [Set.indicator_of_notMem hx]
+        rw [mem_largeSet, not_le] at hx
+        have hn0 : (0 : ℝ) ≤ (n : ℝ) := Nat.cast_nonneg n
+        have hxle : |x| ≤ ρ - ρ / ((↑(n + 1) : ℝ) + 1) := by
+          have hcast : (↑(n + 1) : ℝ) + 1 = (n : ℝ) + 2 := by push_cast; ring
+          rw [hcast]
+          have hden : (0 : ℝ) < (n : ℝ) + 2 := by linarith
+          have h1 : ρ / ((n : ℝ) + 2) ≤ ρ / 2 :=
+            (div_le_div_iff_of_pos_left hρ hden (by norm_num)).mpr (by linarith)
+          linarith
+        simp only [hφg_def, largeUpperMulBCF_apply,
+          largeUpperBCF_eq_zero ρ hρ (n + 1) hxle, zero_mul, abs_zero, le_refl]
+    have h_lim := (tendsto_add_atTop_iff_nat (f := fun m => ∫ x, φg m x ∂ν) 1).mp h_shift
     rwa [integral_indicator (measurableSet_largeSet ρ)] at h_lim
-  -- DCT on ν for χ_n: ∫ χ_n dν → 0, using hν_atom.
+  -- DCT on ν for χ_n: ∫ χ_n dν → 0, using hν_atom. The tail `n ≥ 2` is supported in
+  -- `largeSet (ρ/3)` (bump around `|x| = ρ`), dominated by `1_{largeSet (ρ/3)}`.
   have h_dct_χ : Tendsto (fun n => ∫ x, largeAnnulusBCF ρ hρ n x ∂ν) atTop (𝓝 0) := by
-    have h_lim : Tendsto (fun n => ∫ x, largeAnnulusBCF ρ hρ n x ∂ν) atTop
+    have hρ3 : (0 : ℝ) < ρ / 3 := by positivity
+    have h_bound_int : Integrable (Set.indicator (largeSet (ρ / 3)) (fun _ => (1 : ℝ))) ν := by
+      haveI := hν.isFiniteMeasure_restrict_largeSet hρ3
+      exact (integrable_indicator_iff (measurableSet_largeSet (ρ / 3))).mpr (integrable_const 1)
+    have h_shift : Tendsto (fun n => ∫ x, largeAnnulusBCF ρ hρ (n + 2) x ∂ν) atTop
         (𝓝 (∫ x, Set.indicator {y : ℝ | |y| = ρ} (fun _ => (1 : ℝ)) x ∂ν)) := by
-      refine MeasureTheory.tendsto_integral_of_dominated_convergence (bound := fun _ => 1)
-        (fun n => (largeAnnulusBCF ρ hρ n).continuous.aestronglyMeasurable)
-        (integrable_const 1)
-        (fun n => Filter.Eventually.of_forall (fun x => by
-          rw [Real.norm_eq_abs, abs_of_nonneg (largeAnnulusBCF_nonneg ρ hρ n x)]
-          exact largeAnnulusBCF_le_one ρ hρ n x))
-        (Filter.Eventually.of_forall (fun x => largeAnnulusBCF_tendsto_indicator ρ hρ x))
+      refine MeasureTheory.tendsto_integral_of_dominated_convergence
+        (bound := Set.indicator (largeSet (ρ / 3)) (fun _ => (1 : ℝ)))
+        (fun n => (largeAnnulusBCF ρ hρ (n + 2)).continuous.aestronglyMeasurable)
+        h_bound_int
+        (fun n => Filter.Eventually.of_forall (fun x => ?_))
+        (Filter.Eventually.of_forall (fun x =>
+          (tendsto_add_atTop_iff_nat 2).mpr (largeAnnulusBCF_tendsto_indicator ρ hρ x)))
+      rw [Real.norm_eq_abs, abs_of_nonneg (largeAnnulusBCF_nonneg ρ hρ (n + 2) x)]
+      by_cases hx : x ∈ largeSet (ρ / 3)
+      · rw [Set.indicator_of_mem hx]; exact largeAnnulusBCF_le_one ρ hρ (n + 2) x
+      · rw [Set.indicator_of_notMem hx]
+        rw [mem_largeSet, not_le] at hx
+        have hn0 : (0 : ℝ) ≤ (n : ℝ) := Nat.cast_nonneg n
+        refine le_of_eq (largeAnnulusBCF_eq_zero ρ hρ (n + 2) ?_)
+        have habs : |(|x| - ρ)| = ρ - |x| := by
+          rw [abs_of_nonpos (by linarith : |x| - ρ ≤ 0)]; ring
+        rw [habs]
+        have hcast : (↑(n + 2) : ℝ) + 1 = (n : ℝ) + 3 := by push_cast; ring
+        rw [hcast]
+        have hden : (0 : ℝ) < (n : ℝ) + 3 := by linarith
+        have h1 : 2 * ρ / ((n : ℝ) + 3) ≤ 2 * ρ / 3 :=
+          (div_le_div_iff_of_pos_left (by positivity) hden (by norm_num)).mpr (by linarith)
+        linarith
     have h_meas_singleton : MeasurableSet {y : ℝ | |y| = ρ} :=
       (isClosed_singleton.preimage continuous_abs).measurableSet
-    rw [integral_indicator h_meas_singleton] at h_lim
+    rw [integral_indicator h_meas_singleton] at h_shift
     have h_zero : ∫ _ in {y : ℝ | |y| = ρ}, (1 : ℝ) ∂ν = 0 := by
       have : (ν.restrict {y : ℝ | |y| = ρ}) = 0 := by
         rw [Measure.restrict_eq_zero]; exact hν_atom
       rw [show (∫ _ in {y : ℝ | |y| = ρ}, (1 : ℝ) ∂ν) =
             ∫ _, (1 : ℝ) ∂(ν.restrict {y : ℝ | |y| = ρ}) from rfl, this,
           integral_zero_measure]
-    rw [h_zero] at h_lim
-    exact h_lim
+    rw [h_zero] at h_shift
+    exact (tendsto_add_atTop_iff_nat
+      (f := fun m => ∫ x, largeAnnulusBCF ρ hρ m x ∂ν) 2).mp h_shift
   -- ε/3 argument.
   rw [Metric.tendsto_atTop]
   intro ε hε
@@ -3547,13 +3592,24 @@ private lemma integrableOn_of_bounded {s : Set ℝ} {μ : Measure ℝ} [IsFinite
   Integrable.mono' (integrable_const M) hf_cont.aestronglyMeasurable
     (Filter.Eventually.of_forall hf_bnd) |>.integrableOn
 
+/-- Bounded continuous integrands are set-integrable against any measure that is finite on the
+set of integration. This generalizes `integrableOn_of_bounded` to (possibly σ-finite) measures
+by only demanding `μ s < ⊤` rather than global finiteness. -/
+private lemma integrableOn_of_bounded_of_measure_lt_top {s : Set ℝ} {μ : Measure ℝ}
+    (hs : μ s < ⊤) {E : Type*} [NormedAddCommGroup E]
+    {f : ℝ → E} (hf_cont : Continuous f) {M : ℝ} (hf_bnd : ∀ x, ‖f x‖ ≤ M) :
+    IntegrableOn f s μ := by
+  haveI : IsFiniteMeasure (μ.restrict s) := isFiniteMeasure_restrict.mpr hs.ne
+  exact Integrable.mono' (integrable_const M) hf_cont.aestronglyMeasurable
+    (Filter.Eventually.of_forall hf_bnd)
+
 /-- **Large-jump identification (complex), at split radius `ρ`.** The scaled set integral
 over `largeSet ρ` of the characteristic integrand `exp(ix·ξ) − 1` against `μ_t` converges
 to the corresponding ν-integral, obtained from the scalar identification via the Re/Im
 split. -/
 private lemma scaled_largeSet_charFun_tendsto
     {ρ : ℝ} (hρ : 0 < ρ) (ξ : ℝ)
-    {ν : Measure ℝ} [IsFiniteMeasure ν] (hν_atom : ν {x | |x| = ρ} = 0)
+    {ν : Measure ℝ} (hν : IsLevyMeasure ν) (hν_atom : ν {x | |x| = ρ} = 0)
     {t_seq : ℕ → {t : ℝ // 0 < t}}
     (h_jump : ∀ (f : BoundedContinuousFunction ℝ ℝ),
         (∃ r > 0, ∀ x, |x| < r → f x = 0) →
@@ -3585,13 +3641,13 @@ private lemma scaled_largeSet_charFun_tendsto
   have hIm_eq : ∀ x : ℝ, RCLike.im (exp ((↑x : ℂ) * ↑ξ * I) - 1) = gIm x := fun x => by
     simp only [hgIm_def, RCLike.im_to_complex, Complex.sub_im, Complex.one_im, hExp_arg,
       Complex.exp_ofReal_mul_I_im, sub_zero]
-  -- Decomposition of the complex set integral over any finite measure.
-  have h_decomp : ∀ (m : Measure ℝ) [IsFiniteMeasure m],
+  -- Decomposition of the complex set integral over any measure finite on `largeSet ρ`.
+  have h_decomp : ∀ (m : Measure ℝ), m (largeSet ρ) < ⊤ →
       ∫ x in largeSet ρ, (exp ((↑x : ℂ) * ↑ξ * I) - 1) ∂m =
         (↑(∫ x in largeSet ρ, gRe x ∂m) : ℂ) + (↑(∫ x in largeSet ρ, gIm x ∂m) : ℂ) * I := by
-    intro m _
+    intro m hm
     have h_int : IntegrableOn (fun x : ℝ => exp ((↑x : ℂ) * ↑ξ * I) - 1) (largeSet ρ) m := by
-      refine integrableOn_of_bounded
+      refine integrableOn_of_bounded_of_measure_lt_top hm
         (((Complex.continuous_exp.comp
           (((Complex.continuous_ofReal.mul continuous_const).mul continuous_const))).sub
           continuous_const)) (M := 2) (fun x => ?_)
@@ -3615,11 +3671,11 @@ private lemma scaled_largeSet_charFun_tendsto
   have h_re_lim : Tendsto (fun k => (t_seq k).val⁻¹ *
       ∫ x in largeSet ρ, gRe x ∂(S.measure (t_seq k) : Measure ℝ))
       atTop (𝓝 (∫ x in largeSet ρ, gRe x ∂ν)) :=
-    S.scaled_largeSet_integral_tendsto hρ gRe hgRe_cont (by norm_num) hgRe_bnd hν_atom h_jump
+    S.scaled_largeSet_integral_tendsto hρ gRe hgRe_cont (by norm_num) hgRe_bnd hν hν_atom h_jump
   have h_im_lim : Tendsto (fun k => (t_seq k).val⁻¹ *
       ∫ x in largeSet ρ, gIm x ∂(S.measure (t_seq k) : Measure ℝ))
       atTop (𝓝 (∫ x in largeSet ρ, gIm x ∂ν)) :=
-    S.scaled_largeSet_integral_tendsto hρ gIm hgIm_cont (by norm_num) hgIm_bnd hν_atom h_jump
+    S.scaled_largeSet_integral_tendsto hρ gIm hgIm_cont (by norm_num) hgIm_bnd hν hν_atom h_jump
   -- Recombine into the complex limit.
   have h_re_lim_C : Tendsto (fun k => (↑((t_seq k).val⁻¹ *
       ∫ x in largeSet ρ, gRe x ∂(S.measure (t_seq k) : Measure ℝ)) : ℂ))
@@ -3630,9 +3686,9 @@ private lemma scaled_largeSet_charFun_tendsto
       atTop (𝓝 ((↑(∫ x in largeSet ρ, gIm x ∂ν) : ℂ) * I)) :=
     ((Complex.continuous_ofReal.tendsto _).comp h_im_lim).mul_const I
   have h_sum := h_re_lim_C.add h_im_lim_C
-  rw [← h_decomp ν] at h_sum
+  rw [← h_decomp ν (hν.measure_setOf_abs_ge_lt_top hρ)] at h_sum
   refine h_sum.congr (fun k => ?_)
-  rw [h_decomp (S.measure (t_seq k) : Measure ℝ)]
+  rw [h_decomp (S.measure (t_seq k) : Measure ℝ) (measure_lt_top _ _)]
   push_cast
   ring
 
@@ -3643,7 +3699,7 @@ private lemma scaled_band_integral_tendsto
     {δ ρ : ℝ} (hδ : 0 < δ) (hδρ : δ < ρ)
     (g : ℝ → ℝ) (hg_cont : Continuous g) {M : ℝ} (hM_nn : 0 ≤ M)
     (hg_bnd : ∀ x, |g x| ≤ M)
-    {ν : Measure ℝ} [IsFiniteMeasure ν]
+    {ν : Measure ℝ} (hν : IsLevyMeasure ν)
     (hν_δ : ν {x | |x| = δ} = 0) (hν_ρ : ν {x | |x| = ρ} = 0)
     {t_seq : ℕ → {t : ℝ // 0 < t}}
     (h_jump : ∀ (f : BoundedContinuousFunction ℝ ℝ),
@@ -3673,14 +3729,15 @@ private lemma scaled_band_integral_tendsto
     obtain ⟨hxl, hxr⟩ := abs_lt.mp hxρ
     show max (-ρ) (min x ρ) = x
     rw [min_eq_left (le_of_lt hxr), max_eq_right (le_of_lt hxl)]
-  -- For any finite measure, the band integral of `g` equals the difference of the
-  -- two `largeSet` integrals of `g'`.
-  have h_split : ∀ (m : Measure ℝ) [IsFiniteMeasure m],
+  -- For any measure finite on `largeSet δ`, the band integral of `g` equals the difference of
+  -- the two `largeSet` integrals of `g'`.
+  have h_split : ∀ (m : Measure ℝ), m (largeSet δ) < ⊤ →
       ∫ x in {x | δ ≤ |x| ∧ |x| < ρ}, g x ∂m =
         (∫ x in largeSet δ, g' x ∂m) - ∫ x in largeSet ρ, g' x ∂m := by
-    intro m _
+    intro m hm
     have hg'_intOn : IntegrableOn g' (largeSet δ) m :=
-      integrableOn_of_bounded hg'_cont (fun x => by simpa [Real.norm_eq_abs] using hg'_bnd x)
+      integrableOn_of_bounded_of_measure_lt_top hm hg'_cont
+        (fun x => by simpa [Real.norm_eq_abs] using hg'_bnd x)
     have h_diff : ∫ x in largeSet δ \ largeSet ρ, g' x ∂m =
         (∫ x in largeSet δ, g' x ∂m) - ∫ x in largeSet ρ, g' x ∂m :=
       integral_diff (measurableSet_largeSet ρ) hg'_intOn h_sub
@@ -3696,15 +3753,15 @@ private lemma scaled_band_integral_tendsto
   have h_δ_lim : Tendsto (fun k => (t_seq k).val⁻¹ *
       ∫ x in largeSet δ, g' x ∂(S.measure (t_seq k) : Measure ℝ))
       atTop (𝓝 (∫ x in largeSet δ, g' x ∂ν)) :=
-    S.scaled_largeSet_integral_tendsto hδ g' hg'_cont hM_nn hg'_bnd hν_δ h_jump
+    S.scaled_largeSet_integral_tendsto hδ g' hg'_cont hM_nn hg'_bnd hν hν_δ h_jump
   have h_ρ_lim : Tendsto (fun k => (t_seq k).val⁻¹ *
       ∫ x in largeSet ρ, g' x ∂(S.measure (t_seq k) : Measure ℝ))
       atTop (𝓝 (∫ x in largeSet ρ, g' x ∂ν)) :=
-    S.scaled_largeSet_integral_tendsto hρ g' hg'_cont hM_nn hg'_bnd hν_ρ h_jump
+    S.scaled_largeSet_integral_tendsto hρ g' hg'_cont hM_nn hg'_bnd hν hν_ρ h_jump
   have h_sub_lim := h_δ_lim.sub h_ρ_lim
-  rw [← h_split ν] at h_sub_lim
+  rw [← h_split ν (hν.measure_setOf_abs_ge_lt_top hδ)] at h_sub_lim
   refine h_sub_lim.congr (fun k => ?_)
-  rw [h_split (S.measure (t_seq k) : Measure ℝ), mul_sub]
+  rw [h_split (S.measure (t_seq k) : Measure ℝ) (measure_lt_top _ _), mul_sub]
 
 /-- The `ν`-small-ball second moment is dominated by the scaled-second-moment limit:
 `∫_{|x|<r} x² dν ≤ σ_sq_r`. This makes the Gaussian variance
@@ -3754,7 +3811,7 @@ private lemma smallBall_second_moment_nu_le
         ∫ x in {x | δ m ≤ |x| ∧ |x| < r}, x ^ 2 ∂(S.measure (t_seq k) : Measure ℝ))
         atTop (𝓝 (∫ x in {x | δ m ≤ |x| ∧ |x| < r}, x ^ 2 ∂ν)) := by
       have h := S.scaled_band_integral_tendsto (hδ := hδ_pos m) (hδρ := hδ_lt m)
-        g hg_cont hr2_nn hg_bnd (hδ_null m) hν_r h_jump
+        g hg_cont hr2_nn hg_bnd (IsLevyMeasure.of_isFiniteMeasure hν_zero) (hδ_null m) hν_r h_jump
       -- Swap `g` for `x²` on the band (it lies in the ball where `g = x²`).
       have hswap : ∀ (μ : Measure ℝ),
           ∫ x in {x | δ m ≤ |x| ∧ |x| < r}, g x ∂μ =
@@ -3960,7 +4017,7 @@ Re/Im split (à la `scaled_largeSet_charFun_tendsto`), feeding the *clamped* rea
 parts to `scaled_band_integral_tendsto`. -/
 private lemma remainder_band_tendsto
     {δ r : ℝ} (hδ : 0 < δ) (hδr : δ < r) (hr1 : r ≤ 1) (ξ : ℝ)
-    {ν : Measure ℝ} [IsFiniteMeasure ν]
+    {ν : Measure ℝ} [IsFiniteMeasure ν] (hν_zero : ν {0} = 0)
     (hν_δ : ν {x | |x| = δ} = 0) (hν_r : ν {x | |x| = r} = 0)
     {t_seq : ℕ → {t : ℝ // 0 < t}}
     (h_jump : ∀ (f : BoundedContinuousFunction ℝ ℝ),
@@ -4023,11 +4080,13 @@ private lemma remainder_band_tendsto
   have h_re_lim : Tendsto (fun k => (t_seq k).val⁻¹ *
       ∫ x in band, gRe x ∂(S.measure (t_seq k) : Measure ℝ))
       atTop (𝓝 (∫ x in band, gRe x ∂ν)) :=
-    S.scaled_band_integral_tendsto hδ hδr gRe hgRe_cont hM_nn hgRe_bnd hν_δ hν_r h_jump
+    S.scaled_band_integral_tendsto hδ hδr gRe hgRe_cont hM_nn hgRe_bnd
+      (IsLevyMeasure.of_isFiniteMeasure hν_zero) hν_δ hν_r h_jump
   have h_im_lim : Tendsto (fun k => (t_seq k).val⁻¹ *
       ∫ x in band, gIm x ∂(S.measure (t_seq k) : Measure ℝ))
       atTop (𝓝 (∫ x in band, gIm x ∂ν)) :=
-    S.scaled_band_integral_tendsto hδ hδr gIm hgIm_cont hM_nn hgIm_bnd hν_δ hν_r h_jump
+    S.scaled_band_integral_tendsto hδ hδr gIm hgIm_cont hM_nn hgIm_bnd
+      (IsLevyMeasure.of_isFiniteMeasure hν_zero) hν_δ hν_r h_jump
   -- Recombine into the complex limit.
   have h_re_lim_C : Tendsto (fun k => (↑((t_seq k).val⁻¹ *
       ∫ x in band, gRe x ∂(S.measure (t_seq k) : Measure ℝ)) : ℂ))
@@ -4178,7 +4237,7 @@ private lemma remainder_ball_split
 `scaled_band_integral_tendsto` (Re/Im); ν-tail by dominated convergence as `δ → 0`. -/
 private lemma scaled_smallBall_remainder_tendsto
     {r : ℝ} (hr : 0 < r) (hr1 : r ≤ 1) (ξ : ℝ)
-    {ν : Measure ℝ} [IsFiniteMeasure ν] (_hν_zero : ν {0} = 0)
+    {ν : Measure ℝ} [IsFiniteMeasure ν] (hν_zero : ν {0} = 0)
     (hν_r : ν {x | |x| = r} = 0)
     {t_seq : ℕ → {t : ℝ // 0 < t}}
     (hσ_bdd : ∃ C : ℝ, ∀ k, (t_seq k).val⁻¹ *
@@ -4250,7 +4309,7 @@ private lemma scaled_smallBall_remainder_tendsto
   obtain ⟨m, hmC, hmBν⟩ := (hevC.and hevBν).exists
   -- Band limit for this `m` ⟹ an index `N` controlling the band term.
   have h_band_lim := S.remainder_band_tendsto (hδ_pos m) (hδ_ltr m) hr1 ξ
-    (hδ_atom m) hν_r h_jump
+    hν_zero (hδ_atom m) hν_r h_jump
   rw [Metric.tendsto_atTop] at h_band_lim
   obtain ⟨N, hN⟩ := h_band_lim (ε / 3) (by linarith)
   refine ⟨N, fun k hk => ?_⟩
@@ -4548,14 +4607,7 @@ private lemma psi_levyKhintchine_algebra
   have hr_pos : (0 : ℝ) < r := by linarith [hr.1]
   have hr1 : r ≤ 1 := hr.2
   -- ν is a Lévy measure (finite + ν{0}=0).
-  have hν_levy : IsLevyMeasure ν := by
-    refine ⟨hν_zero, ?_⟩
-    calc ∫⁻ x, ENNReal.ofReal (min 1 (x ^ 2)) ∂ν
-        ≤ ∫⁻ _, 1 ∂ν := lintegral_mono (fun x => by
-          rw [show (1 : ℝ≥0∞) = ENNReal.ofReal 1 by simp]
-          exact ENNReal.ofReal_le_ofReal (min_le_left _ _))
-      _ = ν Set.univ := lintegral_one
-      _ < ⊤ := (‹IsFiniteMeasure ν›).measure_univ_lt_top
+  have hν_levy : IsLevyMeasure ν := IsLevyMeasure.of_isFiniteMeasure hν_zero
   -- Abbreviations for the sets.
   set Bball : Set ℝ := {x | |x| < r} with hBball_def
   set Bband : Set ℝ := {x | r ≤ |x| ∧ |x| < 1} with hBband_def
@@ -4795,7 +4847,8 @@ theorem psi_eq_levyKhintchine_formula
   -- B3: the three term-limits (types inferred from the respective lemmas).
   have hT1 := S.drift_term ξ ht_seq hb
   have hT2 := S.scaled_smallBall_compensated_tendsto hr_pos hr.2 ξ hν_zero hν_r hσ h_jump
-  have hT3 := S.scaled_largeSet_charFun_tendsto hr_pos ξ hν_r h_jump
+  have hT3 := S.scaled_largeSet_charFun_tendsto hr_pos ξ
+    (IsLevyMeasure.of_isFiniteMeasure hν_zero) hν_r h_jump
   -- B4: sum of the three limits (matching the per-`n` decomposition pointwise).
   have hRHS_lim := (hT1.add hT2).add hT3
   -- B2 + B5: the LHS quotient equals the per-`n` sum; uniqueness of limits.
