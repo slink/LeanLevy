@@ -297,6 +297,154 @@ private theorem double_sum_conj_mul_eq_zero {n : ℕ} {c : Fin n → ℂ} (hc : 
   simp_rw [← Finset.mul_sum, ← Finset.sum_mul]
   simp [hc]
 
+/-! ### Closure algebra for conditionally negative definite functions
+
+A small collection of elementary closure lemmas used to assemble the Lévy–Khintchine
+exponent from its building blocks: sums, non-negative scalings, the imaginary drift
+`ξ ↦ a·ξ·I`, the Gaussian term `ξ ↦ -ξ²`, and `g - 1` for a positive definite `g`. -/
+
+/-- The sum of two conditionally negative definite functions is conditionally negative
+definite. -/
+theorem IsConditionallyNegativeDefinite.add {ψ₁ ψ₂ : ℝ → ℂ}
+    (h₁ : IsConditionallyNegativeDefinite ψ₁) (h₂ : IsConditionallyNegativeDefinite ψ₂) :
+    IsConditionallyNegativeDefinite (fun ξ => ψ₁ ξ + ψ₂ ξ) := by
+  intro n ξ c hc
+  show 0 ≤ (∑ i, ∑ j, starRingEnd ℂ (c i) * c j *
+    (ψ₁ (ξ i - ξ j) + ψ₂ (ξ i - ξ j))).re
+  have e : (∑ i, ∑ j, starRingEnd ℂ (c i) * c j *
+        (ψ₁ (ξ i - ξ j) + ψ₂ (ξ i - ξ j))).re
+      = (∑ i, ∑ j, starRingEnd ℂ (c i) * c j * ψ₁ (ξ i - ξ j)).re
+        + (∑ i, ∑ j, starRingEnd ℂ (c i) * c j * ψ₂ (ξ i - ξ j)).re := by
+    rw [← Complex.add_re]
+    congr 1
+    rw [← Finset.sum_add_distrib]
+    refine Finset.sum_congr rfl fun i _ => ?_
+    rw [← Finset.sum_add_distrib]
+    refine Finset.sum_congr rfl fun j _ => ?_
+    ring
+  rw [e]
+  exact add_nonneg (h₁ n ξ c hc) (h₂ n ξ c hc)
+
+/-- A non-negative real scaling of a conditionally negative definite function is
+conditionally negative definite. -/
+theorem IsConditionallyNegativeDefinite.smul_nonneg {a : ℝ} {ψ : ℝ → ℂ}
+    (h : IsConditionallyNegativeDefinite ψ) (ha : 0 ≤ a) :
+    IsConditionallyNegativeDefinite (fun ξ => (a : ℂ) * ψ ξ) := by
+  intro n ξ c hc
+  show 0 ≤ (∑ i, ∑ j, starRingEnd ℂ (c i) * c j * ((a : ℂ) * ψ (ξ i - ξ j))).re
+  have e : (∑ i, ∑ j, starRingEnd ℂ (c i) * c j * ((a : ℂ) * ψ (ξ i - ξ j))).re
+      = a * (∑ i, ∑ j, starRingEnd ℂ (c i) * c j * ψ (ξ i - ξ j)).re := by
+    rw [show (∑ i, ∑ j, starRingEnd ℂ (c i) * c j * ((a : ℂ) * ψ (ξ i - ξ j)))
+        = (a : ℂ) * ∑ i, ∑ j, starRingEnd ℂ (c i) * c j * ψ (ξ i - ξ j) from ?_,
+      Complex.re_ofReal_mul]
+    rw [Finset.mul_sum]
+    refine Finset.sum_congr rfl fun i _ => ?_
+    rw [Finset.mul_sum]
+    refine Finset.sum_congr rfl fun j _ => ?_
+    ring
+  rw [e]
+  exact mul_nonneg ha (h n ξ c hc)
+
+/-- The imaginary linear function `ξ ↦ a·ξ·I` is conditionally negative definite:
+the double sum factors through both `∑ c = 0` and `∑ conj c = 0`, hence vanishes. -/
+theorem cnd_imag_linear (a : ℝ) :
+    IsConditionallyNegativeDefinite (fun ξ => (a : ℂ) * ↑ξ * I) := by
+  intro n ξ c hc
+  show 0 ≤ (∑ i, ∑ j, starRingEnd ℂ (c i) * c j *
+    ((a : ℂ) * ↑(ξ i - ξ j) * I)).re
+  have hconj0 : (∑ i, starRingEnd ℂ (c i)) = 0 := by rw [← _root_.map_sum, hc, map_zero]
+  have expand : (∑ i, ∑ j, starRingEnd ℂ (c i) * c j *
+        ((↑(ξ i) : ℂ) - ↑(ξ j)))
+      = (∑ i, starRingEnd ℂ (c i) * (↑(ξ i) : ℂ)) * (∑ j, c j)
+        - (∑ i, starRingEnd ℂ (c i)) * (∑ j, c j * (↑(ξ j) : ℂ)) := by
+    rw [Finset.sum_mul, Finset.sum_mul, ← Finset.sum_sub_distrib]
+    refine Finset.sum_congr rfl fun i _ => ?_
+    rw [Finset.mul_sum, Finset.mul_sum, ← Finset.sum_sub_distrib]
+    refine Finset.sum_congr rfl fun j _ => ?_
+    ring
+  have hsum0 : (∑ i, ∑ j, starRingEnd ℂ (c i) * c j *
+      ((a : ℂ) * ↑(ξ i - ξ j) * I)) = 0 := by
+    have factored : (∑ i, ∑ j, starRingEnd ℂ (c i) * c j *
+          ((a : ℂ) * ↑(ξ i - ξ j) * I))
+        = (a : ℂ) * I * (∑ i, ∑ j, starRingEnd ℂ (c i) * c j *
+          ((↑(ξ i) : ℂ) - ↑(ξ j))) := by
+      rw [Finset.mul_sum]
+      refine Finset.sum_congr rfl fun i _ => ?_
+      rw [Finset.mul_sum]
+      refine Finset.sum_congr rfl fun j _ => ?_
+      push_cast; ring
+    rw [factored, expand, hc, hconj0]; ring
+  rw [hsum0]; simp
+
+/-- The negative square `ξ ↦ -ξ²` is conditionally negative definite: the cross term
+of the expansion contributes `2·conj(W)·W = 2‖W‖²` with `W = ∑ cⱼ ξⱼ`, and the pure
+square terms vanish by the zero-sum condition. -/
+theorem cnd_neg_sq :
+    IsConditionallyNegativeDefinite (fun ξ => -((ξ : ℂ) ^ 2)) := by
+  intro n ξ c hc
+  show 0 ≤ (∑ i, ∑ j, starRingEnd ℂ (c i) * c j *
+    (-((↑(ξ i - ξ j) : ℂ) ^ 2))).re
+  set W : ℂ := ∑ j, c j * (↑(ξ j) : ℂ) with hW
+  have hconj0 : (∑ i, starRingEnd ℂ (c i)) = 0 := by rw [← _root_.map_sum, hc, map_zero]
+  have hcW : (∑ i, starRingEnd ℂ (c i) * (↑(ξ i) : ℂ)) = starRingEnd ℂ W := by
+    rw [hW, _root_.map_sum]
+    refine Finset.sum_congr rfl fun j _ => ?_
+    rw [map_mul, Complex.conj_ofReal]
+  have A : (∑ i, ∑ j, -(starRingEnd ℂ (c i) * (↑(ξ i) : ℂ) ^ 2) * c j) = 0 := by
+    refine Finset.sum_eq_zero fun i _ => ?_
+    rw [← Finset.mul_sum, hc, mul_zero]
+  have B : (∑ i, ∑ j, 2 * (starRingEnd ℂ (c i) * (↑(ξ i) : ℂ)) * (c j * (↑(ξ j) : ℂ)))
+      = 2 * starRingEnd ℂ W * W := by
+    have hi : ∀ i, (∑ j, 2 * (starRingEnd ℂ (c i) * (↑(ξ i) : ℂ)) * (c j * (↑(ξ j) : ℂ)))
+        = 2 * (starRingEnd ℂ (c i) * (↑(ξ i) : ℂ)) * W := by
+      intro i; rw [hW, Finset.mul_sum]
+    simp_rw [hi]
+    rw [← Finset.sum_mul, ← Finset.mul_sum, hcW]
+  have C : (∑ i, ∑ j, -(starRingEnd ℂ (c i) * (c j * (↑(ξ j) : ℂ) ^ 2))) = 0 := by
+    have hi : ∀ i, (∑ j, -(starRingEnd ℂ (c i) * (c j * (↑(ξ j) : ℂ) ^ 2)))
+        = starRingEnd ℂ (c i) * (∑ j, -(c j * (↑(ξ j) : ℂ) ^ 2)) := by
+      intro i; rw [Finset.mul_sum]
+      refine Finset.sum_congr rfl fun j _ => by ring
+    simp_rw [hi, ← Finset.sum_mul, hconj0, zero_mul]
+  have key : (∑ i, ∑ j, starRingEnd ℂ (c i) * c j * (-((↑(ξ i - ξ j) : ℂ) ^ 2)))
+      = 2 * starRingEnd ℂ W * W := by
+    have step : (∑ i, ∑ j, starRingEnd ℂ (c i) * c j * (-((↑(ξ i - ξ j) : ℂ) ^ 2)))
+        = (∑ i, ∑ j, (-(starRingEnd ℂ (c i) * (↑(ξ i) : ℂ) ^ 2) * c j
+            + 2 * (starRingEnd ℂ (c i) * (↑(ξ i) : ℂ)) * (c j * (↑(ξ j) : ℂ))
+            + -(starRingEnd ℂ (c i) * (c j * (↑(ξ j) : ℂ) ^ 2)))) := by
+      refine Finset.sum_congr rfl fun i _ => Finset.sum_congr rfl fun j _ => ?_
+      push_cast; ring
+    rw [step]
+    rw [show (∑ i, ∑ j, (-(starRingEnd ℂ (c i) * (↑(ξ i) : ℂ) ^ 2) * c j
+          + 2 * (starRingEnd ℂ (c i) * (↑(ξ i) : ℂ)) * (c j * (↑(ξ j) : ℂ))
+          + -(starRingEnd ℂ (c i) * (c j * (↑(ξ j) : ℂ) ^ 2))))
+        = (∑ i, ∑ j, -(starRingEnd ℂ (c i) * (↑(ξ i) : ℂ) ^ 2) * c j)
+          + (∑ i, ∑ j, 2 * (starRingEnd ℂ (c i) * (↑(ξ i) : ℂ)) * (c j * (↑(ξ j) : ℂ)))
+          + (∑ i, ∑ j, -(starRingEnd ℂ (c i) * (c j * (↑(ξ j) : ℂ) ^ 2)))
+        from by simp_rw [Finset.sum_add_distrib]]
+    rw [A, B, C]; ring
+  rw [key]
+  have hre : ((2 : ℂ) * starRingEnd ℂ W * W).re = 2 * Complex.normSq W := by
+    rw [mul_assoc, ← Complex.normSq_eq_conj_mul_self]
+    simp [Complex.mul_re]
+  rw [hre]
+  have := Complex.normSq_nonneg W
+  linarith
+
+/-- If `g` is positive definite, then `g - 1` is conditionally negative definite: the
+`-1` contributes `∑∑ conj(cᵢ)cⱼ = 0` under the zero-sum condition, leaving the positive
+definite form. -/
+theorem IsPositiveDefinite.cnd_sub_one {g : ℝ → ℂ} (hg : IsPositiveDefinite g) :
+    IsConditionallyNegativeDefinite (fun ξ => g ξ - 1) := by
+  intro n ξ c hc
+  show 0 ≤ (∑ i, ∑ j, starRingEnd ℂ (c i) * c j * (g (ξ i - ξ j) - 1)).re
+  have e : (∑ i, ∑ j, starRingEnd ℂ (c i) * c j * (g (ξ i - ξ j) - 1))
+      = (∑ i, ∑ j, starRingEnd ℂ (c i) * c j * g (ξ i - ξ j))
+        - (∑ i, ∑ j, starRingEnd ℂ (c i) * c j) := by
+    simp_rw [mul_sub, mul_one, Finset.sum_sub_distrib]
+  rw [e, double_sum_conj_mul_eq_zero hc, sub_zero]
+  exact hg.re_nonneg n ξ c
+
 /-- PSD of characteristic function: the Hermitian form with charFun values is non-negative.
 This wraps the ProbabilityMeasure-level statement for bare Measures. -/
 private theorem charFun_psd {ν : Measure ℝ} [IsProbabilityMeasure ν]

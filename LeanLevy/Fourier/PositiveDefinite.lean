@@ -323,4 +323,18 @@ theorem of_charFun (μ : ProbabilityMeasure ℝ) :
 
 end IsPositiveDefinite
 
+/-- The exponential `ξ ↦ exp(x·ξ·I)` is positive definite: it is the characteristic
+function of the Dirac measure at `x`. -/
+theorem isPositiveDefinite_exp_ofReal_mul (x : ℝ) :
+    IsPositiveDefinite (fun ξ : ℝ => Complex.exp ((x : ℂ) * (ξ : ℂ) * I)) := by
+  set μ : ProbabilityMeasure ℝ := ⟨Measure.dirac x, inferInstance⟩ with hμ
+  have h := IsPositiveDefinite.of_charFun μ
+  have hfun : (fun ξ : ℝ => charFun (μ : Measure ℝ) ξ)
+      = fun ξ : ℝ => Complex.exp ((x : ℂ) * (ξ : ℂ) * I) := by
+    funext ξ
+    rw [show (μ : Measure ℝ) = Measure.dirac x from rfl, charFun_apply_real, integral_dirac]
+    congr 1
+    ring
+  rwa [hfun] at h
+
 end ProbabilityTheory
