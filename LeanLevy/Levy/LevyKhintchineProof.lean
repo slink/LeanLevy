@@ -445,6 +445,29 @@ theorem IsPositiveDefinite.cnd_sub_one {g : ℝ → ℂ} (hg : IsPositiveDefinit
   rw [e, double_sum_conj_mul_eq_zero hc, sub_zero]
   exact hg.re_nonneg n ξ c
 
+/-- For fixed `x`, the compensated integrand `ξ ↦ f(ξ, x)` is conditionally negative
+definite. It splits as `(exp(ixξ) - 1) + (-x·1_{|x|<1})·ξ·I`: the first summand is
+conditionally negative definite via `isPositiveDefinite_exp_ofReal_mul` and `cnd_sub_one`,
+the second via `cnd_imag_linear` (the indicator coefficient is `ξ`-independent). -/
+theorem cnd_levyCompensatedIntegrand_fixed (x : ℝ) :
+    IsConditionallyNegativeDefinite (fun ξ => levyCompensatedIntegrand ξ x) := by
+  have hexp : IsConditionallyNegativeDefinite
+      (fun ξ => Complex.exp ((x : ℂ) * (ξ : ℂ) * I) - 1) :=
+    (isPositiveDefinite_exp_ofReal_mul x).cnd_sub_one
+  have hlin : IsConditionallyNegativeDefinite
+      (fun ξ => ((if |x| < 1 then -x else 0 : ℝ) : ℂ) * ↑ξ * I) :=
+    cnd_imag_linear _
+  have key : (fun ξ => levyCompensatedIntegrand ξ x)
+      = fun ξ : ℝ => (Complex.exp ((x : ℂ) * ↑ξ * I) - 1)
+          + ((if |x| < 1 then -x else 0 : ℝ) : ℂ) * ↑ξ * I := by
+    funext ξ
+    simp only [levyCompensatedIntegrand_def]
+    by_cases hx : |x| < 1
+    · simp only [if_pos hx]; push_cast; ring
+    · simp only [if_neg hx]; push_cast; ring
+  rw [key]
+  exact hexp.add hlin
+
 /-- PSD of characteristic function: the Hermitian form with charFun values is non-negative.
 This wraps the ProbabilityMeasure-level statement for bare Measures. -/
 private theorem charFun_psd {ν : Measure ℝ} [IsProbabilityMeasure ν]

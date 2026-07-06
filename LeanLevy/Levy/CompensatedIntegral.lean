@@ -47,6 +47,24 @@ theorem levyCompensatedIntegrand_zero_right (ξ : ℝ) :
     levyCompensatedIntegrand ξ 0 = 0 := by
   simp [levyCompensatedIntegrand]
 
+/-- The compensated integrand vanishes at `ξ = 0`. -/
+@[simp]
+theorem levyCompensatedIntegrand_zero_left (x : ℝ) :
+    levyCompensatedIntegrand 0 x = 0 := by
+  simp [levyCompensatedIntegrand]
+
+/-- Complex conjugation reflects the compensated integrand's frequency:
+`conj (f ξ x) = f (-ξ) x`. -/
+theorem conj_levyCompensatedIntegrand (ξ x : ℝ) :
+    starRingEnd ℂ (levyCompensatedIntegrand ξ x) = levyCompensatedIntegrand (-ξ) x := by
+  have hww : starRingEnd ℂ ((↑x : ℂ) * ↑ξ * I) = (↑x : ℂ) * ↑(-ξ) * I := by
+    simp only [map_mul, conj_ofReal, conj_I]
+    push_cast; ring
+  simp only [levyCompensatedIntegrand]
+  by_cases hx : |x| < 1
+  · simp only [if_pos hx, mul_one, map_sub, map_one, ← exp_conj, hww]
+  · simp only [if_neg hx, mul_zero, sub_zero, map_sub, map_one, ← exp_conj, hww]
+
 /-- The compensated integrand is measurable in `x` for fixed `ξ`. -/
 @[fun_prop]
 theorem measurable_levyCompensatedIntegrand (ξ : ℝ) :
