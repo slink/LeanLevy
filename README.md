@@ -77,7 +77,7 @@ A Lean 4 formalization of Lévy processes, built on top of mathlib.
 - `levyCompensatedIntegrand ξ x = exp(ixξ) − 1 − ixξ·1_{|x|<1}`
 - Pointwise norm bound, measurability, Bochner integrability under a Lévy measure
 
-**Lévy–Khintchine representation** (`LeanLevy/Levy/LevyKhintchine.lean`, `LevyKhintchineProof.lean`)
+**Lévy–Khintchine representation** (`LeanLevy/Levy/LevyKhintchine.lean`, `LevyKhintchineProof.lean`, `LevyKhintchineUniqueness.lean`)
 - `LevyKhintchineTriple` structure: drift, Gaussian variance, Lévy measure
 - Statement of the representation theorem
 - Sub-lemmas 1–3 fully proved: non-vanishing, continuous logarithm, conditional negative definiteness
@@ -87,8 +87,11 @@ A Lean 4 formalization of Lévy processes, built on top of mathlib.
 - **Proof route (canonical-measure extraction)**: the `min(1,x²)`-tilted scaled measures `tiltedScaledMeasure t` are uniformly bounded and tight with no hypothesis on `μ_t` (`tiltedScaledMeasure_mass_eventually_le`, `tiltedScaledMeasure_largeSet_le`); a single Prokhorov call extracts Khintchine's canonical measure (`exists_canonicalMeasure`), which is untilted into a σ-finite Lévy measure `ν` (`exists_levyMeasure`). The triple `(b, σ², ν)` is then extracted jointly along a single subsequence (`exists_drift_variance_jumpMeasure_along_seq`) and identified at an atom-free split radius (`psi_eq_levyKhintchine_formula`, `psi_decomposition`)
 - Analytic limit identification (`psi_eq_levyKhintchine_formula`) fully proved: it identifies `t⁻¹(charFun μ_t − 1) → Ψ(ξ)` by chaining four subsequential limits — the drift term, the small-jump compensated limit (3rd-order Taylor remainder + δ-truncation), and the complex large-jump limit (smooth-cutoff approximation) — against `charFun_scaled_limit` via uniqueness of limits
 - The formula is stated at an **extracted atom-free split radius** `r ∈ (1/2, 1]`: the Gaussian variance is `σ² = lim t⁻¹∫_{|x|<r} x² dμ_t − ∫_{|x|<r} x² dν` (subtracting the small-jump second moment that the compensated integral already carries) and the drift is recovered at the ν level as `b + ∫_{r≤|x|<1} x dν`. This normalization is what makes the formula correct — a naive radius-1 statement double-counts the small-jump second moment
+- **Converse**: `levyKhintchine_converse` — every Lévy–Khintchine triple `T = (b, σ², ν)` is realised by an infinitely divisible probability measure whose characteristic function is `exp(ψ_T)`, where `ψ_T = LevyKhintchineTriple.exponent T` is fed (continuous, `0`-vanishing, conditionally negative definite, Hermitian) to the Schoenberg + Bochner machinery
+- **Uniqueness of the triple**: `LevyKhintchineTriple.ext_of_exponent_eq` — a triple is determined by its exponent. Via Sato's smearing route: the smeared exponent `g(ξ) = ψ_T(ξ) − ½∫_{[-1,1]} ψ_T(ξ+u) du` is the characteristic function of a finite **smeared measure** `smearedMeasure σ² ν` (`smeared_exponent_eq_charFun`) carrying a `σ²/6` atom at `0` and density `1 − sinc` against `ν`; inverting the smearing (`smearedMeasure_inj`) recovers `σ²` and `ν`, and the drift is read off at `ξ = 1`
+- **Characterization**: `isInfinitelyDivisible_iff_exists_levyKhintchineTriple` — a probability measure on ℝ is infinitely divisible **iff** its characteristic function is `exp(ψ_T)` for some Lévy–Khintchine triple `T` (backward direction via `Measure.ext_of_charFun`). `existsUnique_levyKhintchineTriple` upgrades this to a *unique* triple, identifying exponents from equal exponentials by a continuous-log argument on the connected line
 
-The entire codebase is **sorry-free** (verified by `#print axioms`: the representation theorem depends only on `propext`, `Classical.choice`, `Quot.sound`).
+The entire codebase is **sorry-free** (verified by `#print axioms`: the representation theorem, the converse, and the `isInfinitelyDivisible_iff_exists_levyKhintchineTriple` / `existsUnique_levyKhintchineTriple` characterization depend only on `propext`, `Classical.choice`, `Quot.sound`).
 
 ## Building
 
