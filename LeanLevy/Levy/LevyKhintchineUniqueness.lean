@@ -408,4 +408,92 @@ theorem smeared_exponent_eq_charFun (T : LevyKhintchineTriple) (ξ : ℝ) :
 
 end SmearIdentity
 
+/-!
+## Recovery of the triple from the smeared measure
+
+The smearing is injective: from `ρ = smearedMeasure σ² ν` (with `ν` a Lévy measure) both `σ²`
+and `ν` are recovered. The Gaussian coefficient is read off the atom at `0`
+(`smearedMeasure_singleton_zero`); the Lévy measure is recovered by restricting to `{0}ᶜ` — which
+discards the Dirac atom and leaves the jump density untouched — and untilting the density
+`1 − Real.sinc x`, which is strictly positive `ν`-a.e. (`one_sub_sinc_pos`, using `ν{0} = 0`).
+-/
+
+section Recovery
+
+variable {ν : Measure ℝ}
+
+/-- The jump (withDensity) piece of the smeared measure gives no mass to the origin, because a
+Lévy measure gives none. -/
+private lemma withDensity_one_sub_sinc_singleton_zero (hν : IsLevyMeasure ν) :
+    (ν.withDensity fun x => ENNReal.ofReal (1 - Real.sinc x)) {(0 : ℝ)} = 0 := by
+  rw [withDensity_apply _ (measurableSet_singleton 0),
+    setLIntegral_measure_zero _ _ hν.zero_singleton]
+
+/-- **Restriction to `{0}ᶜ` isolates the jump piece.** The Dirac atom lives on `{0}` and so
+restricts to `0`, while the density piece charges nothing at `0`, so it is unchanged. -/
+private lemma smearedMeasure_restrict_compl (hν : IsLevyMeasure ν) :
+    (smearedMeasure σ_sq ν).restrict {(0 : ℝ)}ᶜ
+      = ν.withDensity fun x => ENNReal.ofReal (1 - Real.sinc x) := by
+  classical
+  rw [smearedMeasure, Measure.restrict_add, Measure.restrict_smul, restrict_dirac,
+    if_neg (by simp), smul_zero, zero_add]
+  refine Measure.restrict_eq_self_of_ae_mem ?_
+  rw [ae_iff, show {a : ℝ | a ∉ {(0 : ℝ)}ᶜ} = {(0 : ℝ)} from by ext a; simp]
+  exact withDensity_one_sub_sinc_singleton_zero hν
+
+/-- **Untilt.** The density `1 − Real.sinc x` is strictly positive `ν`-a.e. (it vanishes only at
+`0`, which is `ν`-null) and finite everywhere, so multiplying by its pointwise inverse recovers
+`ν` from `ν.withDensity (1 − Real.sinc)`. -/
+private lemma withDensity_one_sub_sinc_untilt (hν : IsLevyMeasure ν) :
+    (ν.withDensity fun x => ENNReal.ofReal (1 - Real.sinc x)).withDensity
+      (fun x => (ENNReal.ofReal (1 - Real.sinc x))⁻¹) = ν := by
+  have hne0 : ∀ᵐ x ∂ν, x ≠ 0 := by
+    rw [ae_iff]; simpa using hν.zero_singleton
+  refine withDensity_inv_same measurable_one_sub_sinc ?_ ?_
+  · filter_upwards [hne0] with x hx
+    rw [ne_eq, ENNReal.ofReal_eq_zero, not_le]
+    exact one_sub_sinc_pos hx
+  · filter_upwards with x using ENNReal.ofReal_ne_top
+
+/-- **Recovery of the Gaussian coefficient.** If two smeared measures agree, the Gaussian
+variances agree: both equal `6 ·` the atom at `0`. -/
+theorem smearedMeasure_gaussianVariance_inj {ν₁ ν₂ : Measure ℝ}
+    (hν₁ : IsLevyMeasure ν₁) (hν₂ : IsLevyMeasure ν₂) {σ₁ σ₂ : ℝ≥0}
+    (h : smearedMeasure σ₁ ν₁ = smearedMeasure σ₂ ν₂) : σ₁ = σ₂ := by
+  have h0 : (σ₁ : ℝ≥0∞) / 6 = (σ₂ : ℝ≥0∞) / 6 := by
+    have hpt : (smearedMeasure σ₁ ν₁) {(0 : ℝ)} = (smearedMeasure σ₂ ν₂) {(0 : ℝ)} := by rw [h]
+    rwa [smearedMeasure_singleton_zero σ₁ hν₁, smearedMeasure_singleton_zero σ₂ hν₂] at hpt
+  have h6 : (σ₁ : ℝ≥0∞) / 6 * 6 = (σ₂ : ℝ≥0∞) / 6 * 6 := by rw [h0]
+  rw [ENNReal.div_mul_cancel (by norm_num) (by norm_num),
+    ENNReal.div_mul_cancel (by norm_num) (by norm_num)] at h6
+  exact ENNReal.coe_inj.mp h6
+
+/-- **Recovery of the Lévy measure.** If two smeared measures agree, the Lévy measures agree:
+restrict to `{0}ᶜ` to strip the Gaussian atom, then untilt the shared density `1 − Real.sinc x`. -/
+theorem smearedMeasure_levyMeasure_inj {ν₁ ν₂ : Measure ℝ}
+    (hν₁ : IsLevyMeasure ν₁) (hν₂ : IsLevyMeasure ν₂) {σ₁ σ₂ : ℝ≥0}
+    (h : smearedMeasure σ₁ ν₁ = smearedMeasure σ₂ ν₂) : ν₁ = ν₂ := by
+  have hr : (ν₁.withDensity fun x => ENNReal.ofReal (1 - Real.sinc x))
+      = ν₂.withDensity fun x => ENNReal.ofReal (1 - Real.sinc x) := by
+    have hpt : (smearedMeasure σ₁ ν₁).restrict {(0 : ℝ)}ᶜ
+        = (smearedMeasure σ₂ ν₂).restrict {(0 : ℝ)}ᶜ := by rw [h]
+    rwa [smearedMeasure_restrict_compl σ₁ hν₁, smearedMeasure_restrict_compl σ₂ hν₂] at hpt
+  calc ν₁ = (ν₁.withDensity fun x => ENNReal.ofReal (1 - Real.sinc x)).withDensity
+              (fun x => (ENNReal.ofReal (1 - Real.sinc x))⁻¹) :=
+        (withDensity_one_sub_sinc_untilt hν₁).symm
+    _ = (ν₂.withDensity fun x => ENNReal.ofReal (1 - Real.sinc x)).withDensity
+              (fun x => (ENNReal.ofReal (1 - Real.sinc x))⁻¹) := by rw [hr]
+    _ = ν₂ := withDensity_one_sub_sinc_untilt hν₂
+
+/-- **Injectivity of the smearing.** A smeared measure determines its Lévy triple `(σ², ν)`:
+equal smeared measures have equal Gaussian variances and equal Lévy measures. This is the
+inversion step of Sato's uniqueness route; chained with `smeared_exponent_eq_charFun` and
+`Measure.ext_of_charFun` it pins the triple from the characteristic exponent. -/
+theorem smearedMeasure_inj {ν₁ ν₂ : Measure ℝ}
+    (hν₁ : IsLevyMeasure ν₁) (hν₂ : IsLevyMeasure ν₂) {σ₁ σ₂ : ℝ≥0}
+    (h : smearedMeasure σ₁ ν₁ = smearedMeasure σ₂ ν₂) : σ₁ = σ₂ ∧ ν₁ = ν₂ :=
+  ⟨smearedMeasure_gaussianVariance_inj hν₁ hν₂ h, smearedMeasure_levyMeasure_inj hν₁ hν₂ h⟩
+
+end Recovery
+
 end ProbabilityTheory
