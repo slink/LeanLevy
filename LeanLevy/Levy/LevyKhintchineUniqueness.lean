@@ -547,4 +547,97 @@ theorem LevyKhintchineTriple.ext_of_exponent_eq {T T' : LevyKhintchineTriple}
 
 end Uniqueness
 
+/-!
+## Characterization of infinite divisibility
+
+The three pieces of the Lévy–Khintchine programme compose into the classical characterization:
+a probability measure on `ℝ` is infinitely divisible **iff** its characteristic function is
+`exp ∘ ψ_T` for some Lévy–Khintchine triple `T`, and that triple is then **unique**.
+
+* forward direction: `levyKhintchine_representation` (needs only infinite divisibility);
+* backward direction: `levyKhintchine_converse` + `Measure.ext_of_charFun` (a triple's law is
+  pinned by its characteristic function, so it must equal `μ`);
+* uniqueness: `LevyKhintchineTriple.ext_of_exponent_eq`, once exponents are identified from
+  equal exponentials by the continuous-log argument below.
+-/
+
+section Characterization
+
+/-- **Uniqueness of a continuous logarithm on the line.** If two continuous functions
+`f, g : ℝ → ℂ` agree at `0` and have equal exponentials everywhere, they are equal. The
+difference `f − g` is continuous with `exp (f ξ − g ξ) = 1`, hence lands in the discrete lattice
+`2πiℤ`; writing `f ξ − g ξ = (m ξ)·2πi` with `m ξ : ℤ`, the integer `m` is a continuous map into
+the discrete space `ℤ` (via `Int.isClosedEmbedding_coe_real`), hence constant on the connected
+line, so `f − g ≡ f 0 − g 0 = 0`. -/
+private lemma eq_of_cexp_eq_of_continuous {f g : ℝ → ℂ}
+    (hf : Continuous f) (hg : Continuous g) (h0 : f 0 = g 0)
+    (h : ∀ ξ, Complex.exp (f ξ) = Complex.exp (g ξ)) : f = g := by
+  -- The difference has exponential `1`, so it lies in `2πiℤ` pointwise.
+  have hone : ∀ ξ, Complex.exp (f ξ - g ξ) = 1 := fun ξ => by
+    rw [Complex.exp_sub, h ξ, div_self (Complex.exp_ne_zero _)]
+  have hex : ∀ ξ, ∃ n : ℤ, f ξ - g ξ = n * (2 * ↑π * Complex.I) :=
+    fun ξ => Complex.exp_eq_one_iff.mp (hone ξ)
+  choose m hm using hex
+  -- The integer multiplier equals a continuous real function, so `m` is continuous into `ℤ`.
+  have hcast : ∀ ξ, ((m ξ : ℤ) : ℝ) = ((f ξ - g ξ) / (2 * ↑π * Complex.I)).re := by
+    intro ξ
+    have hquot : (f ξ - g ξ) / (2 * ↑π * Complex.I) = (m ξ : ℂ) := by
+      rw [hm ξ, mul_div_assoc, div_self Complex.two_pi_I_ne_zero, mul_one]
+    rw [hquot, Complex.intCast_re]
+  have hcont_cast : Continuous fun ξ => ((m ξ : ℤ) : ℝ) := by
+    simp only [hcast]
+    exact Complex.continuous_re.comp ((hf.sub hg).div_const _)
+  have hcont_m : Continuous m :=
+    Int.isClosedEmbedding_coe_real.isEmbedding.continuous_iff.mpr hcont_cast
+  -- A continuous map from the connected line into the discrete `ℤ` is constant.
+  funext ξ
+  have hval : f ξ - g ξ = 0 := by
+    rw [hm ξ, PreconnectedSpace.constant (α := ℝ) inferInstance hcont_m (x := ξ) (y := 0),
+      ← hm 0, h0, sub_self]
+  exact sub_eq_zero.mp hval
+
+/-- **Characterization of infinite divisibility (Lévy–Khintchine).** A probability measure `μ`
+on `ℝ` is infinitely divisible **iff** its characteristic function is `exp (ψ_T)` for some
+Lévy–Khintchine triple `T = (b, σ², ν)`.
+
+The forward implication is `levyKhintchine_representation`; the converse follows from
+`levyKhintchine_converse` — its measure has the same characteristic function `exp (ψ_T)` as `μ`,
+so `Measure.ext_of_charFun` identifies the two and transports infinite divisibility back to
+`μ`. -/
+theorem isInfinitelyDivisible_iff_exists_levyKhintchineTriple
+    {μ : Measure ℝ} [IsProbabilityMeasure μ] :
+    IsInfinitelyDivisible μ ↔
+      ∃ T : LevyKhintchineTriple, ∀ ξ, charFun μ ξ = Complex.exp (T.exponent ξ) := by
+  constructor
+  · intro h
+    obtain ⟨T, hψ⟩ := levyKhintchine_representation h
+    exact ⟨T, hψ⟩
+  · rintro ⟨T, hT⟩
+    obtain ⟨μ', hμ'P, hμ'ID, hcf'⟩ := levyKhintchine_converse T
+    haveI := hμ'P
+    have hμeq : μ = μ' := by
+      apply Measure.ext_of_charFun
+      funext ξ
+      rw [hT ξ, hcf' ξ]
+    rwa [hμeq]
+
+/-- **Uniqueness of the Lévy–Khintchine triple of an infinitely divisible law.** Combining the
+representation with triple uniqueness: an infinitely divisible `μ` has a *unique*
+Lévy–Khintchine triple `T` with `charFun μ = exp (ψ_T)`. Two such triples have equal
+exponentials of their (continuous, `0`-vanishing) exponents, hence equal exponents
+(`eq_of_cexp_eq_of_continuous`), hence are equal (`LevyKhintchineTriple.ext_of_exponent_eq`). -/
+theorem existsUnique_levyKhintchineTriple
+    {μ : Measure ℝ} [IsProbabilityMeasure μ] (hμ : IsInfinitelyDivisible μ) :
+    ∃! T : LevyKhintchineTriple, ∀ ξ, charFun μ ξ = Complex.exp (T.exponent ξ) := by
+  obtain ⟨T, hT⟩ := isInfinitelyDivisible_iff_exists_levyKhintchineTriple.mp hμ
+  refine ⟨T, hT, fun T' hT' => ?_⟩
+  apply LevyKhintchineTriple.ext_of_exponent_eq
+  have hfe : T'.exponent = T.exponent :=
+    eq_of_cexp_eq_of_continuous T'.exponent_continuous T.exponent_continuous
+      (by rw [T'.exponent_zero, T.exponent_zero])
+      (fun ξ => by rw [← hT' ξ, ← hT ξ])
+  exact fun ξ => congrFun hfe ξ
+
+end Characterization
+
 end ProbabilityTheory
