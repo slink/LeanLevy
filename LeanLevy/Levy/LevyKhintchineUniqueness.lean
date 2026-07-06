@@ -496,4 +496,55 @@ theorem smearedMeasure_inj {ν₁ ν₂ : Measure ℝ}
 
 end Recovery
 
+/-!
+## Uniqueness of the triple
+
+Chaining the smear identity with `Measure.ext_of_charFun` and the smearing inversion pins the
+whole triple `(b, σ², ν)` from the exponent alone.
+-/
+
+section Uniqueness
+
+/-- If two triples with equal Gaussian variance and equal Lévy measure share the exponent value
+at `ξ = 1`, their drifts coincide: the Gaussian and jump pieces cancel, leaving `b·I = b'·I`. -/
+private lemma drift_eq_of_exponent_one {T T' : LevyKhintchineTriple}
+    (hσ : T.gaussianVariance = T'.gaussianVariance) (hν : T.levyMeasure = T'.levyMeasure)
+    (h : T.exponent 1 = T'.exponent 1) : T.drift = T'.drift := by
+  rw [LevyKhintchineTriple.exponent_def, LevyKhintchineTriple.exponent_def, hσ, hν] at h
+  have hI : (T.drift : ℂ) * Complex.I = (T'.drift : ℂ) * Complex.I := by
+    have hcancel : (T.drift : ℂ) * ↑(1 : ℝ) * Complex.I
+        = (T'.drift : ℂ) * ↑(1 : ℝ) * Complex.I := by linear_combination h
+    simpa using hcancel
+  exact Complex.ofReal_inj.mp (mul_right_cancel₀ Complex.I_ne_zero hI)
+
+/-- **Uniqueness of the Lévy–Khintchine triple.** A triple `(b, σ², ν)` is determined by its
+characteristic exponent: if two triples have the same exponent at every frequency, they are
+equal. The proof smears the exponent (`smeared_exponent_eq_charFun`) to obtain equal
+characteristic functions of the two finite smeared measures, applies `Measure.ext_of_charFun`
+to equate the smeared measures, inverts the smearing (`smearedMeasure_inj`) to recover `σ²` and
+`ν`, and reads the drift off the exponent at `ξ = 1`. -/
+theorem LevyKhintchineTriple.ext_of_exponent_eq {T T' : LevyKhintchineTriple}
+    (h : ∀ ξ : ℝ, T.exponent ξ = T'.exponent ξ) : T = T' := by
+  -- Smearing turns the exponent agreement into charFun agreement of the smeared measures.
+  have hcf : charFun (smearedMeasure T.gaussianVariance T.levyMeasure)
+      = charFun (smearedMeasure T'.gaussianVariance T'.levyMeasure) := by
+    funext ξ
+    rw [← smeared_exponent_eq_charFun T ξ, ← smeared_exponent_eq_charFun T' ξ, h ξ,
+      intervalIntegral.integral_congr (fun u _ => h (ξ + u))]
+  -- The two smeared measures are finite, so charFun agreement forces measure equality.
+  haveI := smearedMeasure_isFiniteMeasure T.gaussianVariance T.levyMeasure_isLevyMeasure
+  haveI := smearedMeasure_isFiniteMeasure T'.gaussianVariance T'.levyMeasure_isLevyMeasure
+  have hmeas := Measure.ext_of_charFun hcf
+  -- Invert the smearing to recover the Gaussian variance and the Lévy measure.
+  obtain ⟨hσ, hν⟩ :=
+    smearedMeasure_inj T.levyMeasure_isLevyMeasure T'.levyMeasure_isLevyMeasure hmeas
+  -- The drift is read off the exponent at `ξ = 1` once the other pieces agree.
+  have hdrift := drift_eq_of_exponent_one hσ hν (h 1)
+  -- All three data fields agree; conclude by structure eta and proof irrelevance.
+  obtain ⟨b, σ, ν, hνfact⟩ := T
+  obtain ⟨b', σ', ν', hνfact'⟩ := T'
+  subst hσ; subst hν; subst hdrift; rfl
+
+end Uniqueness
+
 end ProbabilityTheory
