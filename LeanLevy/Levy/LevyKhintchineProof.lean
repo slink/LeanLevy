@@ -5001,4 +5001,97 @@ theorem levyKhintchine_representation
       rw [hcharFun_one]; rfl, h1]
   rw [hcf, one_mul, hψ_eq ξ]
 
+/-! ## Converse: every Lévy-Khintchine triple yields an infinitely divisible law -/
+
+/-- The **Lévy-Khintchine exponent** of a triple `(b, σ², ν)`:
+`ψ_T(ξ) = ibξ − σ²ξ²/2 + ∫ (e^{ixξ} − 1 − ixξ·1_{|x|<1}) dν(x)`.
+
+This is the characteristic exponent whose exponential is the characteristic function of the
+infinitely divisible law associated with `T` (see `levyKhintchine_converse`), and the target
+form identified by `levyKhintchine_representation`. -/
+noncomputable def LevyKhintchineTriple.exponent (T : LevyKhintchineTriple) (ξ : ℝ) : ℂ :=
+  ↑T.drift * ↑ξ * I - ↑(T.gaussianVariance : ℝ) * ↑ξ ^ 2 / 2
+    + ∫ x, levyCompensatedIntegrand ξ x ∂T.levyMeasure
+
+/-- Definitional unfolding of `LevyKhintchineTriple.exponent`. -/
+@[simp]
+theorem LevyKhintchineTriple.exponent_def (T : LevyKhintchineTriple) (ξ : ℝ) :
+    T.exponent ξ = ↑T.drift * ↑ξ * I - ↑(T.gaussianVariance : ℝ) * ↑ξ ^ 2 / 2
+      + ∫ x, levyCompensatedIntegrand ξ x ∂T.levyMeasure := rfl
+
+/-- The Lévy-Khintchine exponent vanishes at `ξ = 0`. -/
+theorem LevyKhintchineTriple.exponent_zero (T : LevyKhintchineTriple) : T.exponent 0 = 0 := by
+  simp [LevyKhintchineTriple.exponent]
+
+/-- The Lévy-Khintchine exponent is continuous. -/
+theorem LevyKhintchineTriple.exponent_continuous (T : LevyKhintchineTriple) :
+    Continuous T.exponent := by
+  unfold LevyKhintchineTriple.exponent
+  have hInt := continuous_integral_levyCompensatedIntegrand T.levyMeasure_isLevyMeasure
+  fun_prop
+
+/-- The Lévy-Khintchine exponent is conditionally negative definite: the imaginary drift
+`ibξ` via `cnd_imag_linear`, the Gaussian term `−σ²ξ²/2` via `cnd_neg_sq` scaled by
+`σ²/2 ≥ 0`, and the jump integral via `cnd_integral_levyCompensatedIntegrand`. -/
+theorem LevyKhintchineTriple.exponent_cnd (T : LevyKhintchineTriple) :
+    IsConditionallyNegativeDefinite T.exponent := by
+  have hDrift := cnd_imag_linear T.drift
+  have hGauss := cnd_neg_sq.smul_nonneg
+    (show (0 : ℝ) ≤ (T.gaussianVariance : ℝ) / 2 by positivity)
+  have hInt := cnd_integral_levyCompensatedIntegrand T.levyMeasure_isLevyMeasure
+  have key : T.exponent = fun ξ : ℝ =>
+      (((T.drift : ℂ) * ↑ξ * I) + (↑((T.gaussianVariance : ℝ) / 2) : ℂ) * (-((↑ξ : ℂ) ^ 2)))
+        + ∫ x, levyCompensatedIntegrand ξ x ∂T.levyMeasure := by
+    funext ξ
+    simp only [LevyKhintchineTriple.exponent]
+    push_cast
+    ring
+  rw [key]
+  exact (hDrift.add hGauss).add hInt
+
+/-- The Lévy-Khintchine exponent is Hermitian: `ψ_T(−ξ) = conj(ψ_T(ξ))`. -/
+theorem LevyKhintchineTriple.exponent_hermitian (T : LevyKhintchineTriple) (ξ : ℝ) :
+    T.exponent (-ξ) = starRingEnd ℂ (T.exponent ξ) := by
+  simp only [LevyKhintchineTriple.exponent, map_add, map_sub,
+    hermitian_integral_levyCompensatedIntegrand T.levyMeasure_isLevyMeasure ξ,
+    Complex.ofReal_neg, map_mul, map_div₀, map_pow, map_ofNat, Complex.conj_ofReal,
+    Complex.conj_I]
+  ring
+
+/-- **Converse Lévy-Khintchine theorem**: every Lévy-Khintchine triple `T = (b, σ², ν)`
+is realised by an infinitely divisible probability measure `μ` on `ℝ` whose characteristic
+function is `exp(ψ_T)`, where `ψ_T = T.exponent`.
+
+**Proof:** feed `ψ_T` — continuous, conditionally negative definite, `ψ_T(0) = 0`, Hermitian —
+to the forward machinery `convolutionSemigroupOfCND` (Schoenberg + Bochner), obtaining a
+convolution semigroup with `charFun(μ_t) = exp(t·ψ_T)`. Take `μ := μ_1`. Infinite divisibility
+follows because `μ_{1/n}^{∗n}` has characteristic function `exp(n·(1/n)·ψ_T) = exp(ψ_T)`, so
+`μ = μ_{1/n}^{∗n}` by `Measure.ext_of_charFun`. -/
+theorem levyKhintchine_converse (T : LevyKhintchineTriple) :
+    ∃ μ : Measure ℝ, IsProbabilityMeasure μ ∧ IsInfinitelyDivisible μ ∧
+      ∀ ξ : ℝ, charFun μ ξ = Complex.exp (T.exponent ξ) := by
+  set S := convolutionSemigroupOfCND T.exponent_continuous T.exponent_zero
+    T.exponent_cnd T.exponent_hermitian with hS
+  -- Characteristic function of the `t`-member: `charFun(μ_t) = exp(t · ψ_T)`.
+  have hcf : ∀ (t : {t : ℝ // 0 < t}) (ξ : ℝ),
+      charFun (S.measure t : Measure ℝ) ξ = Complex.exp ((↑t.val : ℂ) * T.exponent ξ) :=
+    fun t ξ => S.charFun_eq t ξ
+  refine ⟨(S.measure ⟨1, one_pos⟩ : Measure ℝ), inferInstance, ?_, ?_⟩
+  · -- Infinite divisibility: `μ = μ_{1/n}^{∗n}`.
+    intro n hn
+    have hnpos : (0 : ℝ) < 1 / n := div_pos one_pos (Nat.cast_pos.mpr hn)
+    refine ⟨(S.measure ⟨1 / n, hnpos⟩ : Measure ℝ), inferInstance, ?_⟩
+    apply Measure.ext_of_charFun
+    funext ξ
+    rw [Measure.charFun_iteratedConv, hcf ⟨1 / n, hnpos⟩ ξ, hcf ⟨1, one_pos⟩ ξ,
+      ← Complex.exp_nat_mul]
+    congr 1
+    have hne : (n : ℂ) ≠ 0 := Nat.cast_ne_zero.mpr (by omega)
+    simp only [one_div, Complex.ofReal_inv, Complex.ofReal_natCast, Complex.ofReal_one, one_mul]
+    rw [← mul_assoc, mul_inv_cancel₀ hne, one_mul]
+  · -- Characteristic function identity at `t = 1`.
+    intro ξ
+    rw [hcf ⟨1, one_pos⟩ ξ]
+    simp only [Complex.ofReal_one, one_mul]
+
 end ProbabilityTheory
