@@ -4572,18 +4572,16 @@ finite-small-mass hypothesis. The key downstream lemmas are:
 /-- **Joint extraction of drift, Gaussian variance, and Lévy measure along a single
 subsequence.**
 
-Combines `exists_levyMeasure_finite`, `drift_limit`, and Bolzano-Weierstrass on the scaled
+Combines `exists_levyMeasure`, `drift_limit`, and Bolzano-Weierstrass on the scaled
 second moment via three nested subsequence extractions. The outer subsequence comes from
 the Lévy-measure construction; the drift extracts a sub-subsequence; the variance extracts
 a sub-sub-subsequence. All three convergences hold along the final composite subsequence
 since `Tendsto` is preserved under further sub-extraction. -/
-theorem exists_drift_variance_jumpMeasure_along_seq
-    (h_finite_small_mass : ∃ C : ℝ≥0, ∀ t : {t : ℝ // 0 < t},
-        t.val⁻¹ * ((S.measure t : Measure ℝ) smallSet).toReal ≤ ↑C) :
-    ∃ (r : ℝ) (b : ℝ) (σ_sq : ℝ≥0) (ν : Measure ℝ) (_ : IsFiniteMeasure ν)
-      (t_seq : ℕ → {t : ℝ // 0 < t}),
+theorem exists_drift_variance_jumpMeasure_along_seq :
+    ∃ (r : ℝ) (b : ℝ) (σ_sq : ℝ≥0) (ν : Measure ℝ), IsLevyMeasure ν ∧
+      ∃ (t_seq : ℕ → {t : ℝ // 0 < t}),
       r ∈ Set.Ioc (1/2 : ℝ) 1 ∧
-      ν {0} = 0 ∧ ν {x | |x| = r} = 0 ∧
+      ν {x | |x| = r} = 0 ∧
       Tendsto (fun n => (t_seq n).val) atTop (𝓝 0) ∧
       Tendsto (fun n =>
         (t_seq n).val⁻¹ * ∫ x in {x | |x| < r}, x ∂(S.measure (t_seq n) : Measure ℝ))
@@ -4595,10 +4593,10 @@ theorem exists_drift_variance_jumpMeasure_along_seq
         Tendsto (fun n => (t_seq n).val⁻¹ * ∫ x, f x ∂(S.measure (t_seq n) : Measure ℝ))
           atTop (𝓝 (∫ x, f x ∂ν))) := by
   -- Step 1: Outer extraction — Lévy measure ν and its witnessing sequence t_seq_ν.
-  obtain ⟨ν, hν_fin, t_seq_ν, ht_seq_ν, hν_zero, h_jump_conv⟩ :=
-    S.exists_levyMeasure_finite h_finite_small_mass
+  obtain ⟨ν, hν, t_seq_ν, ht_seq_ν, h_jump_conv⟩ := S.exists_levyMeasure
   -- Step 1b: an atom-free split radius `r ∈ (1/2, 1]`.
-  obtain ⟨r, hr_mem, hν_r⟩ := exists_atomFree_radius ν (show (1/2 : ℝ) < 1 by norm_num)
+  obtain ⟨r, hr_mem, hν_r⟩ :=
+    hν.exists_atomFree_radius (by norm_num : (0:ℝ) ≤ 1/2) (by norm_num : (1/2:ℝ) < 1)
   have hr_pos : (0 : ℝ) < r := by linarith [hr_mem.1]
   have hr_le1 : r ≤ 1 := hr_mem.2
   have hmeas_ball : MeasurableSet {x : ℝ | |x| < r} :=
@@ -4661,7 +4659,7 @@ theorem exists_drift_variance_jumpMeasure_along_seq
     intro f hf
     have h := h_jump_conv f hf
     exact h.comp ((hφ₁_mono.comp hφ₂_mono).tendsto_atTop)
-  exact ⟨r, b, Real.toNNReal σ, ν, hν_fin, t_seq, hr_mem, hν_zero, hν_r, ht_seq, hb_final,
+  exact ⟨r, b, Real.toNNReal σ, ν, hν, t_seq, hr_mem, hν_r, ht_seq, hb_final,
     hσ_final, h_jump_final⟩
 
 /-- **ν-side bookkeeping for the LK assembly.** Reorganizes the three subsequential-limit
@@ -4949,7 +4947,7 @@ The diagonal extraction `exists_drift_variance_jumpMeasure_along_seq` produces a
 three witnesses along a single subsequence; the formula then follows from
 `psi_eq_levyKhintchine_formula`. -/
 theorem psi_decomposition
-    (h_finite_small_mass : ∃ C : ℝ≥0, ∀ t : {t : ℝ // 0 < t},
+    (_h_finite_small_mass : ∃ C : ℝ≥0, ∀ t : {t : ℝ // 0 < t},
         t.val⁻¹ * ((S.measure t : Measure ℝ) smallSet).toReal ≤ ↑C) :
     ∃ (b : ℝ) (σ_sq : ℝ≥0) (ν : Measure ℝ),
       IsLevyMeasure ν ∧
@@ -4957,34 +4955,21 @@ theorem psi_decomposition
         S.exponent ξ = ↑b * ↑ξ * I
           - ↑(σ_sq : ℝ) * ↑ξ ^ 2 / 2
           + ∫ x, levyCompensatedIntegrand ξ x ∂ν := by
-  obtain ⟨r, b_r, σ_sq_r, ν, hν_fin, t_seq, hr_mem, hν_zero, hν_r, ht_seq, hb, hσ, h_jump⟩ :=
-    S.exists_drift_variance_jumpMeasure_along_seq h_finite_small_mass
+  obtain ⟨r, b_r, σ_sq_r, ν, hν, t_seq, hr_mem, hν_r, ht_seq, hb, hσ, h_jump⟩ :=
+    S.exists_drift_variance_jumpMeasure_along_seq
   -- Corrected witnesses: drift `b' = b_r + ∫_{r≤|x|<1} x dν`, Gaussian variance
   -- `σ_G² = σ_sq_r − ∫_{|x|<r} x² dν` (≥ 0, packaged via `Real.toNNReal`).
   refine ⟨b_r + ∫ x in {x | r ≤ |x| ∧ |x| < 1}, x ∂ν,
-    Real.toNNReal ((σ_sq_r : ℝ) - ∫ x in {x | |x| < r}, x ^ 2 ∂ν), ν, ?_, ?_⟩
-  · -- A finite measure with ν{0}=0 is a Lévy measure: `min(1,x²) ≤ 1` and `ν univ < ∞`.
-    refine ⟨hν_zero, ?_⟩
-    have hbound : ∀ x : ℝ, ENNReal.ofReal (min 1 (x ^ 2)) ≤ 1 := fun x => by
-      rw [show (1 : ℝ≥0∞) = ENNReal.ofReal 1 by simp]
-      exact ENNReal.ofReal_le_ofReal (min_le_left _ _)
-    calc ∫⁻ x, ENNReal.ofReal (min 1 (x ^ 2)) ∂ν
-        ≤ ∫⁻ _, 1 ∂ν := lintegral_mono hbound
-      _ = ν Set.univ := lintegral_one
-      _ < ⊤ := hν_fin.measure_univ_lt_top
-  · intro ξ
-    haveI := hν_fin
-    -- σ_G² ≥ 0, so its `Real.toNNReal` coercion is honest (no truncation).
-    have hr_pos : (0 : ℝ) < r := by linarith [hr_mem.1]
-    have hnn : (0 : ℝ) ≤ (σ_sq_r : ℝ) - ∫ x in {x | |x| < r}, x ^ 2 ∂ν := by
-      haveI := hν_fin
-      have := S.smallBall_second_moment_nu_le hr_pos
-        (IsLevyMeasure.of_isFiniteMeasure hν_zero) hν_zero hν_r hσ h_jump
-      linarith
-    rw [show (↑(Real.toNNReal ((σ_sq_r : ℝ) - ∫ x in {x | |x| < r}, x ^ 2 ∂ν)) : ℝ)
-          = (σ_sq_r : ℝ) - ∫ x in {x | |x| < r}, x ^ 2 ∂ν from Real.coe_toNNReal _ hnn]
-    exact S.psi_eq_levyKhintchine_formula hr_mem b_r σ_sq_r
-      (IsLevyMeasure.of_isFiniteMeasure hν_zero) hν_zero hν_r ht_seq hb hσ h_jump ξ
+    Real.toNNReal ((σ_sq_r : ℝ) - ∫ x in {x | |x| < r}, x ^ 2 ∂ν), ν, hν, ?_⟩
+  intro ξ
+  -- σ_G² ≥ 0, so its `Real.toNNReal` coercion is honest (no truncation).
+  have hr_pos : (0 : ℝ) < r := by linarith [hr_mem.1]
+  have hnn : (0 : ℝ) ≤ (σ_sq_r : ℝ) - ∫ x in {x | |x| < r}, x ^ 2 ∂ν := by
+    have := S.smallBall_second_moment_nu_le hr_pos hν hν.1 hν_r hσ h_jump
+    linarith
+  rw [show (↑(Real.toNNReal ((σ_sq_r : ℝ) - ∫ x in {x | |x| < r}, x ^ 2 ∂ν)) : ℝ)
+        = (σ_sq_r : ℝ) - ∫ x in {x | |x| < r}, x ^ 2 ∂ν from Real.coe_toNNReal _ hnn]
+  exact S.psi_eq_levyKhintchine_formula hr_mem b_r σ_sq_r hν hν.1 hν_r ht_seq hb hσ h_jump ξ
 
 end ConvolutionSemigroup
 
