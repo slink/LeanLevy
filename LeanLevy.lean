@@ -13,6 +13,7 @@ import LeanLevy.Processes.ProjectiveFamily
 import LeanLevy.Processes.Kolmogorov
 import LeanLevy.Processes.LevyProcess
 import LeanLevy.Processes.PoissonProcess
+import LeanLevy.Processes.PiecewisePath
 import LeanLevy.Levy.CharacteristicExponent
 import LeanLevy.Levy.InfiniteDivisible
 import LeanLevy.Levy.CompensatedIntegral
