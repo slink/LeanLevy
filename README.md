@@ -11,7 +11,7 @@ A Lean 4 formalization of Lévy processes, built on top of mathlib.
 **Fourier analysis** (`LeanLevy/Fourier/`)
 - Fourier transform of finite measures on ℝ, with boundedness, continuity, and value at zero
 - Positive definite functions: definition, Schur product theorem, pointwise closure, characteristic function bridge
-- Bochner's theorem: main proof via Gaussian smoothing + Prokhorov + Lévy continuity
+- Bochner's theorem, proved via Gaussian smoothing, Prokhorov compactness, and Lévy continuity
 
 **Characteristic functions** (`LeanLevy/Probability/Characteristic.lean`)
 - Characteristic function of probability measures
@@ -23,8 +23,8 @@ A Lean 4 formalization of Lévy processes, built on top of mathlib.
 - Characteristic function: `φ(ξ) = exp(r(exp(iξ) − 1))`
 
 **Lévy's continuity theorem** (`LeanLevy/Probability/WeakConvergence.lean`)
-- Both directions fully proved: weak convergence ⟺ pointwise convergence of characteristic functions
-- Tightness from characteristic function convergence
+- Weak convergence of probability measures is equivalent to pointwise convergence of characteristic functions
+- Tightness from convergence of characteristic functions
 
 **Stochastic processes** (`LeanLevy/Processes/StochasticProcess.lean`)
 - Independent and stationary increments
@@ -49,14 +49,13 @@ A Lean 4 formalization of Lévy processes, built on top of mathlib.
 - Characteristic exponent and supporting lemmas (multiplicativity, non-vanishing, right-continuity)
 
 **Kolmogorov extension theorem** (`LeanLevy/Processes/Kolmogorov.lean`)
-- Full proof of existence and uniqueness of the projective limit measure on Polish spaces
-- σ-additivity of cylinder content via inner regularity and Tychonoff compactness
+- Existence and uniqueness of the projective limit measure on Polish spaces
+- σ-additivity of the cylinder content via inner regularity and Tychonoff compactness
 
 **Poisson process** (`LeanLevy/Processes/PoissonProcess.lean`)
-- Definition as a counting process with independent Poisson-distributed increments
-- Existence via Kolmogorov extension, fully proved (zero sorry)
-- Poisson FDD projectivity fully proved (single-step erase via Poisson convolution)
-- Shown to be a Lévy process
+- Defined as a counting process with independent, Poisson-distributed increments
+- Constructed via the Kolmogorov extension theorem from its finite-dimensional distributions, whose projective consistency comes down to the convolution identity for Poisson laws
+- Is a Lévy process
 
 **Characteristic exponent** (`LeanLevy/Levy/CharacteristicExponent.lean`)
 - Local log construction (branch-cut safe) and local-global exponent agreement
@@ -77,19 +76,13 @@ A Lean 4 formalization of Lévy processes, built on top of mathlib.
 - `levyCompensatedIntegrand ξ x = exp(ixξ) − 1 − ixξ·1_{|x|<1}`
 - Pointwise norm bound, measurability, Bochner integrability under a Lévy measure
 
-**Lévy–Khintchine representation** (`LeanLevy/Levy/LevyKhintchine.lean`, `LevyKhintchineProof.lean`, `LevyKhintchineUniqueness.lean`)
-- `LevyKhintchineTriple` structure: drift, Gaussian variance, Lévy measure
-- Statement of the representation theorem
-- Sub-lemmas 1–3 fully proved: non-vanishing, continuous logarithm, conditional negative definiteness
-- Schoenberg helper lemmas, convolution semigroup structure
-- Sub-lemma 4: Schoenberg's theorem proved via kernel factorization + spectral decomposition; convolution semigroup construction complete
-- **General representation theorem**: `levyKhintchine_representation` holds for every infinitely divisible probability measure on ℝ, with `ν` an arbitrary Lévy measure (σ-finite, `∫ min(1,x²) dν < ∞`) — no finite-activity or finite-mass hypothesis. This covers infinite-activity cases such as α-stable laws (whose infinite divisibility is not itself formalized here)
-- **Proof route (canonical-measure extraction)**: the `min(1,x²)`-tilted scaled measures `tiltedScaledMeasure t` are uniformly bounded and tight with no hypothesis on `μ_t` (`tiltedScaledMeasure_mass_eventually_le`, `tiltedScaledMeasure_largeSet_le`); a single Prokhorov call extracts Khintchine's canonical measure (`exists_canonicalMeasure`), which is untilted into a σ-finite Lévy measure `ν` (`exists_levyMeasure`). The triple `(b, σ², ν)` is then extracted jointly along a single subsequence (`exists_drift_variance_jumpMeasure_along_seq`) and identified at an atom-free split radius (`psi_eq_levyKhintchine_formula`, `psi_decomposition`)
-- Analytic limit identification (`psi_eq_levyKhintchine_formula`) fully proved: it identifies `t⁻¹(charFun μ_t − 1) → Ψ(ξ)` by chaining four subsequential limits — the drift term, the small-jump compensated limit (3rd-order Taylor remainder + δ-truncation), and the complex large-jump limit (smooth-cutoff approximation) — against `charFun_scaled_limit` via uniqueness of limits
-- The formula is stated at an **extracted atom-free split radius** `r ∈ (1/2, 1]`: the Gaussian variance is `σ² = lim t⁻¹∫_{|x|<r} x² dμ_t − ∫_{|x|<r} x² dν` (subtracting the small-jump second moment that the compensated integral already carries) and the drift is recovered at the ν level as `b + ∫_{r≤|x|<1} x dν`. This normalization is what makes the formula correct — a naive radius-1 statement double-counts the small-jump second moment
-- **Converse**: `levyKhintchine_converse` — every Lévy–Khintchine triple `T = (b, σ², ν)` is realised by an infinitely divisible probability measure whose characteristic function is `exp(ψ_T)`, where `ψ_T = LevyKhintchineTriple.exponent T` is fed (continuous, `0`-vanishing, conditionally negative definite, Hermitian) to the Schoenberg + Bochner machinery
-- **Uniqueness of the triple**: `LevyKhintchineTriple.ext_of_exponent_eq` — a triple is determined by its exponent. Via Sato's smearing route: the smeared exponent `g(ξ) = ψ_T(ξ) − ½∫_{[-1,1]} ψ_T(ξ+u) du` is the characteristic function of a finite **smeared measure** `smearedMeasure σ² ν` (`smeared_exponent_eq_charFun`) carrying a `σ²/6` atom at `0` and density `1 − sinc` against `ν`; inverting the smearing (`smearedMeasure_inj`) recovers `σ²` and `ν`, and the drift is read off at `ξ = 1`
-- **Characterization**: `isInfinitelyDivisible_iff_exists_levyKhintchineTriple` — a probability measure on ℝ is infinitely divisible **iff** its characteristic function is `exp(ψ_T)` for some Lévy–Khintchine triple `T` (backward direction via `Measure.ext_of_charFun`). `existsUnique_levyKhintchineTriple` upgrades this to a *unique* triple, identifying exponents from equal exponentials by a continuous-log argument on the connected line
+**Lévy–Khintchine theorem** (`LeanLevy/Levy/LevyKhintchine.lean`, `LevyKhintchineProof.lean`, `LevyKhintchineUniqueness.lean`)
+- `LevyKhintchineTriple`: a drift, a Gaussian variance, and a Lévy measure, whose `exponent` is the Lévy–Khintchine formula `ψ_T(ξ) = ibξ − σ²ξ²/2 + ∫ (e^{ixξ} − 1 − ixξ·1_{|x|<1}) dν`
+- `levyKhintchine_representation`: every infinitely divisible probability measure on ℝ has characteristic function `exp(ψ_T)` for some triple. The Lévy measure is only required to be σ-finite with `∫ min(1,x²) dν < ∞`, so infinite-activity cases such as α-stable laws are covered (their infinite divisibility is not itself formalized here)
+- The proof extracts Khintchine's canonical measure by a single Prokhorov argument applied to the `min(1,x²)`-tilted scaled measures, untilts it into the Lévy measure, and obtains the whole triple along one subsequence. The limit is identified at a split radius `r ∈ (1/2, 1]` chosen so that `ν` has no atom on the sphere; the resulting variance `σ² = lim t⁻¹∫_{|x|<r} x² dμ_t − ∫_{|x|<r} x² dν` keeps the small-jump second moment from being counted both in `σ²` and in the compensated integral
+- `levyKhintchine_converse`: conversely, every triple is realised by an infinitely divisible law — `ψ_T` is continuous, vanishes at `0`, is Hermitian and conditionally negative definite, so Schoenberg's theorem and Bochner's theorem produce a convolution semigroup whose time-`1` member has characteristic function `exp(ψ_T)`
+- `LevyKhintchineTriple.ext_of_exponent_eq`: the triple is determined by its exponent, via Sato's smearing argument — `ψ_T(ξ) − ½∫_{[-1,1]} ψ_T(ξ+u) du` is the characteristic function of a finite measure with a `σ²/6` atom at the origin and density `1 − sinc` against `ν`, from which `σ²`, `ν`, and then the drift are recovered
+- `isInfinitelyDivisible_iff_exists_levyKhintchineTriple` and `existsUnique_levyKhintchineTriple`: a probability measure on ℝ is infinitely divisible iff its characteristic function is `exp(ψ_T)` for a triple `T`, and that triple is unique (equal exponentials force equal exponents by a continuous-logarithm argument on the connected line)
 
 **Compound Poisson process** (`LeanLevy/Processes/CompoundPoisson.lean`, `CompoundPoissonLaw.lean`)
 - **Construction**: `exists_isCompoundPoissonDriver` — for any rate `r > 0` and jump law `ν'`, a driver `(τ, Y)` of i.i.d. exponential interarrival times and i.i.d. `ν'`-marks, jointly independent, on a canonical product space
@@ -99,7 +92,7 @@ A Lean 4 formalization of Lévy processes, built on top of mathlib.
 - **Characteristic function**: `charFun_map_compoundPoisson` — the marginal at time `t` has characteristic function `exp(t·(i b ξ + r·(charFun ν' ξ − 1)))`, by conditioning on the Poisson jump count and summing the generating series
 - **Lévy–Khintchine realization**: `compoundPoissonTriple` is the triple `(b + ∫_{|x|<1} x d(r·ν'), 0, r·ν')`; `charFun_map_compoundPoisson_eq_exponent` shows the marginal's characteristic function is `exp(t·ψ_T)` for this triple, so compound Poisson processes realize exactly the finite-activity, zero-Gaussian Lévy–Khintchine triples, and `isInfinitelyDivisible_map_compoundPoisson` records that every marginal is infinitely divisible (via the converse Lévy–Khintchine theorem)
 
-The entire codebase is **sorry-free** (verified by `#print axioms`: the representation theorem, the converse, the `isInfinitelyDivisible_iff_exists_levyKhintchineTriple` / `existsUnique_levyKhintchineTriple` characterization, and the compound Poisson `compoundPoisson_pathwise_ito` / `charFun_map_compoundPoisson_eq_exponent` / `isInfinitelyDivisible_map_compoundPoisson` results depend only on `propext`, `Classical.choice`, `Quot.sound`).
+The codebase is sorry-free. `#print axioms` on the main results — the Lévy–Khintchine representation, converse, uniqueness, and characterization, and the compound Poisson pathwise Itô formula and law identification — reports only `propext`, `Classical.choice`, and `Quot.sound`.
 
 ## Building
 
@@ -140,5 +133,6 @@ LeanLevy/
     ├── InfiniteDivisible.lean
     ├── LevyKhintchine.lean
     ├── LevyKhintchineProof.lean
+    ├── LevyKhintchineUniqueness.lean
     └── LevyMeasure.lean
 ```
