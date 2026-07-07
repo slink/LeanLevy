@@ -20,8 +20,8 @@ The interarrival times generate the *arrival times*
 `arrival τ n ω = ∑ i ∈ Finset.range (n + 1), τ i ω`,
 
 the partial sums that mark when the jumps occur. This file records their almost-sure structure —
-positivity, strict monotonicity, and divergence to `+∞` — which the pathwise Itô construction in the
-next layer consumes.
+positivity, strict monotonicity, and divergence to `+∞`, and uses it to build the compound-Poisson
+sample path itself and prove its almost-sure càdlàg regularity and pathwise Itô formula.
 
 ## Main definitions
 
@@ -43,6 +43,13 @@ next layer consumes.
   surely strictly increasing.
 * `ProbabilityTheory.IsCompoundPoissonDriver.ae_tendsto_arrival` — the arrival times almost surely
   tend to `+∞`.
+* `ProbabilityTheory.compoundPoisson_ae_start` — the compound Poisson path almost surely starts at
+  `0`.
+* `ProbabilityTheory.compoundPoisson_ae_isCadlag` — the compound Poisson process almost surely has
+  càdlàg sample paths.
+* `ProbabilityTheory.compoundPoisson_pathwise_ito` — **the pathwise Itô formula**: almost every
+  sample path decomposes the increment of a `C¹` function along the process into the drift integral
+  plus the sum of jump increments, with no stochastic integral needed.
 
 ## Implementation notes
 
@@ -248,7 +255,7 @@ theorem exists_isCompoundPoissonDriver (r : ℝ≥0) (hr : 0 < r) (ν' : Measure
 
 section CompoundPoisson
 
-variable {b : ℝ} {τ Y : ℕ → Ω → ℝ}
+variable {b : ℝ} {τ Y : ℕ → Ω → ℝ} {r : ℝ≥0} {ν' : Measure ℝ} {μ : Measure Ω}
 
 /-- The **compound-Poisson-with-drift sample path**: the deterministic `piecewisePath` starting at
 `0`, drifting at rate `b`, with jump times given by the random arrival times `arrival τ · ω` and
@@ -310,6 +317,48 @@ lemma measurable_compoundPoisson (hτ : ∀ n, Measurable (τ n)) (hY : ∀ n, M
       = fun ω => 0 + b * t + ∑ n ∈ Finset.range (jumpCount (fun n => arrival τ n ω) t), Y n ω := rfl
   rw [hcp]
   exact hg.const_add _
+
+/-- The compound Poisson path almost surely starts at `0`: on the almost-sure event that the first
+arrival is positive, no jump has occurred by time `0`, so the path equals its starting value. -/
+theorem compoundPoisson_ae_start (hd : IsCompoundPoissonDriver τ Y r ν' μ) (hr : 0 < r) :
+    ∀ᵐ ω ∂μ, compoundPoisson b τ Y 0 ω = 0 := by
+  filter_upwards [hd.ae_arrival_pos hr] with ω hpos
+  exact piecewisePath_zero hpos
+
+/-- **The compound Poisson process has almost surely càdlàg sample paths.** On the almost-sure event
+that the arrival times are strictly increasing and diverge to `+∞`, every sample path is a
+piecewise-affine jump path, hence right-continuous with left limits everywhere. -/
+theorem compoundPoisson_ae_isCadlag (hd : IsCompoundPoissonDriver τ Y r ν' μ) (hr : 0 < r) :
+    ∀ᵐ ω ∂μ, IsCadlag (fun t => compoundPoisson b τ Y t ω) := by
+  filter_upwards [hd.ae_strictMono_arrival hr, hd.ae_tendsto_arrival hr] with ω hmono htop
+  exact isCadlag_piecewisePath hmono htop
+
+/-- **The pathwise Itô formula for a compound Poisson process.** For a `C¹` function `f` (given by
+`HasDerivAt` data with continuous derivative `f'`), almost every sample path of the
+compound-Poisson-with-drift process satisfies, at every time `t ≥ 0`,
+
+`f (Xₜ) − f (X₀) = ∫₀ᵗ f'(Xₛ)·b ds + ∑ₙ, Tₙ ≤ t (f(X_{Tₙ}) − f(X_{Tₙ} − Yₙ))`,
+
+i.e. the increment of `f` along the path splits into the drift integral plus the sum, over the
+arrivals `Tₙ = arrival τ n ω` up to time `t`, of the jump increments `f(X_{Tₙ}) − f(X_{Tₙ} − Yₙ)`.
+
+There is **no stochastic integral**: the compound Poisson process has finite activity — only
+finitely many jumps in any bounded interval — so the formula holds pathwise and deterministically for
+each fixed `ω` in the almost-sure event. The whole time-quantifier `∀ t, 0 ≤ t → …` lives *inside*
+the almost-everywhere quantifier: a single null set is discarded, after which the identity holds
+simultaneously for all `t` and all `C¹` test functions applied to that path. -/
+theorem compoundPoisson_pathwise_ito (hd : IsCompoundPoissonDriver τ Y r ν' μ) (hr : 0 < r)
+    {f f' : ℝ → ℝ} (hf : ∀ x, HasDerivAt f (f' x) x) (hf' : Continuous f') :
+    ∀ᵐ ω ∂μ, ∀ t : ℝ, 0 ≤ t →
+      f (compoundPoisson b τ Y t ω) - f (compoundPoisson b τ Y 0 ω)
+        = (∫ s in (0:ℝ)..t, f' (compoundPoisson b τ Y s ω) * b)
+          + ∑ n ∈ Finset.range (jumpCount (fun m => arrival τ m ω) t),
+              (f (compoundPoisson b τ Y (arrival τ n ω) ω)
+                - f (compoundPoisson b τ Y (arrival τ n ω) ω - Y n ω)) := by
+  filter_upwards [hd.ae_strictMono_arrival hr, hd.ae_arrival_pos hr, hd.ae_tendsto_arrival hr]
+    with ω hmono hpos htop
+  intro t ht
+  exact piecewisePath_ito hf hf' hmono htop hpos ht
 
 end CompoundPoisson
 
