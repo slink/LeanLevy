@@ -91,7 +91,15 @@ A Lean 4 formalization of Lévy processes, built on top of mathlib.
 - **Uniqueness of the triple**: `LevyKhintchineTriple.ext_of_exponent_eq` — a triple is determined by its exponent. Via Sato's smearing route: the smeared exponent `g(ξ) = ψ_T(ξ) − ½∫_{[-1,1]} ψ_T(ξ+u) du` is the characteristic function of a finite **smeared measure** `smearedMeasure σ² ν` (`smeared_exponent_eq_charFun`) carrying a `σ²/6` atom at `0` and density `1 − sinc` against `ν`; inverting the smearing (`smearedMeasure_inj`) recovers `σ²` and `ν`, and the drift is read off at `ξ = 1`
 - **Characterization**: `isInfinitelyDivisible_iff_exists_levyKhintchineTriple` — a probability measure on ℝ is infinitely divisible **iff** its characteristic function is `exp(ψ_T)` for some Lévy–Khintchine triple `T` (backward direction via `Measure.ext_of_charFun`). `existsUnique_levyKhintchineTriple` upgrades this to a *unique* triple, identifying exponents from equal exponentials by a continuous-log argument on the connected line
 
-The entire codebase is **sorry-free** (verified by `#print axioms`: the representation theorem, the converse, and the `isInfinitelyDivisible_iff_exists_levyKhintchineTriple` / `existsUnique_levyKhintchineTriple` characterization depend only on `propext`, `Classical.choice`, `Quot.sound`).
+**Compound Poisson process** (`LeanLevy/Processes/CompoundPoisson.lean`, `CompoundPoissonLaw.lean`)
+- **Construction**: `exists_isCompoundPoissonDriver` — for any rate `r > 0` and jump law `ν'`, a driver `(τ, Y)` of i.i.d. exponential interarrival times and i.i.d. `ν'`-marks, jointly independent, on a canonical product space
+- **Sample paths**: `compoundPoisson_ae_isCadlag` — the path `t ↦ b·t + ∑_{n ≤ N(t)} Yₙ` is almost surely càdlàg
+- **Pathwise Itô formula**: `compoundPoisson_pathwise_ito` — for a `C¹` function `f`, a purely *pathwise* change-of-variables identity `f(Xₜ) − f(X₀) = ∫₀ᵗ f'(Xₛ)·b ds + ∑ jump terms`, valid for these finite-activity paths with no stochastic integral (the drift part is an ordinary Riemann integral, the jumps a finite sum)
+- **Jump-count law**: `map_jumpCount_arrival` — the number of jumps by time `t` is Poisson with mean `r·t`, obtained from the Gamma law of the arrival times and telescoping survival probabilities
+- **Characteristic function**: `charFun_map_compoundPoisson` — the marginal at time `t` has characteristic function `exp(t·(i b ξ + r·(charFun ν' ξ − 1)))`, by conditioning on the Poisson jump count and summing the generating series
+- **Lévy–Khintchine realization**: `compoundPoissonTriple` is the triple `(b + ∫_{|x|<1} x d(r·ν'), 0, r·ν')`; `charFun_map_compoundPoisson_eq_exponent` shows the marginal's characteristic function is `exp(t·ψ_T)` for this triple, so compound Poisson processes realize exactly the finite-activity, zero-Gaussian Lévy–Khintchine triples, and `isInfinitelyDivisible_map_compoundPoisson` records that every marginal is infinitely divisible (via the converse Lévy–Khintchine theorem)
+
+The entire codebase is **sorry-free** (verified by `#print axioms`: the representation theorem, the converse, the `isInfinitelyDivisible_iff_exists_levyKhintchineTriple` / `existsUnique_levyKhintchineTriple` characterization, and the compound Poisson `compoundPoisson_pathwise_ito` / `charFun_map_compoundPoisson_eq_exponent` / `isInfinitelyDivisible_map_compoundPoisson` results depend only on `propext`, `Classical.choice`, `Quot.sound`).
 
 ## Building
 
@@ -115,10 +123,13 @@ LeanLevy/
 │   └── WeakConvergence.lean
 ├── Processes/
 │   ├── Cadlag.lean
+│   ├── CompoundPoisson.lean
+│   ├── CompoundPoissonLaw.lean
 │   ├── FiniteDimensional.lean
 │   ├── ProjectiveFamily.lean
 │   ├── Kolmogorov.lean
 │   ├── LevyProcess.lean
+│   ├── PiecewisePath.lean
 │   ├── PoissonProcess.lean
 │   └── StochasticProcess.lean
 ├── Representation/
