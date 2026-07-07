@@ -7,6 +7,8 @@ import LeanLevy.Processes.Cadlag
 import Mathlib.Topology.Instances.Real.Lemmas
 import Mathlib.Data.Nat.Lattice
 import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+import Mathlib.MeasureTheory.Integral.IntervalIntegral.FundThmCalculus
+import Mathlib.Analysis.Calculus.Deriv.Mul
 
 /-!
 # Piecewise-affine jump paths
@@ -36,6 +38,9 @@ The number of jumps that have occurred strictly before (or at) time `t` is track
 * `ProbabilityTheory.tendsto_piecewisePath_leftLim` — the left limit at `T n` is smaller than the
   value there by exactly the jump size `Y n`.
 * `ProbabilityTheory.isCadlag_piecewisePath` — a piecewise-affine jump path is càdlàg.
+* `ProbabilityTheory.piecewisePath_ito` — the deterministic Itô formula: for `f` with continuous
+  derivative `f'`, the increment `f (path t) − f (path 0)` splits into the drift integral
+  `∫₀ᵗ f' (path s)·b ds` plus the sum of jump increments `f (path (T n)) − f (path (T n) − Y n)`.
 -/
 
 open Filter Set Topology
@@ -238,5 +243,205 @@ theorem isCadlag_piecewisePath (hmono : StrictMono T) (htop : Tendsto T atTop at
   exact Filter.Tendsto.congr' (Filter.eventually_of_mem hmem fun u hu => (heqOn hu).symm) hgc
 
 end PiecewisePath
+
+section Ito
+
+open MeasureTheory
+open scoped Interval
+
+variable {x₀ b : ℝ} {T Y : ℕ → ℝ} {f f' : ℝ → ℝ}
+
+/-- Telescoping identity underlying the deterministic Itô formula: if `J i` is the "gap" between
+consecutive pieces `L (i + 1) − R i`, then the sum of piece increments `R i − L i` collapses to the
+overall increment `R k − L 0` minus the accumulated gaps. -/
+private theorem sum_range_succ_telescope (R L J : ℕ → ℝ) (k : ℕ)
+    (h : ∀ i < k, J i = L (i + 1) - R i) :
+    ∑ i ∈ Finset.range (k + 1), (R i - L i) = R k - L 0 - ∑ i ∈ Finset.range k, J i := by
+  induction k with
+  | zero => simp
+  | succ m ih =>
+    rw [Finset.sum_range_succ (fun i => R i - L i), ih fun i hi => h i (by omega),
+      Finset.sum_range_succ J, h m (by omega)]
+    ring
+
+/-- FTC on a single inter-jump interval: the derivative of the affine composite `s ↦ f (v + b·s)`
+integrates to the increment of `f (v + b·-)` between the endpoints. -/
+private theorem intervalIntegral_deriv_comp_affine
+    (hf : ∀ x, HasDerivAt f (f' x) x) (hf' : Continuous f') (v a c : ℝ) :
+    (∫ s in a..c, f' (v + b * s) * b) = f (v + b * c) - f (v + b * a) := by
+  have hderiv : ∀ s ∈ Set.uIcc a c,
+      HasDerivAt (fun u => f (v + b * u)) (f' (v + b * s) * b) s := by
+    intro s _
+    have h1 : HasDerivAt (fun u => v + b * u) b s := by
+      simpa using (HasDerivAt.const_mul b (hasDerivAt_id s)).const_add v
+    exact (hf (v + b * s)).comp s h1
+  have hcont : Continuous (fun s => f' (v + b * s) * b) :=
+    (hf'.comp (by fun_prop : Continuous fun s => v + b * s)).mul continuous_const
+  simpa using intervalIntegral.integral_eq_sub_of_hasDerivAt hderiv (hcont.intervalIntegrable a c)
+
+/-- On an interval `[a, c)` on which the jump count is constantly `k'`, the Itô integrand
+`s ↦ f' (path s)·b` is interval-integrable and integrates to the increment of `f` along the affine
+piece; the two integrands differ at most at the right endpoint, a null set. -/
+private theorem piecewisePath_deriv_integral
+    (hf : ∀ x, HasDerivAt f (f' x) x) (hf' : Continuous f')
+    {a c : ℝ} {k' : ℕ} (hac : a ≤ c) (hconst : ∀ s ∈ Set.Ico a c, jumpCount T s = k') :
+    IntervalIntegrable (fun s => f' (piecewisePath x₀ b T Y s) * b) volume a c ∧
+      (∫ s in a..c, f' (piecewisePath x₀ b T Y s) * b)
+        = f ((x₀ + ∑ n ∈ Finset.range k', Y n) + b * c)
+          - f ((x₀ + ∑ n ∈ Finset.range k', Y n) + b * a) := by
+  set v : ℝ := x₀ + ∑ n ∈ Finset.range k', Y n with hv
+  have hae : (fun s => f' (piecewisePath x₀ b T Y s) * b)
+      =ᵐ[volume.restrict (Ι a c)] fun s => f' (v + b * s) * b := by
+    refine (ae_restrict_iff' measurableSet_uIoc).mpr ?_
+    rw [ae_iff]
+    refine measure_mono_null ?_ (by simp : volume ({c} : Set ℝ) = 0)
+    intro x hx
+    simp only [Set.mem_setOf_eq, Classical.not_imp] at hx
+    obtain ⟨hxmem, hxne⟩ := hx
+    rw [Set.uIoc_of_le hac] at hxmem
+    rcases eq_or_lt_of_le hxmem.2 with hxc | hxc
+    · exact Set.mem_singleton_iff.mpr hxc
+    · refine absurd ?_ hxne
+      have hxIco : x ∈ Set.Ico a c := ⟨le_of_lt hxmem.1, hxc⟩
+      have hpath : piecewisePath x₀ b T Y x = v + b * x := by
+        simp only [piecewisePath, hconst x hxIco, hv]; ring
+      rw [hpath]
+  have hcont : Continuous (fun s => f' (v + b * s) * b) :=
+    (hf'.comp (by fun_prop : Continuous fun s => v + b * s)).mul continuous_const
+  refine ⟨(hcont.intervalIntegrable a c).congr_ae hae.symm, ?_⟩
+  rw [intervalIntegral.integral_congr_ae_restrict hae]
+  exact intervalIntegral_deriv_comp_affine hf hf' v a c
+
+/-- **Deterministic Itô formula for a piecewise-affine jump path.** For a `C¹` function `f` (given by
+`HasDerivAt` data with continuous derivative `f'`), the increment of `f` along a piecewise-affine
+jump path decomposes as the drift integral `∫₀ᵗ f' (path s)·b ds` plus the sum of jump increments
+`f (path (T n)) − f (path (T n) − Y n)` over the arrivals `T n ≤ t`. This is the pathwise skeleton
+of Itô's formula for a compound-Poisson-with-drift process. -/
+theorem piecewisePath_ito (hf : ∀ x, HasDerivAt f (f' x) x) (hf' : Continuous f')
+    (hmono : StrictMono T) (htop : Tendsto T atTop atTop) (hpos : 0 < T 0)
+    {t : ℝ} (ht : 0 ≤ t) :
+    f (piecewisePath x₀ b T Y t) - f (piecewisePath x₀ b T Y 0)
+      = (∫ s in (0:ℝ)..t, f' (piecewisePath x₀ b T Y s) * b)
+        + ∑ n ∈ Finset.range (jumpCount T t),
+            (f (piecewisePath x₀ b T Y (T n)) - f (piecewisePath x₀ b T Y (T n) - Y n)) := by
+  classical
+  set k := jumpCount T t with hk_def
+  set e : ℕ → ℝ := fun i => if i = 0 then 0 else if i ≤ k then T (i - 1) else t with he_def
+  set v : ℕ → ℝ := fun i => x₀ + ∑ n ∈ Finset.range i, Y n with hv_def
+  -- Endpoint-function values.
+  have he0 : e 0 = 0 := by simp [he_def]
+  have heS : ∀ i, 1 ≤ i → i ≤ k → e i = T (i - 1) := by
+    intro i hi1 hik
+    simp only [he_def]
+    rw [if_neg (by omega), if_pos hik]
+  have heTop : ∀ i, k < i → e i = t := by
+    intro i hi
+    simp only [he_def]
+    rw [if_neg (by omega), if_neg (by omega)]
+  -- The right endpoint `t` lies strictly before the next arrival.
+  have ht_lt : t < T k := by
+    have hnot : ¬ (T k ≤ t) := by rw [← lt_jumpCount_iff hmono htop k t]; omega
+    exact not_le.mp hnot
+  -- Lower bound: reaching `e i` means at least `i` jumps have occurred.
+  have he_lb : ∀ i, i ≤ k → ∀ s, e i ≤ s → i ≤ jumpCount T s := by
+    intro i hik s hs
+    rcases Nat.eq_zero_or_pos i with hi0 | hipos
+    · omega
+    · rw [heS i hipos hik] at hs
+      have := (lt_jumpCount_iff hmono htop (i - 1) s).mpr hs
+      omega
+  -- Upper bound: the next endpoint is at most the `i`-th arrival.
+  have he_ub : ∀ i, i ≤ k → e (i + 1) ≤ T i := by
+    intro i hik
+    rcases Nat.lt_or_ge i k with hlt | hge
+    · rw [heS (i + 1) (by omega) (by omega)]; simp
+    · rw [heTop (i + 1) (by omega)]
+      have hik' : i = k := by omega
+      rw [hik']; exact le_of_lt ht_lt
+  -- The endpoints are (weakly) increasing.
+  have he_le : ∀ i, i ≤ k → e i ≤ e (i + 1) := by
+    intro i hik
+    rcases Nat.eq_zero_or_pos i with hi0 | hipos
+    · subst hi0
+      rw [he0]
+      rcases Nat.eq_zero_or_pos k with hk0 | hkpos
+      · rw [heTop 1 (by omega)]; exact ht
+      · rw [heS 1 (by omega) (by omega)]; simpa using le_of_lt hpos
+    · rw [heS i hipos hik]
+      rcases Nat.lt_or_ge i k with hlt | hge
+      · rw [heS (i + 1) (by omega) (by omega)]
+        simp only [Nat.add_sub_cancel]
+        exact hmono.monotone (by omega)
+      · rw [heTop (i + 1) (by omega)]
+        exact (lt_jumpCount_iff hmono htop (i - 1) t).mp (by rw [← hk_def]; omega)
+  -- The jump count is constantly `i` on each piece `[e i, e (i + 1))`.
+  have hconst : ∀ i, i ≤ k → ∀ s ∈ Set.Ico (e i) (e (i + 1)), jumpCount T s = i := by
+    intro i hik s hs
+    have h1 : i ≤ jumpCount T s := he_lb i hik s hs.1
+    have h2 : jumpCount T s ≤ i := by
+      have hlt : s < T i := lt_of_lt_of_le hs.2 (he_ub i hik)
+      by_contra hc
+      push_neg at hc
+      exact absurd ((lt_jumpCount_iff hmono htop i s).mp hc) (not_le.mpr hlt)
+    omega
+  -- Per-piece integrability and value.
+  have hpiece : ∀ i, i ≤ k →
+      IntervalIntegrable (fun s => f' (piecewisePath x₀ b T Y s) * b) volume (e i) (e (i + 1)) ∧
+      (∫ s in e i..e (i + 1), f' (piecewisePath x₀ b T Y s) * b)
+        = f (v i + b * e (i + 1)) - f (v i + b * e i) := by
+    intro i hik
+    have hres := piecewisePath_deriv_integral (x₀ := x₀) (b := b) (Y := Y) hf hf'
+      (he_le i hik) (hconst i hik)
+    simpa [hv_def] using hres
+  -- Glue the pieces into the integral over `[0, t]`.
+  have hint : ∀ i < k + 1,
+      IntervalIntegrable (fun s => f' (piecewisePath x₀ b T Y s) * b) volume (e i) (e (i + 1)) :=
+    fun i hi => (hpiece i (by omega)).1
+  have hsum_int :
+      ∑ i ∈ Finset.range (k + 1), ∫ s in e i..e (i + 1), f' (piecewisePath x₀ b T Y s) * b
+        = ∫ s in e 0..e (k + 1), f' (piecewisePath x₀ b T Y s) * b :=
+    intervalIntegral.sum_integral_adjacent_intervals hint
+  rw [he0, heTop (k + 1) (by omega)] at hsum_int
+  have hsum_val :
+      ∑ i ∈ Finset.range (k + 1), ∫ s in e i..e (i + 1), f' (piecewisePath x₀ b T Y s) * b
+        = ∑ i ∈ Finset.range (k + 1), (f (v i + b * e (i + 1)) - f (v i + b * e i)) :=
+    Finset.sum_congr rfl fun i hi => (hpiece i (Nat.lt_succ_iff.mp (Finset.mem_range.mp hi))).2
+  have hRL : ∑ i ∈ Finset.range (k + 1), (f (v i + b * e (i + 1)) - f (v i + b * e i))
+      = ∫ s in (0:ℝ)..t, f' (piecewisePath x₀ b T Y s) * b := by
+    rw [← hsum_val, hsum_int]
+  -- Identify the telescoped endpoints and the gaps with the stated quantities.
+  have hRk : f (v k + b * e (k + 1)) = f (piecewisePath x₀ b T Y t) := by
+    have hval : v k + b * e (k + 1) = piecewisePath x₀ b T Y t := by
+      rw [heTop (k + 1) (by omega)]
+      simp only [piecewisePath, hv_def, ← hk_def]
+      ring
+    rw [hval]
+  have hL0 : f (v 0 + b * e 0) = f (piecewisePath x₀ b T Y 0) := by
+    have hval : v 0 + b * e 0 = piecewisePath x₀ b T Y 0 := by
+      rw [he0, piecewisePath_zero hpos]
+      simp only [hv_def, Finset.range_zero, Finset.sum_empty]
+      ring
+    rw [hval]
+  have hJ : ∀ i < k,
+      f (piecewisePath x₀ b T Y (T i)) - f (piecewisePath x₀ b T Y (T i) - Y i)
+        = f (v (i + 1) + b * e (i + 1)) - f (v i + b * e (i + 1)) := by
+    intro i hi
+    have hei : e (i + 1) = T i := by
+      rw [heS (i + 1) (by omega) (by omega)]; simp
+    rw [hei]
+    have hpath : piecewisePath x₀ b T Y (T i) = v (i + 1) + b * T i := by
+      simp only [piecewisePath, jumpCount_arrival_self hmono htop, hv_def]; ring
+    have hpath' : piecewisePath x₀ b T Y (T i) - Y i = v i + b * T i := by
+      rw [hpath]; simp only [hv_def, Finset.sum_range_succ]; ring
+    rw [hpath', hpath]
+  have htel := sum_range_succ_telescope
+    (fun i => f (v i + b * e (i + 1))) (fun i => f (v i + b * e i))
+    (fun i => f (piecewisePath x₀ b T Y (T i)) - f (piecewisePath x₀ b T Y (T i) - Y i)) k hJ
+  rw [← hRL, htel]
+  simp only []
+  rw [hRk, hL0]
+  ring
+
+end Ito
 
 end ProbabilityTheory
