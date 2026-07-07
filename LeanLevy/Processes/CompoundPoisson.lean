@@ -56,8 +56,9 @@ sample path itself and prove its almost-sure càdlàg regularity and pathwise It
 The joint independence is stored as a single `iIndepFun` over the combined index type `ℕ ⊕ ℕ`, with
 the interarrival family on the `Sum.inl` block and the mark family on the `Sum.inr` block, glued by
 `Sum.elim τ Y`. This one-family spelling is what lets later layers extract *any* disjoint-block
-independence (interarrivals ⟂ marks, or finite subfamilies of either) via `iIndepFun.precomp` and
-`iIndepFun.indepFun_finset`.
+independence (interarrivals ⟂ marks, or finite subfamilies of either): the per-block families are
+exposed as `IsCompoundPoissonDriver.iIndepFun_interarrival` / `.iIndepFun_mark`, and finer splits
+follow via `iIndepFun.precomp` and `iIndepFun.indepFun_finset`.
 
 Because `isProbabilityMeasure_expMeasure` requires a strictly positive rate, the existence theorem
 and every almost-sure lemma carries a hypothesis `hr : 0 < r`.
@@ -114,6 +115,18 @@ lemma measurable_arrival (h : IsCompoundPoissonDriver τ Y r ν' μ) (n : ℕ) :
 lemma isProbabilityMeasure (h : IsCompoundPoissonDriver τ Y r ν' μ) : IsProbabilityMeasure μ :=
   h.indep.isProbabilityMeasure
 
+/-- The interarrival family of a compound Poisson driver is jointly independent: restrict the
+combined `ℕ ⊕ ℕ`-indexed independence to the left summand. -/
+lemma iIndepFun_interarrival (h : IsCompoundPoissonDriver τ Y r ν' μ) : iIndepFun τ μ := by
+  have := h.indep.precomp (g := Sum.inl) Sum.inl_injective
+  simpa [Function.comp] using this
+
+/-- The mark family of a compound Poisson driver is jointly independent: restrict the combined
+`ℕ ⊕ ℕ`-indexed independence to the right summand. -/
+lemma iIndepFun_mark (h : IsCompoundPoissonDriver τ Y r ν' μ) : iIndepFun Y μ := by
+  have := h.indep.precomp (g := Sum.inr) Sum.inr_injective
+  simpa [Function.comp] using this
+
 /-- The interarrival times of a compound Poisson driver are almost surely all positive. -/
 theorem ae_interarrival_pos (h : IsCompoundPoissonDriver τ Y r ν' μ) (hr : 0 < r) :
     ∀ᵐ ω ∂μ, ∀ n, 0 < τ n ω := by
@@ -147,9 +160,7 @@ theorem ae_arrival_pos (h : IsCompoundPoissonDriver τ Y r ν' μ) (hr : 0 < r) 
 interarrival σ-algebras, which form an independent subfamily of the driver. -/
 private lemma iIndepSet_interarrival_gt (h : IsCompoundPoissonDriver τ Y r ν' μ) :
     iIndepSet (fun n => (τ n) ⁻¹' Set.Ioi 1) μ := by
-  have hτ : iIndepFun τ μ := by
-    have := h.indep.precomp (g := Sum.inl) Sum.inl_injective
-    simpa [Function.comp] using this
+  have hτ : iIndepFun τ μ := h.iIndepFun_interarrival
   rw [iIndepSet_iff_meas_biInter fun n => (h.measurable_interarrival n) measurableSet_Ioi]
   intro s
   exact hτ.meas_biInter fun i _ => ⟨Set.Ioi 1, measurableSet_Ioi, rfl⟩
@@ -346,7 +357,7 @@ There is **no stochastic integral**: the compound Poisson process has finite act
 finitely many jumps in any bounded interval — so the formula holds pathwise and deterministically for
 each fixed `ω` in the almost-sure event. The whole time-quantifier `∀ t, 0 ≤ t → …` lives *inside*
 the almost-everywhere quantifier: a single null set is discarded, after which the identity holds
-simultaneously for all `t` and all `C¹` test functions applied to that path. -/
+simultaneously for all `t`. (The null set depends only on the arrival structure, not on `f`.) -/
 theorem compoundPoisson_pathwise_ito (hd : IsCompoundPoissonDriver τ Y r ν' μ) (hr : 0 < r)
     {f f' : ℝ → ℝ} (hf : ∀ x, HasDerivAt f (f' x) x) (hf' : Continuous f') :
     ∀ᵐ ω ∂μ, ∀ t : ℝ, 0 ≤ t →

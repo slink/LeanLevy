@@ -217,9 +217,7 @@ private lemma map_arrival_eq [IsProbabilityMeasure μ]
     have h0 : arrival τ 0 = τ 0 := by funext ω; exact arrival_zero τ ω
     rw [h0, (hd.law_interarrival 0).map_eq, expMeasure_eq_withDensity_arrivalDensity]
   | succ n ih =>
-    have hτ : iIndepFun τ μ := by
-      have := hd.indep.precomp (g := Sum.inl) Sum.inl_injective
-      simpa [Function.comp] using this
+    have hτ : iIndepFun τ μ := hd.iIndepFun_interarrival
     have harr_eq : arrival τ n = ∑ j ∈ Finset.range (n + 1), τ j := by
       funext ω; simp [arrival, Finset.sum_apply]
     have hindep : IndepFun (arrival τ n) (τ (n + 1)) μ := by
@@ -403,7 +401,6 @@ private lemma tsum_poissonPMFReal_mul_pow (lam : ℝ≥0) (w : ℂ) :
   push_cast
   ring
 
-variable {b : ℝ}
 
 /-- **The interarrival family is independent of the mark family.** The joint driver independence
 `iIndepFun (Sum.elim τ Y)` over `ℕ ⊕ ℕ` restricts, via the process-independence criterion, to
@@ -445,9 +442,7 @@ private lemma charFun_finset_sum_marks (hd : IsCompoundPoissonDriver τ Y r ν' 
     (k : ℕ) (ξ : ℝ) :
     charFun (μ.map (fun ω => ∑ n ∈ Finset.range k, Y n ω)) ξ = (charFun ν' ξ) ^ k := by
   haveI := hd.isProbabilityMeasure
-  have hY : iIndepFun Y μ := by
-    have := hd.indep.precomp (g := Sum.inr) Sum.inr_injective
-    simpa [Function.comp] using this
+  have hY : iIndepFun Y μ := hd.iIndepFun_mark
   have hZ : iIndepFun (fun i : Fin k => Y (i : ℕ)) μ := hY.precomp Fin.val_injective
   have hfun : (fun ω => ∑ n ∈ Finset.range k, Y n ω) = (fun ω => ∑ i : Fin k, Y (i : ℕ) ω) := by
     funext ω
@@ -621,7 +616,8 @@ theorem charFun_map_compoundPoisson [IsProbabilityMeasure μ]
 and (probability) jump law `ν'`. The Gaussian part vanishes, the Lévy measure is the finite measure
 `r · ν'`, and the drift is corrected by the small-jump compensator `∫_{|x| < 1} x d(r · ν')` so that
 the compensated Lévy–Khintchine exponent reproduces the compound-Poisson characteristic exponent
-`i b ξ + r (charFun ν' ξ − 1)` (see `exponent_compoundPoissonTriple`). By uniqueness of the triple
+`i b ξ + r (charFun ν' ξ − 1)` (proved in this file en route to
+`charFun_map_compoundPoisson_eq_exponent`). By uniqueness of the triple
 of an infinitely divisible law (`existsUnique_levyKhintchineTriple`) this is *the* Lévy–Khintchine
 triple of the time-`1` marginal. -/
 noncomputable def compoundPoissonTriple (b : ℝ) (r : ℝ≥0) (ν' : Measure ℝ)
