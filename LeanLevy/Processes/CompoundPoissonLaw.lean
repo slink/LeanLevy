@@ -8,6 +8,9 @@ import LeanLevy.Probability.Poisson
 import Mathlib.MeasureTheory.Group.Convolution
 import Mathlib.Probability.Distributions.Gamma
 import Mathlib.Analysis.SpecialFunctions.Integrals.Basic
+import Mathlib.Probability.Independence.CharacteristicFunction
+import Mathlib.Probability.Independence.Integration
+import Mathlib.Probability.Independence.Process
 
 /-!
 # The jump-count law of a compound Poisson process is Poisson
@@ -30,6 +33,9 @@ Poisson jump-count law follows by telescoping the survival probabilities.
 * `ProbabilityTheory.arrival_survival` — `P(arrival τ n > t) = e^{-rt} ∑_{k ≤ n} (rt)^k / k!`.
 * `ProbabilityTheory.map_jumpCount_arrival` — the law of the jump count at time `t` is
   `poissonMeasure (r · t)`.
+* `ProbabilityTheory.charFun_map_compoundPoisson` — the characteristic function of the
+  compound-Poisson-with-drift marginal at time `t` is
+  `exp(t · (i b ξ + r · (charFun ν' ξ − 1)))`.
 -/
 
 open MeasureTheory Filter Finset
@@ -365,5 +371,240 @@ theorem map_jumpCount_arrival [IsProbabilityMeasure μ]
     simp only [survivalPoly, poissonPMFReal, Finset.sum_range_succ, NNReal.coe_mul]
     field_simp
     ring
+
+/-! ## The characteristic function of the compound Poisson marginal -/
+
+/-- **Poisson probability-generating function.** For any complex `w`, the power series
+`∑ₖ P(N = k) · wᵏ` of a Poisson`(λ)` count sums to `exp(λ · (w − 1))`. This is the analytic
+identity behind the compound-Poisson characteristic function; it is proved exactly like
+`poissonCharFun_eq`, by pulling the normalising constant `e^{−λ}` out of the exponential series. -/
+private lemma tsum_poissonPMFReal_mul_pow (lam : ℝ≥0) (w : ℂ) :
+    ∑' k : ℕ, (poissonPMFReal lam k : ℂ) * w ^ k = Complex.exp ((lam : ℝ) * (w - 1)) := by
+  have hterm : ∀ k : ℕ, (poissonPMFReal lam k : ℂ) * w ^ k
+      = (Real.exp (-(lam : ℝ)) : ℂ) * (((lam : ℝ) * w) ^ k / (Nat.factorial k : ℂ)) := by
+    intro k
+    simp only [poissonPMFReal]
+    push_cast
+    rw [mul_pow]
+    ring
+  simp_rw [hterm]
+  rw [tsum_mul_left]
+  have hsum := NormedSpace.expSeries_div_hasSum_exp (((lam : ℝ) : ℂ) * w)
+  rw [hsum.tsum_eq, ← Complex.exp_eq_exp_ℂ, Complex.ofReal_exp, ← Complex.exp_add]
+  congr 1
+  push_cast
+  ring
+
+variable {b : ℝ}
+
+/-- **The interarrival family is independent of the mark family.** The joint driver independence
+`iIndepFun (Sum.elim τ Y)` over `ℕ ⊕ ℕ` restricts, via the process-independence criterion, to
+independence of the two whole `ℕ → ℝ`-valued blocks. This is the pi-block independence that lets a
+functional of *all* interarrival times (such as the jump count) be treated as independent of the
+marks. -/
+private lemma indepFun_interarrival_mark (hd : IsCompoundPoissonDriver τ Y r ν' μ) :
+    IndepFun (fun ω n => τ n ω) (fun ω n => Y n ω) μ := by
+  haveI := hd.isProbabilityMeasure
+  have hmeas : ∀ i, Measurable (Sum.elim τ Y i) := by
+    rintro (n | n)
+    · exact hd.measurable_interarrival n
+    · exact hd.measurable_mark n
+  refine IndepFun.process_indepFun_process hd.measurable_interarrival hd.measurable_mark ?_
+  intro I J
+  classical
+  set eL : ℕ ↪ ℕ ⊕ ℕ := ⟨Sum.inl, Sum.inl_injective⟩ with heL
+  set eR : ℕ ↪ ℕ ⊕ ℕ := ⟨Sum.inr, Sum.inr_injective⟩ with heR
+  have hdisj : Disjoint (I.map eL) (J.map eR) := by
+    rw [Finset.disjoint_left]
+    rintro x hxL hxR
+    rw [Finset.mem_map] at hxL hxR
+    obtain ⟨a, -, rfl⟩ := hxL
+    obtain ⟨c, -, hc⟩ := hxR
+    exact Sum.inr_ne_inl hc
+  have key := hd.indep.indepFun_finset (I.map eL) (J.map eR) hdisj hmeas
+  have φmeas : Measurable
+      (fun (g : (I.map eL) → ℝ) (i : I) => g ⟨Sum.inl (i : ℕ), Finset.mem_map_of_mem eL i.2⟩) :=
+    measurable_pi_lambda _ fun _ => measurable_pi_apply _
+  have ψmeas : Measurable
+      (fun (g : (J.map eR) → ℝ) (j : J) => g ⟨Sum.inr (j : ℕ), Finset.mem_map_of_mem eR j.2⟩) :=
+    measurable_pi_lambda _ fun _ => measurable_pi_apply _
+  exact key.comp φmeas ψmeas
+
+/-- **iid marks contribute a power of the mark characteristic function.** The partial sum of the
+first `k` marks has characteristic function `(charFun ν' ξ)ᵏ`, since the marks are i.i.d. with law
+`ν'`. Proved through mathlib's `iIndepFun.charFun_map_fun_sum_eq_prod`. -/
+private lemma charFun_finset_sum_marks (hd : IsCompoundPoissonDriver τ Y r ν' μ)
+    (k : ℕ) (ξ : ℝ) :
+    charFun (μ.map (fun ω => ∑ n ∈ Finset.range k, Y n ω)) ξ = (charFun ν' ξ) ^ k := by
+  haveI := hd.isProbabilityMeasure
+  have hY : iIndepFun Y μ := by
+    have := hd.indep.precomp (g := Sum.inr) Sum.inr_injective
+    simpa [Function.comp] using this
+  have hZ : iIndepFun (fun i : Fin k => Y (i : ℕ)) μ := hY.precomp Fin.val_injective
+  have hfun : (fun ω => ∑ n ∈ Finset.range k, Y n ω) = (fun ω => ∑ i : Fin k, Y (i : ℕ) ω) := by
+    funext ω
+    exact (Fin.sum_univ_eq_sum_range (fun n => Y n ω) k).symm
+  rw [hfun, iIndepFun.charFun_map_fun_sum_eq_prod
+      (fun (i : Fin k) => (hd.measurable_mark (i : ℕ)).aemeasurable) hZ,
+    Finset.prod_apply]
+  rw [Finset.prod_congr rfl fun i _ => by rw [(hd.law_mark (i : ℕ)).map_eq]]
+  rw [Finset.prod_const, Finset.card_univ, Fintype.card_fin]
+
+/-- **The characteristic function of the compound Poisson marginal.** At each fixed time `t ≥ 0`,
+the compound-Poisson-with-drift random variable `Xₜ = b·t + ∑_{n ≤ N(t)} Yₙ` has characteristic
+function
+
+`E[e^{iξ Xₜ}] = exp(t · (i b ξ + r · (charFun ν' ξ − 1)))`,
+
+the classical Lévy–Khintchine form of a compound Poisson process with drift `b`, jump rate `r`, and
+jump law `ν'`. The proof conditions on the Poisson jump count `N(t)`: on `{N(t) = k}` the jump sum is
+a sum of `k` i.i.d. marks, contributing `(charFun ν' ξ)ᵏ`, and `∑ₖ P(N(t) = k)·(charFun ν' ξ)ᵏ`
+sums to the Poisson generating function `exp(r t · (charFun ν' ξ − 1))`. -/
+theorem charFun_map_compoundPoisson [IsProbabilityMeasure μ]
+    (hd : IsCompoundPoissonDriver τ Y r ν' μ) (hr : 0 < r) (b : ℝ) (t : ℝ≥0) (ξ : ℝ) :
+    charFun (μ.map (compoundPoisson b τ Y (t : ℝ))) ξ
+      = Complex.exp ((t : ℝ) * (Complex.I * b * ξ + r * (charFun ν' ξ - 1))) := by
+  classical
+  set jc : Ω → ℕ := fun ω => jumpCount (fun n => arrival τ n ω) (t : ℝ) with hjc
+  have hjc_meas : Measurable jc := measurable_jumpCount_arrival hd.measurable_interarrival _
+  set w : ℂ := charFun ν' ξ with hw
+  have hXmeas : Measurable (compoundPoisson b τ Y (t : ℝ)) :=
+    measurable_compoundPoisson hd.measurable_interarrival hd.measurable_mark _
+  -- Independence of the jump count (a functional of all interarrival times) from the marks.
+  have hblock : IndepFun (fun ω n => τ n ω) (fun ω n => Y n ω) μ := indepFun_interarrival_mark hd
+  have hφ : Measurable (fun g : ℕ → ℝ =>
+      jumpCount (fun n => arrival (fun m ω' => ω' m) n g) (t : ℝ)) :=
+    measurable_jumpCount_arrival (fun m => measurable_pi_apply m) (t : ℝ)
+  have hNY : IndepFun jc (fun ω n => Y n ω) μ := hblock.comp hφ measurable_id
+  have hYbar_ae : AEMeasurable (fun ω n => Y n ω) μ :=
+    (measurable_pi_lambda _ fun n => hd.measurable_mark n).aemeasurable
+  -- The value of the jump-sum integral: the Poisson generating function.
+  have hA : (∫ ω, Complex.exp (↑ξ * ↑(∑ n ∈ Finset.range (jc ω), Y n ω) * Complex.I) ∂μ)
+      = Complex.exp (((r * t : ℝ≥0) : ℝ) * (w - 1)) := by
+    set F : Ω → ℂ := fun ω => Complex.exp (↑ξ * ↑(∑ n ∈ Finset.range (jc ω), Y n ω) * Complex.I)
+      with hF
+    set s : ℕ → Set Ω := fun k => {ω | jc ω = k} with hs
+    have hs_meas : ∀ k, MeasurableSet (s k) := fun k => hjc_meas (measurableSet_singleton k)
+    have hs_disj : Pairwise (fun i j => Disjoint (s i) (s j)) := by
+      intro k k' hkk'
+      simp only [Set.disjoint_left, hs, Set.mem_setOf_eq]
+      intro ω h1 h2
+      exact hkk' (h1.symm.trans h2)
+    have hunion : (⋃ k, s k) = Set.univ :=
+      Set.eq_univ_of_forall fun ω => Set.mem_iUnion.2 ⟨jc ω, rfl⟩
+    have hSum : Measurable (fun ω => ∑ n ∈ Finset.range (jc ω), Y n ω) := by
+      have hP : Measurable (fun p : Ω × ℕ => ∑ n ∈ Finset.range p.2, Y n p.1) :=
+        measurable_from_prod_countable_left fun m =>
+          Finset.measurable_sum (Finset.range m) fun n _ => hd.measurable_mark n
+      exact hP.comp (measurable_id.prodMk hjc_meas)
+    have hFmeas : Measurable F := by
+      show Measurable (fun ω => Complex.exp (↑ξ * ↑(∑ n ∈ Finset.range (jc ω), Y n ω) * Complex.I))
+      exact (by fun_prop : Measurable fun z : ℝ => Complex.exp (↑ξ * ↑z * Complex.I)).comp hSum
+    have hFbound : ∀ ω, ‖F ω‖ ≤ 1 := by
+      intro ω
+      show ‖Complex.exp (↑ξ * ↑(∑ n ∈ Finset.range (jc ω), Y n ω) * Complex.I)‖ ≤ 1
+      rw [show (↑ξ * ↑(∑ n ∈ Finset.range (jc ω), Y n ω) * Complex.I : ℂ)
+          = ↑(ξ * ∑ n ∈ Finset.range (jc ω), Y n ω) * Complex.I from by push_cast; ring,
+        Complex.norm_exp_ofReal_mul_I]
+    have hF_int : Integrable F μ :=
+      (integrable_const (1 : ℝ)).mono' hFmeas.aestronglyMeasurable
+        (ae_of_all _ fun ω => by simpa using hFbound ω)
+    have hpart := hasSum_integral_iUnion hs_meas hs_disj (by rw [hunion]; exact hF_int.integrableOn)
+    rw [hunion, setIntegral_univ] at hpart
+    have hterm : ∀ k, (∫ ω in s k, F ω ∂μ) = (poissonPMFReal (r * t) k : ℂ) * w ^ k := by
+      intro k
+      -- On `{jc = k}` the jump sum is the sum of the first `k` marks.
+      have hFcong : Set.EqOn F
+          (fun ω => Complex.exp (↑ξ * ↑(∑ n ∈ Finset.range k, Y n ω) * Complex.I)) (s k) := by
+        intro ω hω
+        have hk : jc ω = k := hω
+        show Complex.exp (↑ξ * ↑(∑ n ∈ Finset.range (jc ω), Y n ω) * Complex.I) = _
+        rw [hk]
+      have hGeq :
+          (s k).indicator (fun ω => Complex.exp (↑ξ * ↑(∑ n ∈ Finset.range k, Y n ω) * Complex.I))
+            = fun ω => (if jc ω = k then (1 : ℂ) else 0)
+                * Complex.exp (↑ξ * ↑(∑ n ∈ Finset.range k, Y n ω) * Complex.I) := by
+        funext ω
+        simp only [Set.indicator_apply, hs, Set.mem_setOf_eq]
+        by_cases h : jc ω = k <;> simp [h]
+      -- Measurability of the two factor maps.
+      have hf_aesm : AEStronglyMeasurable (fun m : ℕ => if m = k then (1 : ℂ) else 0) (μ.map jc) :=
+        (measurable_of_countable _).aestronglyMeasurable
+      have hg_aesm : AEStronglyMeasurable
+          (fun y : ℕ → ℝ => Complex.exp (↑ξ * ↑(∑ n ∈ Finset.range k, y n) * Complex.I))
+          (μ.map (fun ω n => Y n ω)) := by
+        have : Measurable
+            (fun y : ℕ → ℝ => Complex.exp (↑ξ * ↑(∑ n ∈ Finset.range k, y n) * Complex.I)) := by
+          fun_prop
+        exact this.aestronglyMeasurable
+      -- Factorisation of the `k`-th term by independence of the count and the marks.
+      have hprod : (∫ ω, (if jc ω = k then (1 : ℂ) else 0)
+            * Complex.exp (↑ξ * ↑(∑ n ∈ Finset.range k, Y n ω) * Complex.I) ∂μ)
+          = (∫ ω, (if jc ω = k then (1 : ℂ) else 0) ∂μ)
+            * ∫ ω, Complex.exp (↑ξ * ↑(∑ n ∈ Finset.range k, Y n ω) * Complex.I) ∂μ :=
+        hNY.integral_fun_comp_mul_comp (f := fun m : ℕ => if m = k then (1 : ℂ) else 0)
+          (g := fun y : ℕ → ℝ => Complex.exp (↑ξ * ↑(∑ n ∈ Finset.range k, y n) * Complex.I))
+          hjc_meas.aemeasurable hYbar_ae hf_aesm hg_aesm
+      -- Identify the probability of `{jc = k}` with the Poisson pmf.
+      have hμreal : μ.real (s k) = poissonPMFReal (r * t) k := by
+        have h1 : μ (s k) = poissonMeasure (r * t) {k} := by
+          have hmap : μ.map jc = poissonMeasure (r * t) := map_jumpCount_arrival hd hr t
+          rw [show s k = jc ⁻¹' {k} from rfl,
+            ← Measure.map_apply hjc_meas (measurableSet_singleton k), hmap]
+        rw [measureReal_def, h1, show poissonMeasure (r * t) {k}
+            = ENNReal.ofReal (poissonPMFReal (r * t) k) from by
+              rw [poissonMeasure, PMF.toMeasure_apply_singleton _ _ (measurableSet_singleton k)]; rfl,
+          ENNReal.toReal_ofReal poissonPMFReal_nonneg]
+      -- The indicator factor integrates to the probability of `{jc = k}`.
+      have hf_int : (∫ ω, (if jc ω = k then (1 : ℂ) else 0) ∂μ)
+          = (poissonPMFReal (r * t) k : ℂ) := by
+        have heq : (fun ω => if jc ω = k then (1 : ℂ) else 0) = (s k).indicator fun _ => (1 : ℂ) := by
+          funext ω
+          simp only [Set.indicator_apply, hs, Set.mem_setOf_eq]
+        rw [heq, integral_indicator_const (1 : ℂ) (hs_meas k), hμreal]
+        exact Complex.real_smul.trans (mul_one _)
+      -- The mark factor is the `k`-th power of the mark characteristic function.
+      have hg_int : (∫ ω, Complex.exp (↑ξ * ↑(∑ n ∈ Finset.range k, Y n ω) * Complex.I) ∂μ)
+          = w ^ k := by
+        have hmapmeas : Measurable (fun ω => ∑ n ∈ Finset.range k, Y n ω) :=
+          Finset.measurable_sum _ fun n _ => hd.measurable_mark n
+        rw [hw, ← charFun_finset_sum_marks hd k ξ, charFun_apply_real,
+          integral_map hmapmeas.aemeasurable
+            ((by fun_prop : Continuous fun x : ℝ => Complex.exp (↑ξ * ↑x * Complex.I))
+              |>.aestronglyMeasurable)]
+      rw [setIntegral_congr_fun (hs_meas k) hFcong, ← integral_indicator (hs_meas k)]
+      simp only [hGeq]
+      rw [hprod, hf_int, hg_int]
+    -- Sum the Poisson generating series.
+    have hHS : HasSum (fun k => (poissonPMFReal (r * t) k : ℂ) * w ^ k) (∫ ω, F ω ∂μ) := by
+      have hfun : (fun k => ∫ ω in s k, F ω ∂μ)
+          = fun k => (poissonPMFReal (r * t) k : ℂ) * w ^ k := funext hterm
+      rwa [hfun] at hpart
+    rw [← hHS.tsum_eq, tsum_poissonPMFReal_mul_pow]
+  -- Peel off the drift and assemble.
+  have hint_eq : ∀ ω, Complex.exp (↑ξ * ↑(compoundPoisson b τ Y (t : ℝ) ω) * Complex.I)
+      = Complex.exp (↑ξ * ↑b * ↑(t : ℝ) * Complex.I)
+        * Complex.exp (↑ξ * ↑(∑ n ∈ Finset.range (jc ω), Y n ω) * Complex.I) := by
+    intro ω
+    rw [show compoundPoisson b τ Y (t : ℝ) ω
+        = 0 + b * (t : ℝ) + ∑ n ∈ Finset.range (jc ω), Y n ω from rfl, ← Complex.exp_add]
+    congr 1
+    push_cast
+    ring
+  rw [charFun_apply_real,
+    integral_map hXmeas.aemeasurable
+      ((by fun_prop : Continuous fun x : ℝ => Complex.exp (↑ξ * ↑x * Complex.I))
+        |>.aestronglyMeasurable)]
+  simp_rw [hint_eq]
+  calc ∫ ω, Complex.exp (↑ξ * ↑b * ↑(t : ℝ) * Complex.I)
+          * Complex.exp (↑ξ * ↑(∑ n ∈ Finset.range (jc ω), Y n ω) * Complex.I) ∂μ
+        = Complex.exp (↑ξ * ↑b * ↑(t : ℝ) * Complex.I)
+          * ∫ ω, Complex.exp (↑ξ * ↑(∑ n ∈ Finset.range (jc ω), Y n ω) * Complex.I) ∂μ :=
+        MeasureTheory.integral_const_mul _ _
+    _ = Complex.exp ((t : ℝ) * (Complex.I * b * ξ + r * (charFun ν' ξ - 1))) := by
+        rw [hA, ← Complex.exp_add]
+        congr 1
+        push_cast
+        ring
 
 end ProbabilityTheory
