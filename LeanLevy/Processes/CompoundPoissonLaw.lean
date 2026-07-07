@@ -5,6 +5,7 @@ Authors: LeanLevy Contributors
 -/
 import LeanLevy.Processes.CompoundPoisson
 import LeanLevy.Probability.Poisson
+import LeanLevy.Levy.LevyKhintchineUniqueness
 import Mathlib.MeasureTheory.Group.Convolution
 import Mathlib.Probability.Distributions.Gamma
 import Mathlib.Analysis.SpecialFunctions.Integrals.Basic
@@ -36,6 +37,13 @@ Poisson jump-count law follows by telescoping the survival probabilities.
 * `ProbabilityTheory.charFun_map_compoundPoisson` — the characteristic function of the
   compound-Poisson-with-drift marginal at time `t` is
   `exp(t · (i b ξ + r · (charFun ν' ξ − 1)))`.
+* `ProbabilityTheory.compoundPoissonTriple` — the Lévy–Khintchine triple `(b', 0, r · ν')` of a
+  compound Poisson process with drift `b`, jump rate `r`, and jump law `ν'`.
+* `ProbabilityTheory.charFun_map_compoundPoisson_eq_exponent` — the marginal's characteristic
+  function is `exp(t · ψ_T)` for `T = compoundPoissonTriple b r ν'`, realizing the finite-activity,
+  zero-Gaussian Lévy–Khintchine triples.
+* `ProbabilityTheory.isInfinitelyDivisible_map_compoundPoisson` — every marginal is infinitely
+  divisible.
 -/
 
 open MeasureTheory Filter Finset
@@ -606,5 +614,159 @@ theorem charFun_map_compoundPoisson [IsProbabilityMeasure μ]
         congr 1
         push_cast
         ring
+
+/-! ## The Lévy–Khintchine triple of the compound Poisson marginal -/
+
+/-- **The Lévy–Khintchine triple of a compound Poisson process** with drift `b`, jump rate `r`,
+and (probability) jump law `ν'`. The Gaussian part vanishes, the Lévy measure is the finite measure
+`r · ν'`, and the drift is corrected by the small-jump compensator `∫_{|x| < 1} x d(r · ν')` so that
+the compensated Lévy–Khintchine exponent reproduces the compound-Poisson characteristic exponent
+`i b ξ + r (charFun ν' ξ − 1)` (see `exponent_compoundPoissonTriple`). By uniqueness of the triple
+of an infinitely divisible law (`existsUnique_levyKhintchineTriple`) this is *the* Lévy–Khintchine
+triple of the time-`1` marginal. -/
+noncomputable def compoundPoissonTriple (b : ℝ) (r : ℝ≥0) (ν' : Measure ℝ)
+    [IsProbabilityMeasure ν'] (hν' : ν' {0} = 0) : LevyKhintchineTriple where
+  drift := b + ∫ x in {x : ℝ | |x| < 1}, x ∂((r : ℝ≥0∞) • ν')
+  gaussianVariance := 0
+  levyMeasure := (r : ℝ≥0∞) • ν'
+  levyMeasure_isLevyMeasure := by
+    haveI : IsFiniteMeasure ((r : ℝ≥0∞) • ν') := Measure.smul_finite ν' ENNReal.coe_ne_top
+    refine IsLevyMeasure.of_isFiniteMeasure ?_
+    rw [Measure.smul_apply, hν', smul_zero]
+
+/-- **The compound-Poisson exponent identity.** The Lévy–Khintchine exponent of
+`compoundPoissonTriple b r ν'` equals the compound-Poisson characteristic exponent
+`i b ξ + r (charFun ν' ξ − 1)`. The small-jump drift correction inside the triple exactly cancels
+the imaginary compensator `∫ i x ξ · 1_{|x| < 1} d(r · ν')`, and `∫ (e^{i x ξ} − 1) d(r · ν')`
+evaluates to `r (charFun ν' ξ − 1)` because `ν'` is a probability measure. -/
+private lemma exponent_compoundPoissonTriple (b : ℝ) (r : ℝ≥0) (ν' : Measure ℝ)
+    [IsProbabilityMeasure ν'] (hν' : ν' {0} = 0) (ξ : ℝ) :
+    (compoundPoissonTriple b r ν' hν').exponent ξ
+      = Complex.I * b * ξ + r * (charFun ν' ξ - 1) := by
+  have hSmeas : MeasurableSet {x : ℝ | |x| < 1} :=
+    measurableSet_lt continuous_abs.measurable measurable_const
+  -- Integrability of the pieces against the finite probability measure `ν'`.
+  have hexpint : Integrable (fun x => Complex.exp (↑x * ↑ξ * Complex.I)) ν' := by
+    apply (integrable_const (1 : ℝ)).mono' (by fun_prop)
+    refine ae_of_all _ fun x => ?_
+    have hn : ‖Complex.exp (↑x * ↑ξ * Complex.I)‖ = 1 := by
+      rw [show (↑x * ↑ξ * Complex.I : ℂ) = ↑(x * ξ) * Complex.I from by push_cast; ring,
+        Complex.norm_exp_ofReal_mul_I]
+    exact le_of_eq hn
+  have hmeas_g2 : Measurable
+      (fun x : ℝ => (↑x : ℂ) * ↑ξ * Complex.I * (if |x| < 1 then (1 : ℂ) else 0)) :=
+    (((Complex.continuous_ofReal.measurable).mul measurable_const).mul measurable_const).mul
+      (Measurable.ite hSmeas measurable_const measurable_const)
+  have hg2int : Integrable
+      (fun x : ℝ => (↑x : ℂ) * ↑ξ * Complex.I * (if |x| < 1 then (1 : ℂ) else 0)) ν' := by
+    apply (integrable_const |ξ|).mono' hmeas_g2.aestronglyMeasurable
+    refine ae_of_all _ fun x => ?_
+    by_cases hx : |x| < 1
+    · simp only [hx, if_true, mul_one]
+      rw [norm_mul, norm_mul, Complex.norm_I, mul_one, Complex.norm_real, Complex.norm_real,
+        Real.norm_eq_abs, Real.norm_eq_abs]
+      calc |x| * |ξ| ≤ 1 * |ξ| := mul_le_mul_of_nonneg_right hx.le (abs_nonneg _)
+        _ = |ξ| := one_mul _
+    · simp only [hx, if_false, mul_zero, norm_zero]; exact abs_nonneg ξ
+  -- `∫ (e^{i x ξ} − 1) dν' = charFun ν' ξ − 1`.
+  have hE : ∫ x, (Complex.exp (↑x * ↑ξ * Complex.I) - 1) ∂ν' = charFun ν' ξ - 1 := by
+    rw [integral_sub hexpint (integrable_const 1)]
+    have h1 : (∫ _ : ℝ, (1 : ℂ) ∂ν') = 1 := by simp
+    rw [h1]
+    congr 1
+    rw [charFun_apply_real]
+    refine integral_congr_ae (ae_of_all _ fun x => ?_)
+    exact congrArg Complex.exp (by ring)
+  -- The imaginary compensator integral, bridged to the real small-jump integral.
+  have hg2 : ∫ x, (↑x : ℂ) * ↑ξ * Complex.I * (if |x| < 1 then (1 : ℂ) else 0) ∂ν'
+      = ↑ξ * Complex.I * ↑(∫ x in {x : ℝ | |x| < 1}, x ∂ν') := by
+    have hpt : ∀ x : ℝ, (↑x : ℂ) * ↑ξ * Complex.I * (if |x| < 1 then (1 : ℂ) else 0)
+        = (↑ξ * Complex.I) * ((({x : ℝ | |x| < 1}).indicator (fun y => y) x : ℝ) : ℂ) := by
+      intro x
+      rw [Set.indicator_apply]
+      by_cases hx : x ∈ {x : ℝ | |x| < 1}
+      · have hlt : |x| < 1 := hx
+        rw [if_pos hlt, if_pos hx]; ring
+      · have hlt : ¬ |x| < 1 := hx
+        rw [if_neg hlt, if_neg hx]; push_cast; ring
+    calc ∫ x, (↑x : ℂ) * ↑ξ * Complex.I * (if |x| < 1 then (1 : ℂ) else 0) ∂ν'
+        = ∫ x, (↑ξ * Complex.I) *
+            ((({x : ℝ | |x| < 1}).indicator (fun y => y) x : ℝ) : ℂ) ∂ν' :=
+          integral_congr_ae (ae_of_all _ hpt)
+      _ = (↑ξ * Complex.I) *
+            ∫ x, ((({x : ℝ | |x| < 1}).indicator (fun y => y) x : ℝ) : ℂ) ∂ν' :=
+          integral_const_mul _ _
+      _ = (↑ξ * Complex.I) * ↑(∫ x, ({x : ℝ | |x| < 1}).indicator (fun y => y) x ∂ν') :=
+          congrArg _ integral_complex_ofReal
+      _ = ↑ξ * Complex.I * ↑(∫ x in {x : ℝ | |x| < 1}, x ∂ν') := by
+          rw [integral_indicator hSmeas]
+  -- Split the compensated integral against `ν'`.
+  have hCsplit : ∫ x, levyCompensatedIntegrand ξ x ∂ν'
+      = (charFun ν' ξ - 1) - ↑ξ * Complex.I * ↑(∫ x in {x : ℝ | |x| < 1}, x ∂ν') := by
+    simp only [levyCompensatedIntegrand_def]
+    have hsub : ∫ x, (Complex.exp (↑x * ↑ξ * Complex.I) - 1
+          - ↑x * ↑ξ * Complex.I * (if |x| < 1 then (1 : ℂ) else 0)) ∂ν'
+        = (∫ x, (Complex.exp (↑x * ↑ξ * Complex.I) - 1) ∂ν')
+          - ∫ x, (↑x : ℂ) * ↑ξ * Complex.I * (if |x| < 1 then (1 : ℂ) else 0) ∂ν' :=
+      integral_sub (hexpint.sub (integrable_const 1)) hg2int
+    rw [hsub, hE, hg2]
+  -- Pull the scalar `r` through both the compensated and the small-jump integral.
+  have hCscale : ∫ x, levyCompensatedIntegrand ξ x ∂((r : ℝ≥0∞) • ν')
+      = (r : ℂ) * ((charFun ν' ξ - 1)
+          - ↑ξ * Complex.I * ↑(∫ x in {x : ℝ | |x| < 1}, x ∂ν')) := by
+    rw [integral_smul_measure, ENNReal.coe_toReal, hCsplit]
+    exact Complex.real_smul
+  have hDscale : (∫ x in {x : ℝ | |x| < 1}, x ∂((r : ℝ≥0∞) • ν'))
+      = (r : ℝ) * ∫ x in {x : ℝ | |x| < 1}, x ∂ν' := by
+    rw [Measure.restrict_smul, integral_smul_measure, ENNReal.coe_toReal, smul_eq_mul]
+  -- Reduce the triple's slots and finish by algebra.
+  have hdrift : (compoundPoissonTriple b r ν' hν').drift
+      = b + ∫ x in {x : ℝ | |x| < 1}, x ∂((r : ℝ≥0∞) • ν') := rfl
+  have hgauss : (compoundPoissonTriple b r ν' hν').gaussianVariance = 0 := rfl
+  have hmeasure : (compoundPoissonTriple b r ν' hν').levyMeasure = (r : ℝ≥0∞) • ν' := rfl
+  rw [LevyKhintchineTriple.exponent_def, hdrift, hgauss, hmeasure, hCscale, hDscale]
+  push_cast
+  ring
+
+/-- **Scaling the compound-Poisson exponent in time.** Scaling the exponent by `t` is the same as
+scaling the triple's drift and jump rate by `t`; this identifies the time-`t` marginal's exponent
+with the exponent of a genuine Lévy–Khintchine triple, which is what the infinite-divisibility
+criterion consumes. -/
+private lemma exponent_smul_compoundPoissonTriple (b : ℝ) (r : ℝ≥0) (ν' : Measure ℝ)
+    [IsProbabilityMeasure ν'] (hν' : ν' {0} = 0) (t : ℝ≥0) (ξ : ℝ) :
+    (t : ℝ) * (compoundPoissonTriple b r ν' hν').exponent ξ
+      = (compoundPoissonTriple (t * b) (t * r) ν' hν').exponent ξ := by
+  rw [exponent_compoundPoissonTriple, exponent_compoundPoissonTriple]
+  push_cast
+  ring
+
+/-- **The compound Poisson marginal realizes its Lévy–Khintchine triple.** At each time `t`, the
+characteristic function of the compound-Poisson-with-drift marginal `Xₜ` is the exponential of `t`
+times the Lévy–Khintchine exponent of `compoundPoissonTriple b r ν'`, i.e. the marginal is the
+infinitely divisible law of the finite-activity, zero-Gaussian triple with drift `b`, jump rate `r`,
+and jump law `ν'`. -/
+theorem charFun_map_compoundPoisson_eq_exponent [IsProbabilityMeasure μ]
+    [IsProbabilityMeasure ν'] (hd : IsCompoundPoissonDriver τ Y r ν' μ) (hr : 0 < r)
+    (hν' : ν' {0} = 0) (b : ℝ) (t : ℝ≥0) (ξ : ℝ) :
+    charFun (μ.map (compoundPoisson b τ Y (t : ℝ))) ξ
+      = Complex.exp ((t : ℝ) * (compoundPoissonTriple b r ν' hν').exponent ξ) := by
+  rw [exponent_compoundPoissonTriple b r ν' hν' ξ, charFun_map_compoundPoisson hd hr b t ξ]
+
+/-- **The compound Poisson marginal is infinitely divisible.** Each marginal `Xₜ` of the
+compound-Poisson-with-drift process is an infinitely divisible law on `ℝ`: its characteristic
+function is `exp` of a Lévy–Khintchine exponent (the `t`-scaled triple
+`compoundPoissonTriple (t · b) (t · r) ν'`), so the converse Lévy–Khintchine theorem applies. -/
+theorem isInfinitelyDivisible_map_compoundPoisson [IsProbabilityMeasure μ]
+    [IsProbabilityMeasure ν'] (hd : IsCompoundPoissonDriver τ Y r ν' μ) (hr : 0 < r)
+    (hν' : ν' {0} = 0) (b : ℝ) (t : ℝ≥0) :
+    IsInfinitelyDivisible (μ.map (compoundPoisson b τ Y (t : ℝ))) := by
+  have hXmeas : Measurable (compoundPoisson b τ Y (t : ℝ)) :=
+    measurable_compoundPoisson hd.measurable_interarrival hd.measurable_mark _
+  haveI : IsProbabilityMeasure (μ.map (compoundPoisson b τ Y (t : ℝ))) :=
+    Measure.isProbabilityMeasure_map hXmeas.aemeasurable
+  refine isInfinitelyDivisible_iff_exists_levyKhintchineTriple.mpr
+    ⟨compoundPoissonTriple (t * b) (t * r) ν' hν', fun ξ => ?_⟩
+  rw [charFun_map_compoundPoisson_eq_exponent hd hr hν' b t ξ,
+    exponent_smul_compoundPoissonTriple b r ν' hν' t ξ]
 
 end ProbabilityTheory
