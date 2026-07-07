@@ -28,11 +28,15 @@ next layer consumes.
 * `ProbabilityTheory.arrival` — the arrival-time partial sums of the interarrival sequence.
 * `ProbabilityTheory.IsCompoundPoissonDriver` — the joint independence and marginal-law data of the
   interarrival/mark sequences.
+* `ProbabilityTheory.compoundPoisson` — the compound-Poisson-with-drift sample path, the
+  `piecewisePath` built from the random arrival times and marks.
 
 ## Main results
 
 * `ProbabilityTheory.exists_isCompoundPoissonDriver` — a compound Poisson driver exists for any
   positive rate `r` and any probability law `ν'` of the marks, on a canonical probability space.
+* `ProbabilityTheory.measurable_compoundPoisson` — the compound Poisson path is measurable at each
+  fixed time, so it is a genuine random variable.
 * `ProbabilityTheory.IsCompoundPoissonDriver.ae_interarrival_pos` — the interarrival times are almost
   surely all positive.
 * `ProbabilityTheory.IsCompoundPoissonDriver.ae_strictMono_arrival` — the arrival times are almost
@@ -241,5 +245,72 @@ theorem exists_isCompoundPoissonDriver (r : ℝ≥0) (hr : 0 < r) (ν' : Measure
       indep := by rw [hXelim]; exact hindep
       law_interarrival := fun n => hlawX (Sum.inl n)
       law_mark := fun n => hlawX (Sum.inr n) }
+
+section CompoundPoisson
+
+variable {b : ℝ} {τ Y : ℕ → Ω → ℝ}
+
+/-- The **compound-Poisson-with-drift sample path**: the deterministic `piecewisePath` starting at
+`0`, drifting at rate `b`, with jump times given by the random arrival times `arrival τ · ω` and
+jump sizes given by the random marks `Y · ω`. At a fixed time `t` this is a random variable in `ω`. -/
+noncomputable def compoundPoisson (b : ℝ) (τ Y : ℕ → Ω → ℝ) (t : ℝ) (ω : Ω) : ℝ :=
+  piecewisePath 0 b (fun n => arrival τ n ω) (fun n => Y n ω) t
+
+/-- Characterization of `Nat.sInf s = k` as a Boolean combination of membership statements: either
+`k` is in `s` and nothing below it is, or `s` is empty and `k = 0`. This is what makes the random
+jump count measurable without any pointwise monotonicity of the arrival times. -/
+private lemma nat_sInf_eq_iff (s : Set ℕ) (k : ℕ) :
+    sInf s = k ↔ (k ∈ s ∧ ∀ j < k, j ∉ s) ∨ (s = ∅ ∧ k = 0) := by
+  constructor
+  · intro h
+    rcases s.eq_empty_or_nonempty with hs | hs
+    · exact Or.inr ⟨hs, by rw [hs, Nat.sInf_empty] at h; exact h.symm⟩
+    · exact Or.inl ⟨h ▸ Nat.sInf_mem hs, fun j hj => Nat.notMem_of_lt_sInf (h ▸ hj)⟩
+  · rintro (⟨hk, hlt⟩ | ⟨hs, hk⟩)
+    · refine le_antisymm (Nat.sInf_le hk) ?_
+      by_contra hlt'
+      push_neg at hlt'
+      exact hlt _ hlt' (Nat.sInf_mem ⟨k, hk⟩)
+    · rw [hs, hk]; exact Nat.sInf_empty
+
+/-- The random jump count `ω ↦ jumpCount (arrival τ · ω) t` is measurable: for each `k`, the event
+that exactly `k` arrivals have occurred by time `t` is a countable Boolean combination of the
+measurable events `{t < arrival τ n ω}`. -/
+lemma measurable_jumpCount_arrival (hτ : ∀ n, Measurable (τ n)) (t : ℝ) :
+    Measurable (fun ω => jumpCount (fun n => arrival τ n ω) t) := by
+  have harr : ∀ n, Measurable (fun ω => arrival τ n ω) := fun n =>
+    Finset.measurable_sum _ fun i _ => hτ i
+  have hA : ∀ n, MeasurableSet {ω : Ω | t < arrival τ n ω} := fun n =>
+    measurableSet_lt measurable_const (harr n)
+  refine measurable_to_countable' fun k => ?_
+  have hset : (fun ω => jumpCount (fun n => arrival τ n ω) t) ⁻¹' {k}
+      = ({ω : Ω | t < arrival τ k ω} ∩ ⋂ j, ⋂ _ : j < k, {ω : Ω | ¬ t < arrival τ j ω})
+        ∪ ((⋂ n, {ω : Ω | ¬ t < arrival τ n ω}) ∩ {_ω : Ω | k = 0}) := by
+    ext ω
+    simp only [Set.mem_preimage, Set.mem_singleton_iff, jumpCount]
+    rw [nat_sInf_eq_iff]
+    simp only [Set.mem_union, Set.mem_inter_iff, Set.mem_iInter, Set.mem_setOf_eq,
+      Set.eq_empty_iff_forall_notMem]
+  rw [hset]
+  refine ((hA k).inter (MeasurableSet.iInter fun j => MeasurableSet.iInter fun _ =>
+    (hA j).compl)).union ((MeasurableSet.iInter fun n => (hA n).compl).inter ?_)
+  exact MeasurableSet.const _
+
+/-- At each fixed time `t`, the compound Poisson path `ω ↦ compoundPoisson b τ Y t ω` is measurable,
+given that the interarrival times and marks are measurable. It is therefore a random variable. -/
+lemma measurable_compoundPoisson (hτ : ∀ n, Measurable (τ n)) (hY : ∀ n, Measurable (Y n)) (t : ℝ) :
+    Measurable (compoundPoisson b τ Y t) := by
+  have hF : Measurable (fun p : Ω × ℕ => ∑ n ∈ Finset.range p.2, Y n p.1) :=
+    measurable_from_prod_countable_left fun k =>
+      Finset.measurable_sum (Finset.range k) fun n _ => hY n
+  have hg : Measurable
+      (fun ω => ∑ n ∈ Finset.range (jumpCount (fun n => arrival τ n ω) t), Y n ω) :=
+    hF.comp (measurable_id.prodMk (measurable_jumpCount_arrival hτ t))
+  have hcp : compoundPoisson b τ Y t
+      = fun ω => 0 + b * t + ∑ n ∈ Finset.range (jumpCount (fun n => arrival τ n ω) t), Y n ω := rfl
+  rw [hcp]
+  exact hg.const_add _
+
+end CompoundPoisson
 
 end ProbabilityTheory
