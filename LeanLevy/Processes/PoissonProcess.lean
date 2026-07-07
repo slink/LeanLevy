@@ -24,9 +24,6 @@ This file defines the Poisson process as a structure predicate and derives key p
 * `ProbabilityTheory.IsPoissonProcess.isLevyProcess` — a Poisson process (ℤ-embedded) is a
   Lévy process.
 
-* `ProbabilityTheory.charFun_poissonMeasure_eq` — the characteristic function of
-  `(poissonMeasure r).map Nat.cast` equals `exp(r(e^{iξ} − 1))`.
-
 * `ProbabilityTheory.IsPoissonProcess.charFun_eq` — the characteristic function of the
   time-`t` marginal `N(t)` equals `exp(r·t(e^{iξ} − 1))`.
 
@@ -227,44 +224,6 @@ theorem isLevyProcess (h : IsPoissonProcess N rate μ)
 
 end IsPoissonProcess
 
-/-! ## Characteristic function of the Poisson measure -/
-
-/-- The characteristic function of the Poisson measure pushed forward to ℝ equals
-`exp(r(e^{iξ} − 1))`.
-
-**Proof:**
-1. Unfold `charFun` via `charFun_apply_real`.
-2. Pull through `Measure.map` via `integral_map`.
-3. Unfold `poissonMeasure` as `(poissonPMF r).toMeasure`.
-4. Apply `PMF.integral_eq_tsum`.
-5. Rewrite `smul` to multiplication.
-6. Match with `poissonCharFun` and apply `poissonCharFun_eq`. -/
-theorem charFun_poissonMeasure_eq (r : ℝ≥0) (ξ : ℝ) :
-    charFun ((poissonMeasure r).map (Nat.cast : ℕ → ℝ)) ξ =
-    cexp (↑(r : ℝ) * (cexp (↑ξ * I) - 1)) := by
-  -- Step 1: Unfold charFun to integral
-  rw [charFun_apply_real]
-  -- Step 2: Pull integral through Measure.map
-  rw [integral_map (by fun_prop : Measurable (Nat.cast : ℕ → ℝ)).aemeasurable
-    (by fun_prop : Continuous (fun x : ℝ => cexp (↑ξ * ↑x * I))).aestronglyMeasurable]
-  -- Step 3: Unfold poissonMeasure as PMF.toMeasure
-  change ∫ n, cexp (↑ξ * ↑(n : ℝ) * I) ∂(poissonPMF r).toMeasure = _
-  -- Step 4: Apply PMF.integral_eq_tsum
-  have hint : Integrable (fun n : ℕ => cexp (↑ξ * ↑(n : ℝ) * I)) (poissonPMF r).toMeasure := by
-    apply (integrable_const (1 : ℝ)).mono'
-    · exact (by fun_prop : Continuous (fun n : ℕ => cexp (↑ξ * ↑(n : ℝ) * I))).measurable.aestronglyMeasurable
-    · filter_upwards with n
-      rw [show (↑ξ : ℂ) * ↑(n : ℝ) * I = ↑(ξ * ↑n) * I from by push_cast; ring,
-        norm_exp_ofReal_mul_I]
-  rw [PMF.integral_eq_tsum _ _ hint]
-  -- Step 5: Rewrite smul to mul and match poissonCharFun
-  simp only [poissonPMF_toReal]
-  -- Now: ∑' n, poissonPMFReal r n • cexp (↑ξ * ↑(n : ℝ) * I) = ...
-  -- Match poissonCharFun (which has the factors in opposite order) via commutativity
-  convert poissonCharFun_eq r ξ using 1
-  unfold poissonCharFun
-  congr 1; ext n; erw [Algebra.smul_def]; exact mul_comm _ _
-
 /-- The pushforward measure of `N t` (as ℝ) equals `(poissonMeasure (rate * t)).map Nat.cast`. -/
 private theorem IsPoissonProcess.map_natCast_eq {N : ℝ≥0 → Ω → ℕ} {rate : ℝ≥0} {μ : Measure Ω}
     (h : IsPoissonProcess N rate μ) (t : ℝ≥0) :
@@ -292,92 +251,6 @@ theorem IsPoissonProcess.charFun_eq {N : ℝ≥0 → Ω → ℕ} {rate : ℝ≥0
     cexp (↑(rate * t : ℝ≥0) * (cexp (↑ξ * I) - 1)) := by
   rw [h.map_natCast_eq t]
   exact charFun_poissonMeasure_eq (rate * t) ξ
-
-/-! ## Poisson convolution on ℕ -/
-
-set_option maxHeartbeats 800000 in
-/-- Poisson convolution at the ℕ level: pushing forward the product
-`poissonMeasure(a) ⊗ poissonMeasure(b)` through addition gives `poissonMeasure(a + b)`.
-Derived from the ℝ-level characteristic function identity via Nat.cast injectivity. -/
-private theorem poissonMeasure_add_conv (a b : ℝ≥0) :
-    ((poissonMeasure a).prod (poissonMeasure b)).map (fun p : ℕ × ℕ => p.1 + p.2) =
-    poissonMeasure (a + b) := by
-  -- Nat.cast : ℕ → ℝ is a measurable embedding
-  have hembed : MeasurableEmbedding (Nat.cast : ℕ → ℝ) :=
-    ⟨Nat.cast_injective, measurable_from_top,
-      fun {t} _ => (t.to_countable.image _).measurableSet⟩
-  -- The ℝ-level convolution: Poisson(a).map cast ∗ Poisson(b).map cast = Poisson(a+b).map cast
-  have hR : (poissonMeasure a).map (Nat.cast : ℕ → ℝ) ∗
-      (poissonMeasure b).map (Nat.cast : ℕ → ℝ) =
-      (poissonMeasure (a + b)).map (Nat.cast : ℕ → ℝ) := by
-    apply Measure.ext_of_charFun; funext ξ
-    rw [charFun_conv, charFun_poissonMeasure_eq, charFun_poissonMeasure_eq,
-      charFun_poissonMeasure_eq, NNReal.coe_add, Complex.ofReal_add, add_mul]
-    exact (Complex.exp_add _ _).symm
-  -- Key: map Nat.cast of our LHS = convolution on ℝ
-  have h_cast_lhs :
-      (((poissonMeasure a).prod (poissonMeasure b)).map (fun p : ℕ × ℕ => p.1 + p.2)).map
-        (Nat.cast : ℕ → ℝ) =
-      (poissonMeasure a).map (Nat.cast : ℕ → ℝ) ∗
-      (poissonMeasure b).map (Nat.cast : ℕ → ℝ) := by
-    -- Convolution μ ∗ ν = (μ.prod ν).map (+)
-    -- LHS = ((prod pa pb).map (+ℕ)).map cast = (prod pa pb).map (cast ∘ +ℕ)
-    --     = (prod pa pb).map (+ℝ ∘ Prod.map cast cast)
-    --     = ((prod pa pb).map (Prod.map cast cast)).map (+ℝ)
-    --     = ((pa.map cast).prod (pb.map cast)).map (+ℝ)
-    --     = pa.map cast ∗ pb.map cast
-    rw [Measure.map_map hembed.measurable Measurable.of_discrete]
-    show ((poissonMeasure a).prod (poissonMeasure b)).map
-      ((Nat.cast : ℕ → ℝ) ∘ fun p : ℕ × ℕ => p.1 + p.2) = _
-    have hcomp : (Nat.cast : ℕ → ℝ) ∘ (fun p : ℕ × ℕ => p.1 + p.2) =
-        (fun p : ℝ × ℝ => p.1 + p.2) ∘ Prod.map (Nat.cast : ℕ → ℝ) (Nat.cast : ℕ → ℝ) := by
-      ext ⟨x, y⟩; simp [Prod.map]
-    rw [hcomp, ← Measure.map_map (by fun_prop) (by fun_prop),
-        ← Measure.map_prod_map _ _ hembed.measurable hembed.measurable]
-    rfl
-  -- Combine: map cast of LHS = conv = map cast of RHS
-  exact hembed.map_injective (h_cast_lhs.trans hR)
-
-/-- Singleton-level Poisson convolution: the convolution sum at a single point. -/
-private theorem poissonMeasure_conv_singleton (a b : ℝ≥0) (m : ℕ) :
-    (∑' n : ℕ, if n ≤ m then poissonMeasure a {n} * poissonMeasure b {m - n} else 0) =
-    poissonMeasure (a + b) {m} := by
-  have hpc := poissonMeasure_add_conv a b
-  -- hpc : (prod).map add = poissonMeasure(a+b)
-  -- Evaluate both sides at {m}
-  have hpc' : ((poissonMeasure a).prod (poissonMeasure b)).map
-      (fun p : ℕ × ℕ => p.1 + p.2) {m} = poissonMeasure (a + b) {m} := by rw [hpc]
-  rw [Measure.map_apply Measurable.of_discrete (measurableSet_singleton m)] at hpc'
-  rw [← hpc']
-  -- LHS of hpc: (prod).{(i,j) | i + j = m}
-  -- Express preimage as disjoint union of singletons {(n, m-n)}
-  have hfib : (fun p : ℕ × ℕ => p.1 + p.2) ⁻¹' {m} =
-      ⋃ n : ℕ, if n ≤ m then {⟨n, m - n⟩} else ∅ := by
-    ext ⟨a', b'⟩
-    simp only [Set.mem_preimage, Set.mem_singleton_iff, Set.mem_iUnion]
-    constructor
-    · intro hab; exact ⟨a', by rw [if_pos (by omega)]; ext <;> simp; omega⟩
-    · rintro ⟨n, hn⟩
-      by_cases hle : n ≤ m
-      · rw [if_pos hle] at hn; obtain ⟨rfl, rfl⟩ := Prod.mk.inj hn; omega
-      · rw [if_neg hle] at hn; exact absurd hn (by simp)
-  rw [hfib, measure_iUnion₀
-    (by intro i j hij; simp only [Function.onFun, AEDisjoint]
-        by_cases hi : i ≤ m
-        · by_cases hj : j ≤ m
-          · rw [if_pos hi, if_pos hj]
-            exact (Set.disjoint_singleton.mpr (fun h => hij (Prod.mk.inj h).1)).aedisjoint
-          · rw [if_neg hj]; simp
-        · rw [if_neg hi]; simp)
-    (by intro n; by_cases hn : n ≤ m
-        · rw [if_pos hn]; exact (measurableSet_singleton _).nullMeasurableSet
-        · rw [if_neg hn]; exact MeasurableSet.empty.nullMeasurableSet)]
-  congr 1; ext n
-  by_cases hn : n ≤ m
-  · rw [if_pos hn, if_pos hn,
-      show ({⟨n, m - n⟩} : Set (ℕ × ℕ)) = {n} ×ˢ {m - n} from (Set.singleton_prod_singleton).symm,
-      Measure.prod_prod]
-  · rw [if_neg hn, if_neg hn, measure_empty]
 
 /-! ## Poisson process projective family -/
 
