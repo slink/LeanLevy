@@ -92,7 +92,16 @@ A Lean 4 formalization of Lévy processes, built on top of mathlib.
 - **Characteristic function**: `charFun_map_compoundPoisson` — the marginal at time `t` has characteristic function `exp(t·(i b ξ + r·(charFun ν' ξ − 1)))`, by conditioning on the Poisson jump count and summing the generating series
 - **Lévy–Khintchine realization**: `compoundPoissonTriple` is the triple `(b + ∫_{|x|<1} x d(r·ν'), 0, r·ν')`; `charFun_map_compoundPoisson_eq_exponent` shows the marginal's characteristic function is `exp(t·ψ_T)` for this triple, so compound Poisson processes realize exactly the finite-activity, zero-Gaussian Lévy–Khintchine triples, and `isInfinitelyDivisible_map_compoundPoisson` records that every marginal is infinitely divisible (via the converse Lévy–Khintchine theorem)
 
-The codebase is sorry-free. `#print axioms` on the main results — the Lévy–Khintchine representation, converse, uniqueness, and characterization, and the compound Poisson pathwise Itô formula and law identification — reports only `propext`, `Classical.choice`, and `Quot.sound`.
+**Poisson random measures** (`LeanLevy/RandomMeasure/PoissonPointFamily.lean`, `PoissonRandomMeasure.lean`, `PoissonCompensated.lean`)
+
+For a σ-finite intensity measure `m` on a measurable space, the random measure is constructed, rather than axiomatized.
+- **Point family**: `prmPiece`, `prmPieceLaw` partition the space into disjoint finite-mass pieces and normalize `m` on each; `IsPoissonPointFamily` bundles a family of piece counts and points, and `exists_isPoissonPointFamily` builds it in one shot with the counts and all points jointly independent, each count Poisson-distributed with the piece mass and each point drawn from the normalized piece law
+- **Per-piece identities**: `integral_pieceSum` is Campbell's formula for a piece (`E[∑ g(Xₙ)] = ∫ g dm`), `integral_sq_pieceSum` its second moment, and `integral_pieceProd_eq_exp` the piece probability-generating-function identity `E[∏ w(Xₙ)] = exp(m(piece)·(∫ w dm̂ − 1))`
+- **Thinning**: `thinnedCount` counts the points of a piece landing in a set; `map_thinnedCount` shows this count is Poisson with mean `m(piece ∩ A)`, and `indepFun_thinnedCount_thinnedCount` gives pairwise independence of the counts on disjoint sets
+- **The random measure**: `poissonRandomMeasure` is a genuine `Measure`-valued random object, a countable sum of Dirac masses at the realized points, with `poissonRandomMeasure_apply` its evaluation and `measurable_poissonRandomMeasure_apply` measurability; `map_poissonRandomMeasure_apply` is the superposition law — the count `N(A)` on a finite-mass set is Poisson with mean `m A` — and `indepFun_poissonRandomMeasure_apply` gives pairwise independence of the evaluations on disjoint sets (mutual independence of a finite family of disjoint-set evaluations is not yet formalized)
+- **Compensated integral**: `compensatedPoissonSum` is the centered sum `∑ f(Xₙ) − ∫ f dm`; `integral_compensatedPoissonSum` shows it has mean zero and `integral_sq_compensatedPoissonSum` is Campbell's second formula, the L² isometry `E[Ñ(f)²] = ∫ f² dm` on `L¹ ∩ L²`, with `memLp_two_compensatedPoissonSum` recording square-integrability; `compensatedPoissonIntegral : Lp ℝ 2 m → Lp ℝ 2 μ` extends the map to all of `L²(m)` by density, `eLpNorm_compensatedPoissonIntegral` being the isometry on the whole space and `compensatedPoissonIntegral_eq_sum` its agreement with the explicit sum on `L¹ ∩ L²`
+
+The codebase is sorry-free. `#print axioms` on the main results — the Lévy–Khintchine representation, converse, uniqueness, and characterization, the compound Poisson pathwise Itô formula and law identification, and the Poisson random measure superposition law, disjoint-set independence, compensated second-moment isometry, and its L² extension — reports only `propext`, `Classical.choice`, and `Quot.sound`.
 
 ## Building
 
@@ -125,6 +134,10 @@ LeanLevy/
 │   ├── PiecewisePath.lean
 │   ├── PoissonProcess.lean
 │   └── StochasticProcess.lean
+├── RandomMeasure/
+│   ├── PoissonCompensated.lean
+│   ├── PoissonPointFamily.lean
+│   └── PoissonRandomMeasure.lean
 ├── Representation/
 │   └── BochnerGaussian.lean
 └── Levy/
