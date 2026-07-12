@@ -1221,8 +1221,9 @@ private lemma charFunDual_natCast_thinnedCount [IsProbabilityMeasure μ]
     (le_of_eq (Complex.norm_exp_ofReal_mul_I (M 1)))
 
 /-- The joint characteristic function (via the dual of `ℝ × ℝ`) of the `ℝ²`-pushforward of the pair
-of thinned counts factorizes, by the disjoint two-indicator pgf identity. -/
-private lemma charFunDual_prod_thinnedCount [IsProbabilityMeasure μ]
+of thinned counts factorizes, by the disjoint two-indicator pgf identity. Exposed (non-`private`) for
+the superposition-independence induction in `PoissonRandomMeasure`. -/
+lemma charFunDual_prod_thinnedCount [IsProbabilityMeasure μ]
     (hd : IsPoissonPointFamily K X m μ) (hA : MeasurableSet A) (hB : MeasurableSet B)
     (hAB : Disjoint A B) (L : StrongDual ℝ (ℝ × ℝ)) :
     charFunDual (μ.map fun ω =>

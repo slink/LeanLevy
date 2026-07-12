@@ -24,3 +24,4 @@ import LeanLevy.Levy.LevyKhintchine
 import LeanLevy.Levy.LevyKhintchineProof
 import LeanLevy.Levy.LevyKhintchineUniqueness
 import LeanLevy.RandomMeasure.PoissonPointFamily
+import LeanLevy.RandomMeasure.PoissonRandomMeasure
