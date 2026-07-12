@@ -5,8 +5,11 @@ Authors: LeanLevy Contributors
 -/
 import Mathlib.Probability.Moments.Variance
 import Mathlib.MeasureTheory.Function.L2Space
+import Mathlib.MeasureTheory.Function.SimpleFuncDenseLp
+import Mathlib.MeasureTheory.Function.LpSpace.Complete
 import Mathlib.MeasureTheory.Integral.DominatedConvergence
 import Mathlib.MeasureTheory.Integral.Lebesgue.Markov
+import Mathlib.Analysis.SpecificLimits.Basic
 import Mathlib.Data.Real.ConjExponents
 import LeanLevy.RandomMeasure.PoissonPointFamily
 
@@ -23,21 +26,31 @@ compensated Poisson integral `∫ f d(N - m)`.
 The main result is the **L² isometry** (Campbell's second formula)
 `∫ (compensatedPoissonSum K X f m)² dμ = ∫ f² dm` for `f ∈ L¹(m) ∩ L²(m)`, together with the
 supporting facts that the compensated integral is centered, is itself an `L²(μ)` random variable,
-and is additive / homogeneous in `f`.  These are the inputs for extending the compensated integral
-to all of `L²(m)` by density.
+and is additive / homogeneous / subtractive in `f`.  This isometry is then used to extend the
+compensated integral, by density of the `L¹(m) ∩ L²(m)` simple functions in `L²(m)`, to an
+isometry `ProbabilityTheory.compensatedPoissonIntegral : L²(m) → L²(μ)` on all of `L²(m)`.
 
 ## Main definitions
 
 * `ProbabilityTheory.compensatedPieceSum` — the centered piece sum on a single piece.
 * `ProbabilityTheory.compensatedPoissonSum` — the aggregate compensated Poisson integral.
+* `ProbabilityTheory.compensatedPoissonIntegral` — the **L²(m) → L²(μ) extension** of the
+  compensated Poisson integral, obtained as the `L²(μ)`-limit over a simple-function
+  approximating sequence.
 
 ## Main results
 
 * `ProbabilityTheory.integral_compensatedPoissonSum` — the compensated integral has mean zero.
 * `ProbabilityTheory.integral_sq_compensatedPoissonSum` — the **isometry** `E[(∫ f dÑ)²] = ∫ f² dm`.
 * `ProbabilityTheory.memLp_two_compensatedPoissonSum` — the compensated integral lies in `L²(μ)`.
-* `ProbabilityTheory.compensatedPoissonSum_add`, `ProbabilityTheory.compensatedPoissonSum_const_mul`
+* `ProbabilityTheory.compensatedPoissonSum_add`, `ProbabilityTheory.compensatedPoissonSum_const_mul`,
+  `ProbabilityTheory.compensatedPoissonSum_sub`
   — linearity of the compensated integral in the test function.
+* `ProbabilityTheory.eLpNorm_compensatedPoissonIntegral`,
+  `ProbabilityTheory.norm_compensatedPoissonIntegral` — the **isometry**
+  `‖compensatedPoissonIntegral hd f‖ = ‖f‖` of the `L²(m) → L²(μ)` extension.
+* `ProbabilityTheory.compensatedPoissonIntegral_eq_sum` — the extension agrees a.e. with the
+  explicit pathwise `compensatedPoissonSum` on `L¹(m) ∩ L²(m)`.
 -/
 
 open MeasureTheory Filter
@@ -506,6 +519,284 @@ theorem compensatedPoissonSum_const_mul (c : ℝ) (ω : Ω) :
   simp only [compensatedPoissonSum]
   rw [← tsum_mul_left]
   exact tsum_congr fun k => compensatedPieceSum_const_mul c ω
+
+omit [MeasurableSpace Ω] [Nonempty E] in
+/-- The compensated piece sum is subtractive in the test function. -/
+theorem compensatedPieceSum_sub (hf1 : Integrable f (m.restrict (prmPiece m k)))
+    (hg1 : Integrable g (m.restrict (prmPiece m k))) (ω : Ω) :
+    compensatedPieceSum K X (fun x => f x - g x) m k ω
+      = compensatedPieceSum K X f m k ω - compensatedPieceSum K X g m k ω := by
+  simp only [compensatedPieceSum, pieceSum]
+  rw [Finset.sum_sub_distrib, integral_sub hf1 hg1]
+  ring
+
+/-- The compensated Poisson integral is subtractive in the test function (almost everywhere). -/
+theorem compensatedPoissonSum_sub [IsProbabilityMeasure μ] (hd : IsPoissonPointFamily K X m μ)
+    (hf : Measurable f) (hf1 : Integrable f m) (hf2 : MemLp f 2 m) (hg : Measurable g)
+    (hg1 : Integrable g m) (hg2 : MemLp g 2 m) :
+    ∀ᵐ ω ∂μ, compensatedPoissonSum K X (fun x => f x - g x) m ω
+      = compensatedPoissonSum K X f m ω - compensatedPoissonSum K X g m ω := by
+  filter_upwards [ae_summable_compensatedPieceSum hd hf hf1 hf2,
+    ae_summable_compensatedPieceSum hd hg hg1 hg2] with ω hsf hsg
+  simp only [compensatedPoissonSum]
+  rw [← (hsf.hasSum.sub hsg.hasSum).tsum_eq]
+  exact tsum_congr fun k => compensatedPieceSum_sub hf1.integrableOn hg1.integrableOn ω
+
+/-! ### The `L²(μ)`-valued compensated integral -/
+
+/-- The real `L²`-seminorm of a square-integrable real function is the square root of its second
+moment. -/
+private theorem eLpNorm_two_toReal_eq_sqrt {α : Type*} [MeasurableSpace α] {ν : Measure α}
+    {h : α → ℝ} (hh : MemLp h 2 ν) :
+    (eLpNorm h 2 ν).toReal = Real.sqrt (∫ a, (h a) ^ 2 ∂ν) := by
+  rw [hh.eLpNorm_eq_integral_rpow_norm two_ne_zero (by norm_num),
+    ENNReal.toReal_ofReal (by positivity)]
+  have he : (2 : ℝ≥0∞).toReal = 2 := by norm_num
+  rw [he]
+  have hint : (∫ a, ‖h a‖ ^ (2 : ℝ) ∂ν) = ∫ a, (h a) ^ 2 ∂ν := by
+    refine integral_congr_ae (Eventually.of_forall fun a => ?_)
+    simp only [Real.rpow_two, Real.norm_eq_abs, sq_abs]
+  rw [hint, Real.sqrt_eq_rpow, show (2 : ℝ)⁻¹ = 1 / 2 by norm_num]
+
+/-- The `L²(μ)` element attached to a measurable `L¹ ∩ L²` test function by the compensated Poisson
+sum. -/
+private noncomputable def compensatedPoissonToLp [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X m μ) (hf : Measurable f) (hf1 : Integrable f m)
+    (hf2 : MemLp f 2 m) : Lp ℝ 2 μ :=
+  (memLp_two_compensatedPoissonSum hd hf hf1 hf2).toLp (compensatedPoissonSum K X f m)
+
+private theorem coeFn_compensatedPoissonToLp [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X m μ) (hf : Measurable f) (hf1 : Integrable f m)
+    (hf2 : MemLp f 2 m) :
+    ⇑(compensatedPoissonToLp hd hf hf1 hf2) =ᵐ[μ] compensatedPoissonSum K X f m :=
+  MemLp.coeFn_toLp _
+
+/-- The compensated Poisson map is an isometry from `L¹ ∩ L²` into `L²(μ)`. -/
+private theorem norm_compensatedPoissonToLp [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X m μ) (hf : Measurable f) (hf1 : Integrable f m)
+    (hf2 : MemLp f 2 m) :
+    ‖compensatedPoissonToLp hd hf hf1 hf2‖ = (eLpNorm f 2 m).toReal := by
+  unfold compensatedPoissonToLp
+  rw [Lp.norm_toLp, eLpNorm_two_toReal_eq_sqrt (memLp_two_compensatedPoissonSum hd hf hf1 hf2),
+    eLpNorm_two_toReal_eq_sqrt hf2, integral_sq_compensatedPoissonSum hd hf hf1 hf2]
+
+/-- The distance between two compensated Poisson images is the `L²(m)`-distance of the test
+functions (the isometry, in `dist` form). -/
+private theorem dist_compensatedPoissonToLp [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X m μ) (hf : Measurable f) (hf1 : Integrable f m)
+    (hf2 : MemLp f 2 m) (hg : Measurable g) (hg1 : Integrable g m) (hg2 : MemLp g 2 m) :
+    dist (compensatedPoissonToLp hd hf hf1 hf2) (compensatedPoissonToLp hd hg hg1 hg2)
+      = (eLpNorm (fun x => f x - g x) 2 m).toReal := by
+  have hmemf := memLp_two_compensatedPoissonSum hd hf hf1 hf2
+  have hmemg := memLp_two_compensatedPoissonSum hd hg hg1 hg2
+  have hsub : ∀ᵐ ω ∂μ, (compensatedPoissonSum K X f m - compensatedPoissonSum K X g m) ω
+      = compensatedPoissonSum K X (fun x => f x - g x) m ω := by
+    filter_upwards [compensatedPoissonSum_sub hd hf hf1 hf2 hg hg1 hg2] with ω hω
+    simpa [Pi.sub_apply] using hω.symm
+  rw [dist_eq_norm]
+  unfold compensatedPoissonToLp
+  rw [← MemLp.toLp_sub, Lp.norm_toLp, eLpNorm_congr_ae hsub,
+    eLpNorm_two_toReal_eq_sqrt (memLp_two_compensatedPoissonSum hd (hf.sub hg)
+      (hf1.sub hg1) (hf2.sub hg2)),
+    integral_sq_compensatedPoissonSum hd (hf.sub hg) (hf1.sub hg1) (hf2.sub hg2)]
+  exact (eLpNorm_two_toReal_eq_sqrt (hf2.sub hg2)).symm
+
+/-! ### Simple-function approximation and the density extension -/
+
+omit [SigmaFinite m] [Nonempty E] in
+/-- A simple-function approximation of `f ∈ L²(m)` accurate to `1 / (n + 1)`, extracted from
+`MemLp.exists_simpleFunc_eLpNorm_sub_lt`. -/
+private theorem exists_approxSimple (f : Lp ℝ 2 m) (n : ℕ) :
+    ∃ h : SimpleFunc E ℝ, eLpNorm (⇑f - ⇑h) 2 m < ENNReal.ofReal (1 / (n + 1)) ∧ MemLp h 2 m :=
+  (Lp.memLp f).exists_simpleFunc_eLpNorm_sub_lt (by norm_num)
+    (ENNReal.ofReal_pos.mpr (by positivity)).ne'
+
+private noncomputable def approxSimple (f : Lp ℝ 2 m) (n : ℕ) : SimpleFunc E ℝ :=
+  (exists_approxSimple f n).choose
+
+omit [SigmaFinite m] [Nonempty E] in
+private theorem approxSimple_eLpNorm_lt (f : Lp ℝ 2 m) (n : ℕ) :
+    eLpNorm (⇑f - ⇑(approxSimple f n)) 2 m < ENNReal.ofReal (1 / (n + 1)) :=
+  (exists_approxSimple f n).choose_spec.1
+
+omit [SigmaFinite m] [Nonempty E] in
+private theorem approxSimple_memLp (f : Lp ℝ 2 m) (n : ℕ) : MemLp (approxSimple f n) 2 m :=
+  (exists_approxSimple f n).choose_spec.2
+
+omit [SigmaFinite m] [Nonempty E] in
+private theorem approxSimple_measurable (f : Lp ℝ 2 m) (n : ℕ) :
+    Measurable (⇑(approxSimple f n)) :=
+  (approxSimple f n).measurable
+
+omit [SigmaFinite m] [Nonempty E] in
+private theorem approxSimple_integrable (f : Lp ℝ 2 m) (n : ℕ) :
+    Integrable (⇑(approxSimple f n)) m :=
+  (SimpleFunc.memLp_iff_integrable two_ne_zero (by norm_num)).mp (approxSimple_memLp f n)
+
+omit [SigmaFinite m] [Nonempty E] in
+private theorem approxSimple_eLpNorm_tendsto (f : Lp ℝ 2 m) :
+    Tendsto (fun n => eLpNorm (⇑f - ⇑(approxSimple f n)) 2 m) atTop (𝓝 0) := by
+  have hub : Tendsto (fun n : ℕ => ENNReal.ofReal (1 / (n + 1))) atTop (𝓝 0) := by
+    have hr : Tendsto (fun n : ℕ => (1 : ℝ) / (n + 1)) atTop (𝓝 0) :=
+      tendsto_one_div_add_atTop_nhds_zero_nat
+    simpa using (ENNReal.continuous_ofReal.tendsto 0).comp hr
+  refine tendsto_of_tendsto_of_tendsto_of_le_of_le' tendsto_const_nhds hub
+    (Eventually.of_forall fun n => zero_le _) (Eventually.of_forall fun n => ?_)
+  exact (approxSimple_eLpNorm_lt f n).le
+
+omit [SigmaFinite m] [Nonempty E] in
+/-- The `L²(m)`-image of the approximation converges to `f`. -/
+private theorem tendsto_toLp_approxSimple (f : Lp ℝ 2 m) :
+    Tendsto (fun n => (approxSimple_memLp f n).toLp (⇑(approxSimple f n))) atTop (𝓝 f) := by
+  rw [tendsto_iff_norm_sub_tendsto_zero]
+  have heq : ∀ n, ‖(approxSimple_memLp f n).toLp (⇑(approxSimple f n)) - f‖
+      = (eLpNorm (⇑f - ⇑(approxSimple f n)) 2 m).toReal := by
+    intro n
+    rw [Lp.norm_def]
+    congr 1
+    rw [eLpNorm_sub_comm (⇑f) (⇑(approxSimple f n))]
+    refine eLpNorm_congr_ae ?_
+    filter_upwards [Lp.coeFn_sub ((approxSimple_memLp f n).toLp (⇑(approxSimple f n))) f,
+      MemLp.coeFn_toLp (approxSimple_memLp f n)] with x h1 h2
+    rw [h1]; simp only [Pi.sub_apply]; rw [h2]
+  simp_rw [heq]
+  simpa using (ENNReal.tendsto_toReal (by simp)).comp (approxSimple_eLpNorm_tendsto f)
+
+/-- The compensated images of the approximation form a Cauchy sequence in `L²(μ)`. -/
+private theorem cauchySeq_compApproxSeq [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X m μ) (f : Lp ℝ 2 m) :
+    CauchySeq (fun n => compensatedPoissonToLp hd (approxSimple_measurable f n)
+      (approxSimple_integrable f n) (approxSimple_memLp f n)) := by
+  have hb : CauchySeq (fun n => (approxSimple_memLp f n).toLp (⇑(approxSimple f n))) :=
+    (tendsto_toLp_approxSimple f).cauchySeq
+  have hdist : ∀ n k, dist (compensatedPoissonToLp hd (approxSimple_measurable f n)
+        (approxSimple_integrable f n) (approxSimple_memLp f n))
+        (compensatedPoissonToLp hd (approxSimple_measurable f k)
+        (approxSimple_integrable f k) (approxSimple_memLp f k))
+      = dist ((approxSimple_memLp f n).toLp (⇑(approxSimple f n)))
+        ((approxSimple_memLp f k).toLp (⇑(approxSimple f k))) := by
+    intro n k
+    rw [dist_compensatedPoissonToLp, dist_eq_norm, ← MemLp.toLp_sub, Lp.norm_toLp]
+    rfl
+  rw [Metric.cauchySeq_iff] at hb ⊢
+  intro ε hε
+  obtain ⟨N, hN⟩ := hb ε hε
+  exact ⟨N, fun n hn k hk => (hdist n k).symm ▸ hN n hn k hk⟩
+
+/-- The **compensated Poisson integral** as a map `L²(m) → L²(μ)`: the `L²(μ)`-limit of the
+compensated sums of a simple-function approximation of `f`.  It is an isometry
+(`eLpNorm_compensatedPoissonIntegral`) and agrees a.e. with the explicit pathwise sum on `L¹ ∩ L²`
+(`compensatedPoissonIntegral_eq_sum`). -/
+noncomputable def compensatedPoissonIntegral [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X m μ) (f : Lp ℝ 2 m) : Lp ℝ 2 μ :=
+  (cauchySeq_tendsto_of_complete (cauchySeq_compApproxSeq hd f)).choose
+
+private theorem compApproxSeq_tendsto [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X m μ) (f : Lp ℝ 2 m) :
+    Tendsto (fun n => compensatedPoissonToLp hd (approxSimple_measurable f n)
+      (approxSimple_integrable f n) (approxSimple_memLp f n)) atTop
+      (𝓝 (compensatedPoissonIntegral hd f)) :=
+  (cauchySeq_tendsto_of_complete (cauchySeq_compApproxSeq hd f)).choose_spec
+
+/-- **Well-definedness of the extension.** For *any* measurable `L¹ ∩ L²` sequence `gm n`
+converging to `f` in `L²(m)`, the compensated images converge to `compensatedPoissonIntegral hd f`.
+This is the isometric limit being independent of the approximating sequence. -/
+private theorem tendsto_compensatedPoissonToLp_of_eLpNorm_sub_tendsto [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X m μ) (f : Lp ℝ 2 m) {gm : ℕ → E → ℝ}
+    (hg : ∀ n, Measurable (gm n)) (hg1 : ∀ n, Integrable (gm n) m) (hg2 : ∀ n, MemLp (gm n) 2 m)
+    (htend : Tendsto (fun n => eLpNorm (⇑f - gm n) 2 m) atTop (𝓝 0)) :
+    Tendsto (fun n => compensatedPoissonToLp hd (hg n) (hg1 n) (hg2 n)) atTop
+      (𝓝 (compensatedPoissonIntegral hd f)) := by
+  refine tendsto_iff_dist_tendsto_zero.mpr ?_
+  have hd2 : Tendsto (fun n => dist (compensatedPoissonToLp hd (approxSimple_measurable f n)
+      (approxSimple_integrable f n) (approxSimple_memLp f n))
+      (compensatedPoissonIntegral hd f)) atTop (𝓝 0) := by
+    have h := (compApproxSeq_tendsto hd f).dist
+      (tendsto_const_nhds (x := compensatedPoissonIntegral hd f))
+    rwa [dist_self] at h
+  have t1 : Tendsto (fun n => (eLpNorm (⇑f - gm n) 2 m).toReal) atTop (𝓝 0) := by
+    simpa using (ENNReal.tendsto_toReal (by simp)).comp htend
+  have t2 : Tendsto (fun n => (eLpNorm (⇑f - ⇑(approxSimple f n)) 2 m).toReal) atTop (𝓝 0) := by
+    simpa using (ENNReal.tendsto_toReal (by simp)).comp (approxSimple_eLpNorm_tendsto f)
+  have hd1 : Tendsto (fun n => dist (compensatedPoissonToLp hd (hg n) (hg1 n) (hg2 n))
+      (compensatedPoissonToLp hd (approxSimple_measurable f n) (approxSimple_integrable f n)
+        (approxSimple_memLp f n))) atTop (𝓝 0) := by
+    refine squeeze_zero (fun n => dist_nonneg) (fun n => ?_) (by simpa using t1.add t2)
+    rw [dist_compensatedPoissonToLp]
+    have hfin1 : eLpNorm (⇑f - gm n) 2 m ≠ ⊤ := ((Lp.memLp f).sub (hg2 n)).2.ne
+    have hfin2 : eLpNorm (⇑f - ⇑(approxSimple f n)) 2 m ≠ ⊤ :=
+      ((Lp.memLp f).sub (approxSimple_memLp f n)).2.ne
+    have htri : eLpNorm (fun x => gm n x - (approxSimple f n) x) 2 m
+        ≤ eLpNorm (⇑f - gm n) 2 m + eLpNorm (⇑f - ⇑(approxSimple f n)) 2 m := by
+      have hrw : (fun x => gm n x - (approxSimple f n) x)
+          = (fun x => gm n x - ⇑f x) + (fun x => ⇑f x - (approxSimple f n) x) := by
+        funext x; simp only [Pi.add_apply]; ring
+      rw [hrw]
+      refine (eLpNorm_add_le ((hg2 n).sub (Lp.memLp f)).aestronglyMeasurable
+        ((Lp.memLp f).sub (approxSimple_memLp f n)).aestronglyMeasurable one_le_two).trans_eq ?_
+      rw [eLpNorm_sub_comm (gm n) (⇑f)]
+    calc (eLpNorm (fun x => gm n x - (approxSimple f n) x) 2 m).toReal
+        ≤ (eLpNorm (⇑f - gm n) 2 m + eLpNorm (⇑f - ⇑(approxSimple f n)) 2 m).toReal :=
+          ENNReal.toReal_mono (ENNReal.add_ne_top.mpr ⟨hfin1, hfin2⟩) htri
+      _ = (eLpNorm (⇑f - gm n) 2 m).toReal + (eLpNorm (⇑f - ⇑(approxSimple f n)) 2 m).toReal :=
+          ENNReal.toReal_add hfin1 hfin2
+  have hg0 : Tendsto (fun n => dist (compensatedPoissonToLp hd (hg n) (hg1 n) (hg2 n))
+        (compensatedPoissonToLp hd (approxSimple_measurable f n) (approxSimple_integrable f n)
+          (approxSimple_memLp f n))
+      + dist (compensatedPoissonToLp hd (approxSimple_measurable f n) (approxSimple_integrable f n)
+          (approxSimple_memLp f n)) (compensatedPoissonIntegral hd f)) atTop (𝓝 0) := by
+    simpa using hd1.add hd2
+  exact squeeze_zero (fun n => dist_nonneg) (fun n => dist_triangle _ _ _) hg0
+
+/-- **Isometry of the compensated Poisson integral on all of `L²(m)`.** -/
+theorem eLpNorm_compensatedPoissonIntegral [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X m μ) (f : Lp ℝ 2 m) :
+    eLpNorm (compensatedPoissonIntegral hd f) 2 μ = eLpNorm f 2 m := by
+  have h1 : Tendsto (fun n => ‖compensatedPoissonToLp hd (approxSimple_measurable f n)
+      (approxSimple_integrable f n) (approxSimple_memLp f n)‖) atTop
+      (𝓝 ‖compensatedPoissonIntegral hd f‖) := (compApproxSeq_tendsto hd f).norm
+  have h2 : Tendsto (fun n => ‖compensatedPoissonToLp hd (approxSimple_measurable f n)
+      (approxSimple_integrable f n) (approxSimple_memLp f n)‖) atTop (𝓝 ‖f‖) := by
+    have heq : ∀ n, ‖compensatedPoissonToLp hd (approxSimple_measurable f n)
+        (approxSimple_integrable f n) (approxSimple_memLp f n)‖
+        = ‖(approxSimple_memLp f n).toLp (⇑(approxSimple f n))‖ := by
+      intro n
+      rw [norm_compensatedPoissonToLp, Lp.norm_toLp]
+    simp_rw [heq]
+    exact (tendsto_toLp_approxSimple f).norm
+  have hnorm : ‖compensatedPoissonIntegral hd f‖ = ‖f‖ := tendsto_nhds_unique h1 h2
+  rw [Lp.norm_def, Lp.norm_def] at hnorm
+  exact (ENNReal.toReal_eq_toReal_iff' (Lp.eLpNorm_ne_top _) (Lp.eLpNorm_ne_top _)).mp hnorm
+
+/-- The compensated Poisson integral is an isometry in the `‖·‖` sense. -/
+theorem norm_compensatedPoissonIntegral [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X m μ) (f : Lp ℝ 2 m) :
+    ‖compensatedPoissonIntegral hd f‖ = ‖f‖ := by
+  rw [Lp.norm_def, Lp.norm_def, eLpNorm_compensatedPoissonIntegral hd f]
+
+/-- **Agreement with the explicit sum.** On `L¹ ∩ L²`, the extended integral of `f` agrees a.e.
+with the pathwise compensated Poisson sum. -/
+theorem compensatedPoissonIntegral_eq_sum [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X m μ) (hf : Measurable f) (hf1 : Integrable f m)
+    (hf2 : MemLp f 2 m) :
+    compensatedPoissonIntegral hd (hf2.toLp f) =ᵐ[μ] compensatedPoissonSum K X f m := by
+  have hz : eLpNorm (⇑(hf2.toLp f) - f) 2 m = 0 := by
+    have hae : (⇑(hf2.toLp f) - f) =ᵐ[m] (0 : E → ℝ) := by
+      filter_upwards [MemLp.coeFn_toLp hf2] with x hx
+      simp [Pi.sub_apply, hx]
+    rw [eLpNorm_congr_ae hae, eLpNorm_zero]
+  have hconst : Tendsto (fun _ : ℕ => compensatedPoissonToLp hd hf hf1 hf2) atTop
+      (𝓝 (compensatedPoissonIntegral hd (hf2.toLp f))) := by
+    refine tendsto_compensatedPoissonToLp_of_eLpNorm_sub_tendsto hd (hf2.toLp f)
+      (gm := fun _ => f) (fun _ => hf) (fun _ => hf1) (fun _ => hf2) ?_
+    have hfun : (fun n : ℕ => eLpNorm (⇑(hf2.toLp f) - (fun _ => f) n) 2 m)
+        = fun _ => (0 : ℝ≥0∞) := funext fun _ => hz
+    rw [hfun]
+    exact tendsto_const_nhds
+  have hEq : compensatedPoissonIntegral hd (hf2.toLp f) = compensatedPoissonToLp hd hf hf1 hf2 :=
+    tendsto_nhds_unique hconst tendsto_const_nhds
+  rw [hEq]
+  exact coeFn_compensatedPoissonToLp hd hf hf1 hf2
 
 end Compensated
 
