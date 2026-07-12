@@ -13,13 +13,22 @@ import LeanLevy.Probability.Characteristic
 /-!
 # Poisson Distribution: Expectation, Variance, and Characteristic Function
 
-This file proves three fundamental results about the Poisson distribution with rate `r`:
+This file collects the basic facts about the Poisson distribution with rate `r`: its moments,
+its characteristic function (in both the ℕ-level and ℝ-pushforward forms), the additivity of
+independent Poisson laws under convolution, and the degenerate zero-rate case.
 
 ## Main results
 
 * `ProbabilityTheory.poissonExpectation_hasSum` — E[X] = r
 * `ProbabilityTheory.poissonVariance` — Var[X] = r
+* `ProbabilityTheory.integral_id_poissonMeasure`, `ProbabilityTheory.integral_factorialMoment_poissonMeasure`
+  — the mean and second factorial moment as Bochner integrals against `poissonMeasure r`
 * `ProbabilityTheory.poissonCharFun_eq` — φ(ξ) = exp(r(e^{iξ} − 1))
+* `ProbabilityTheory.charFun_poissonMeasure_eq` — the same identity for the ℝ-pushforward of
+  `poissonMeasure r`
+* `ProbabilityTheory.poissonMeasure_add_conv` — the sum of two independent Poisson variables is
+  Poisson with the summed rate
+* `ProbabilityTheory.poissonMeasure_zero` — the zero-rate law is the Dirac mass at `0`
 
 ## Implementation notes
 

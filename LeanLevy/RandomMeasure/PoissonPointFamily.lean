@@ -64,6 +64,12 @@ contributes nothing downstream (its Poisson count is `Poisson 0 = δ₀`).
   **second-moment identity** `E[(pieceSum)²] = ∫ f² dm + (∫ f dm)²` over the piece, and the square's
   integrability.
 * `ProbabilityTheory.indepFun_pieceSum_pieceSum` — piece sums of distinct pieces are independent.
+* `ProbabilityTheory.integral_pieceProd_eq_exp` — the piece **probability-generating identity**
+  `E[∏_{n < K} w (X n)] = exp (m(piece) · (∫ w − 1))` for bounded measurable `w`.
+* `ProbabilityTheory.map_thinnedCount` — **thinning**: the number of points of a piece landing in a
+  measurable set `A` (`thinnedCount`) is Poisson with mean `m (piece ∩ A)`.
+* `ProbabilityTheory.indepFun_thinnedCount_thinnedCount` — within a piece, the thinned counts of two
+  disjoint sets are (pairwise) independent.
 
 This file opens the `LeanLevy/RandomMeasure/` directory; the Poisson point family, the random measure
 itself, and the compensated `L²` integral are built on top of this partition.
