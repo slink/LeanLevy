@@ -35,6 +35,10 @@ which is precisely the compensator that is subtracted.
 * `ProbabilityTheory.aestronglyMeasurable_compensatedPoissonIntegral_prmEvalSigma` — **locality:**
   the compensated Poisson integral of a test function supported in a region `R` is measurable with
   respect to the evaluation sigma-algebra of `R`.
+* `ProbabilityTheory.levyCompensatedSmallJumpVersion` — a `prmFiltration`-adapted representative of
+  the compensated small-jump integral of a Lévy measure.
+* `ProbabilityTheory.martingale_levyCompensatedSmallJump` — **the compensated small-jump process of a
+  Lévy measure is a martingale** for the natural filtration.
 
 The martingale property is the conditional-expectation form of the independent-increment law: the
 band increment is measurable with respect to the disjoint band region, hence independent of the past
@@ -455,5 +459,153 @@ theorem aestronglyMeasurable_compensatedPoissonIntegral_prmEvalSigma [IsProbabil
   exact hSclosed.mem_of_tendsto hconv (Filter.Eventually.of_forall hyS)
 
 end EvalSigmaSupport
+
+/-! ### The compensated small-jump martingale of a Lévy measure
+
+For a Lévy measure `ν` on `ℝ` the compensated small-jump integral
+`levyCompensatedSmallJump hd hν t` (an element of `L²(μ)`) is a martingale for the natural
+filtration `prmFiltration`. The increment over a time step `(s, t]` is the compensated Poisson
+integral of the band test function `1_{(s,t] × (-1,1)}(r, x) · x`, which is supported in the disjoint
+band region `(s, t] × ℝ`; hence it is independent of the prefix `(-∞, s] × ℝ` and has mean zero, so
+its conditional expectation given the past vanishes. -/
+
+section LevyMartingale
+
+variable {ν : Measure ℝ} [SigmaFinite ν] {K : ℕ → Ω → ℕ} {X : ℕ → ℕ → Ω → ℝ × ℝ} {μ : Measure Ω}
+
+/-- The band test function `1_{(s,t] × (-1,1)}(r, x) · x`, viewed in `L²`, vanishes almost
+everywhere outside any product region `A ×ˢ univ` whose time factor contains `(s, t]`. -/
+private lemma smallJumpBandFun_toLp_ae_zero_off (hν : IsLevyMeasure ν) {s t : ℝ} {A : Set ℝ}
+    (hA : Set.Ioc s t ⊆ A) :
+    ∀ᵐ p ∂((volume : Measure ℝ).prod ν), p ∉ A ×ˢ (Set.univ : Set ℝ) →
+      (memLp_two_smallJumpBandFun hν s t).toLp
+          ((Set.Ioc s t ×ˢ Set.Ioo (-1) 1).indicator fun q : ℝ × ℝ => q.2) p = 0 := by
+  filter_upwards [MemLp.coeFn_toLp (memLp_two_smallJumpBandFun hν s t)] with p hp hpA
+  rw [hp]
+  apply Set.indicator_of_notMem
+  intro hmem
+  exact hpA ⟨hA hmem.1, Set.mem_univ _⟩
+
+/-- The compensated small-jump integral at time `t` is almost-everywhere strongly measurable with
+respect to the evaluation sigma-algebra of the prefix region `(-∞, t] × ℝ`. -/
+private lemma aestronglyMeasurable_levyCompensatedSmallJump_prefix [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν)
+    (t : ℝ≥0) :
+    AEStronglyMeasurable[prmEvalSigma K X (volume.prod ν) (Set.Iic (t : ℝ) ×ˢ Set.univ)]
+      (levyCompensatedSmallJump hd hν (t : ℝ)) μ :=
+  aestronglyMeasurable_compensatedPoissonIntegral_prmEvalSigma hd
+    (measurableSet_Iic.prod MeasurableSet.univ)
+    (smallJumpBandFun_toLp_ae_zero_off hν Set.Ioc_subset_Iic_self)
+
+/-- The compensated band integral over `(s, t]` is almost-everywhere strongly measurable with
+respect to the evaluation sigma-algebra of the band region `(s, t] × ℝ`. -/
+private lemma aestronglyMeasurable_levyCompensatedSmallJump_band [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν)
+    (s t : ℝ) :
+    AEStronglyMeasurable[prmEvalSigma K X (volume.prod ν) (Set.Ioc s t ×ˢ Set.univ)]
+      (compensatedPoissonIntegral hd ((memLp_two_smallJumpBandFun hν s t).toLp _)) μ :=
+  aestronglyMeasurable_compensatedPoissonIntegral_prmEvalSigma hd
+    (measurableSet_Ioc.prod MeasurableSet.univ)
+    (smallJumpBandFun_toLp_ae_zero_off hν (subset_refl _))
+
+/-- A `prmFiltration`-adapted representative of the compensated small-jump integral of a Lévy
+measure at time `t`. -/
+noncomputable def levyCompensatedSmallJumpVersion [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν)
+    (t : ℝ≥0) : Ω → ℝ :=
+  (aestronglyMeasurable_levyCompensatedSmallJump_prefix hd hν t).mk _
+
+/-- The adapted representative agrees almost everywhere with the compensated small-jump integral. -/
+theorem levyCompensatedSmallJumpVersion_ae_eq [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν)
+    (t : ℝ≥0) :
+    levyCompensatedSmallJumpVersion hd hν t =ᵐ[μ] levyCompensatedSmallJump hd hν (t : ℝ) :=
+  (aestronglyMeasurable_levyCompensatedSmallJump_prefix hd hν t).ae_eq_mk.symm
+
+/-- The adapted representative is strongly measurable with respect to the prefix-region evaluation
+sigma-algebra. -/
+private lemma stronglyMeasurable_levyCompensatedSmallJumpVersion [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν)
+    (t : ℝ≥0) :
+    StronglyMeasurable[prmEvalSigma K X (volume.prod ν) (Set.Iic (t : ℝ) ×ˢ Set.univ)]
+      (levyCompensatedSmallJumpVersion hd hν t) :=
+  (aestronglyMeasurable_levyCompensatedSmallJump_prefix hd hν t).stronglyMeasurable_mk
+
+/-- The adapted representative is integrable at each time. -/
+private lemma integrable_levyCompensatedSmallJumpVersion [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν)
+    (t : ℝ≥0) : Integrable (levyCompensatedSmallJumpVersion hd hν t) μ :=
+  ((Lp.memLp (levyCompensatedSmallJump hd hν (t : ℝ))).integrable one_le_two).congr
+    (levyCompensatedSmallJumpVersion_ae_eq hd hν t).symm
+
+/-- **The compensated small-jump process of a Lévy measure is a martingale.** For the natural
+filtration `prmFiltration`, the compensated small-jump integral is a martingale: the increment over
+`(s, t]` is the compensated integral of the band test function, which is independent of the past and
+has mean zero. -/
+theorem martingale_levyCompensatedSmallJump [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν) :
+    MeasureTheory.Martingale (levyCompensatedSmallJumpVersion hd hν)
+      (prmFiltration K X ν hd.measurable_count hd.measurable_point) μ := by
+  refine ⟨fun u => ?_, fun s t hst => ?_⟩
+  · -- adaptedness at time `u`
+    simpa only [prmFiltration_apply] using
+      stronglyMeasurable_levyCompensatedSmallJumpVersion hd hν u
+  -- the conditional-expectation identity for `s ≤ t`
+  simp only [prmFiltration_apply]
+  -- the strongly-measurable band representative
+  have hband := aestronglyMeasurable_levyCompensatedSmallJump_band hd hν (s : ℝ) (t : ℝ)
+  set cb : Ω → ℝ := hband.mk _ with hcbdef
+  have hcb_sm : StronglyMeasurable[prmEvalSigma K X (volume.prod ν)
+      (Set.Ioc (s : ℝ) (t : ℝ) ×ˢ Set.univ)] cb := hband.stronglyMeasurable_mk
+  have hcb_ae : cb =ᵐ[μ]
+      ⇑(compensatedPoissonIntegral hd ((memLp_two_smallJumpBandFun hν (s : ℝ) (t : ℝ)).toLp _)) :=
+    hband.ae_eq_mk.symm
+  -- the increment identity `Version t = Version s + cb` (a.e.)
+  have hincr : levyCompensatedSmallJumpVersion hd hν t
+      =ᵐ[μ] levyCompensatedSmallJumpVersion hd hν s + cb := by
+    have hlpsub : ⇑(levyCompensatedSmallJump hd hν (t : ℝ))
+        - ⇑(levyCompensatedSmallJump hd hν (s : ℝ)) =ᵐ[μ] cb := by
+      refine (Lp.coeFn_sub _ _).symm.trans ?_
+      rw [levyCompensatedSmallJump_sub hd hν (NNReal.coe_nonneg s) (by exact_mod_cast hst)]
+      exact hcb_ae.symm
+    filter_upwards [levyCompensatedSmallJumpVersion_ae_eq hd hν t,
+      levyCompensatedSmallJumpVersion_ae_eq hd hν s, hlpsub] with ω hVt hVs hlp
+    simp only [Pi.add_apply, Pi.sub_apply] at *
+    rw [hVt, hVs, ← hlp]
+    ring
+  -- region sub-sigma-algebras and their finiteness for the conditional expectation
+  have hle_s := prmEvalSigma_le (m := volume.prod ν) hd.measurable_count hd.measurable_point
+    (Set.Iic (s : ℝ) ×ˢ Set.univ)
+  have hle_band := prmEvalSigma_le (m := volume.prod ν) hd.measurable_count hd.measurable_point
+    (Set.Ioc (s : ℝ) (t : ℝ) ×ˢ Set.univ)
+  haveI : IsFiniteMeasure (μ.trim hle_s) := isFiniteMeasure_trim hle_s
+  -- the band increment is measurable in the disjoint band region, hence independent of the past
+  have hindep : Indep (prmEvalSigma K X (volume.prod ν) (Set.Ioc (s : ℝ) (t : ℝ) ×ˢ Set.univ))
+      (prmEvalSigma K X (volume.prod ν) (Set.Iic (s : ℝ) ×ˢ Set.univ)) μ :=
+    indep_prmEvalSigma hd
+      (Set.Disjoint.set_prod_left (Set.Iic_disjoint_Ioc (le_refl (s : ℝ))).symm Set.univ Set.univ)
+  -- the band increment has mean zero
+  have hmean : (∫ ω, cb ω ∂μ) = 0 := by
+    rw [integral_congr_ae hcb_ae]
+    exact integral_compensatedPoissonIntegral hd _
+  -- the conditional expectation of the increment collapses to its (zero) mean
+  have hcb0 : μ[cb | prmEvalSigma K X (volume.prod ν) (Set.Iic (s : ℝ) ×ˢ Set.univ)] =ᵐ[μ] 0 := by
+    have hkey := condExp_indep_eq hle_band hle_s hcb_sm hindep
+    simp only [hmean] at hkey
+    simpa using hkey
+  -- assemble: `Version t = Version s + increment`, and both pieces resolve
+  refine (condExp_congr_ae hincr).trans ?_
+  refine (condExp_add (integrable_levyCompensatedSmallJumpVersion hd hν s)
+    (((Lp.memLp _).integrable one_le_two).congr hcb_ae.symm) _).trans ?_
+  rw [condExp_of_stronglyMeasurable hle_s
+    (stronglyMeasurable_levyCompensatedSmallJumpVersion hd hν s)
+    (integrable_levyCompensatedSmallJumpVersion hd hν s)]
+  calc levyCompensatedSmallJumpVersion hd hν s
+        + μ[cb | prmEvalSigma K X (volume.prod ν) (Set.Iic (s : ℝ) ×ˢ Set.univ)]
+      =ᵐ[μ] levyCompensatedSmallJumpVersion hd hν s + (0 : Ω → ℝ) :=
+        EventuallyEq.add EventuallyEq.rfl hcb0
+    _ = levyCompensatedSmallJumpVersion hd hν s := add_zero _
+
+end LevyMartingale
 
 end ProbabilityTheory
