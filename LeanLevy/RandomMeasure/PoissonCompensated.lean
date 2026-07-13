@@ -53,6 +53,9 @@ isometry `ProbabilityTheory.compensatedPoissonIntegral : L²(m) → L²(μ)` on 
   explicit pathwise `compensatedPoissonSum` on `L¹(m) ∩ L²(m)`.
 * `ProbabilityTheory.integral_compensatedPoissonIntegral` — the `L²(m) → L²(μ)` extension has
   mean zero on all of `L²(m)`.
+* `ProbabilityTheory.compensatedPoissonIntegral_add`,
+  `ProbabilityTheory.compensatedPoissonIntegral_neg`,
+  `ProbabilityTheory.compensatedPoissonIntegral_sub` — linearity of the `L²(m) → L²(μ)` extension.
 -/
 
 open MeasureTheory Filter
@@ -843,6 +846,115 @@ theorem compensatedPoissonIntegral_eq_sum [IsProbabilityMeasure μ]
     tendsto_nhds_unique hconst tendsto_const_nhds
   rw [hEq]
   exact coeFn_compensatedPoissonToLp hd hf hf1 hf2
+
+/-! ### Linearity of the `L²(m) → L²(μ)` extension -/
+
+/-- Additivity of the compensated Poisson map at the `L²(μ)`-element level, for measurable
+`L¹ ∩ L²` test functions. -/
+private theorem compensatedPoissonToLp_add [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X m μ) (hf : Measurable f) (hf1 : Integrable f m)
+    (hf2 : MemLp f 2 m) (hg : Measurable g) (hg1 : Integrable g m) (hg2 : MemLp g 2 m) :
+    compensatedPoissonToLp hd (hf.add hg) (hf1.add hg1) (hf2.add hg2)
+      = compensatedPoissonToLp hd hf hf1 hf2 + compensatedPoissonToLp hd hg hg1 hg2 := by
+  have hae : compensatedPoissonSum K X (fun x => f x + g x) m
+      =ᵐ[μ] compensatedPoissonSum K X f m + compensatedPoissonSum K X g m := by
+    filter_upwards [compensatedPoissonSum_add hd hf hf1 hf2 hg hg1 hg2] with ω hω
+    simpa [Pi.add_apply] using hω
+  simp only [compensatedPoissonToLp]
+  rw [← MemLp.toLp_add]
+  exact MemLp.toLp_congr _ _ hae
+
+/-- The compensated Poisson map negates at the `L²(μ)`-element level. -/
+private theorem compensatedPoissonToLp_neg [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X m μ) (hf : Measurable f) (hf1 : Integrable f m)
+    (hf2 : MemLp f 2 m) :
+    compensatedPoissonToLp hd hf.neg hf1.neg hf2.neg = -compensatedPoissonToLp hd hf hf1 hf2 := by
+  have hae : compensatedPoissonSum K X (fun x => -f x) m
+      =ᵐ[μ] -compensatedPoissonSum K X f m := by
+    refine Filter.EventuallyEq.of_eq (funext fun ω => ?_)
+    have h := compensatedPoissonSum_const_mul (K := K) (X := X) (f := f) (m := m) (-1) ω
+    simp only [neg_one_mul] at h
+    simpa [Pi.neg_apply] using h
+  simp only [compensatedPoissonToLp]
+  rw [← MemLp.toLp_neg]
+  exact MemLp.toLp_congr _ _ hae
+
+/-- **Additivity of the compensated Poisson integral** on all of `L²(m)`. -/
+theorem compensatedPoissonIntegral_add [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X m μ) (f g : Lp ℝ 2 m) :
+    compensatedPoissonIntegral hd (f + g)
+      = compensatedPoissonIntegral hd f + compensatedPoissonIntegral hd g := by
+  have hsum0 : Tendsto (fun n => eLpNorm (⇑f - ⇑(approxSimple f n)) 2 m
+      + eLpNorm (⇑g - ⇑(approxSimple g n)) 2 m) atTop (𝓝 0) := by
+    simpa using (approxSimple_eLpNorm_tendsto f).add (approxSimple_eLpNorm_tendsto g)
+  have htend : Tendsto (fun n => eLpNorm (⇑(f + g)
+      - (⇑(approxSimple f n) + ⇑(approxSimple g n))) 2 m) atTop (𝓝 0) := by
+    refine tendsto_of_tendsto_of_tendsto_of_le_of_le' tendsto_const_nhds hsum0
+      (Eventually.of_forall fun n => zero_le _) (Eventually.of_forall fun n => ?_)
+    have hae : (⇑(f + g) - (⇑(approxSimple f n) + ⇑(approxSimple g n)))
+        =ᵐ[m] (⇑f - ⇑(approxSimple f n)) + (⇑g - ⇑(approxSimple g n)) := by
+      filter_upwards [Lp.coeFn_add f g] with x hx
+      simp only [Pi.add_apply] at hx
+      simp only [Pi.sub_apply, Pi.add_apply]
+      rw [hx]; ring
+    rw [eLpNorm_congr_ae hae]
+    exact eLpNorm_add_le (((Lp.memLp f).sub (approxSimple_memLp f n)).aestronglyMeasurable)
+      (((Lp.memLp g).sub (approxSimple_memLp g n)).aestronglyMeasurable) one_le_two
+  have key := tendsto_compensatedPoissonToLp_of_eLpNorm_sub_tendsto hd (f + g)
+    (gm := fun n => ⇑(approxSimple f n) + ⇑(approxSimple g n))
+    (fun n => (approxSimple_measurable f n).add (approxSimple_measurable g n))
+    (fun n => (approxSimple_integrable f n).add (approxSimple_integrable g n))
+    (fun n => (approxSimple_memLp f n).add (approxSimple_memLp g n)) htend
+  have hsplit : (fun n => compensatedPoissonToLp hd
+        ((approxSimple_measurable f n).add (approxSimple_measurable g n))
+        ((approxSimple_integrable f n).add (approxSimple_integrable g n))
+        ((approxSimple_memLp f n).add (approxSimple_memLp g n)))
+      = fun n => compensatedPoissonToLp hd (approxSimple_measurable f n)
+          (approxSimple_integrable f n) (approxSimple_memLp f n)
+        + compensatedPoissonToLp hd (approxSimple_measurable g n)
+          (approxSimple_integrable g n) (approxSimple_memLp g n) := by
+    funext n
+    exact compensatedPoissonToLp_add hd _ _ _ _ _ _
+  rw [hsplit] at key
+  exact tendsto_nhds_unique key ((compApproxSeq_tendsto hd f).add (compApproxSeq_tendsto hd g))
+
+/-- **The compensated Poisson integral negates** on all of `L²(m)`. -/
+theorem compensatedPoissonIntegral_neg [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X m μ) (f : Lp ℝ 2 m) :
+    compensatedPoissonIntegral hd (-f) = -compensatedPoissonIntegral hd f := by
+  have htend : Tendsto (fun n => eLpNorm (⇑(-f) - (-⇑(approxSimple f n))) 2 m) atTop (𝓝 0) := by
+    have heq : (fun n => eLpNorm (⇑(-f) - (-⇑(approxSimple f n))) 2 m)
+        = fun n => eLpNorm (⇑f - ⇑(approxSimple f n)) 2 m := by
+      funext n
+      have hae : (⇑(-f) - (-⇑(approxSimple f n))) =ᵐ[m] -(⇑f - ⇑(approxSimple f n)) := by
+        filter_upwards [Lp.coeFn_neg f] with x hx
+        simp only [Pi.neg_apply] at hx
+        simp only [Pi.sub_apply, Pi.neg_apply]
+        rw [hx]; ring
+      rw [eLpNorm_congr_ae hae, eLpNorm_neg]
+    rw [heq]
+    exact approxSimple_eLpNorm_tendsto f
+  have key := tendsto_compensatedPoissonToLp_of_eLpNorm_sub_tendsto hd (-f)
+    (gm := fun n => -⇑(approxSimple f n))
+    (fun n => (approxSimple_measurable f n).neg)
+    (fun n => (approxSimple_integrable f n).neg)
+    (fun n => (approxSimple_memLp f n).neg) htend
+  have hsplit : (fun n => compensatedPoissonToLp hd (approxSimple_measurable f n).neg
+        (approxSimple_integrable f n).neg (approxSimple_memLp f n).neg)
+      = fun n => -compensatedPoissonToLp hd (approxSimple_measurable f n)
+          (approxSimple_integrable f n) (approxSimple_memLp f n) := by
+    funext n
+    exact compensatedPoissonToLp_neg hd _ _ _
+  rw [hsplit] at key
+  exact tendsto_nhds_unique key (compApproxSeq_tendsto hd f).neg
+
+/-- **The compensated Poisson integral is subtractive** on all of `L²(m)`. -/
+theorem compensatedPoissonIntegral_sub [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X m μ) (f g : Lp ℝ 2 m) :
+    compensatedPoissonIntegral hd (f - g)
+      = compensatedPoissonIntegral hd f - compensatedPoissonIntegral hd g := by
+  rw [show f - g = f + (-g) from sub_eq_add_neg f g, compensatedPoissonIntegral_add,
+    compensatedPoissonIntegral_neg, ← sub_eq_add_neg]
 
 end Compensated
 
