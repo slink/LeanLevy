@@ -29,6 +29,12 @@ evaluations.
   of `ω`.
 * `ProbabilityTheory.map_poissonRandomMeasure_apply` — **superposition**: the count of points in a
   finite-mass set `A` is Poisson-distributed with mean `m A`.
+* `ProbabilityTheory.ae_poissonRandomMeasure_apply_lt_top` — the count in a finite-mass set is almost
+  surely finite.
+* `ProbabilityTheory.integrable_toReal_poissonRandomMeasure_apply` — the `ℝ`-valued count in a
+  finite-mass set is integrable.
+* `ProbabilityTheory.integral_toReal_poissonRandomMeasure_apply` — the `ℝ`-valued count in a
+  finite-mass set has mean `(m A).toReal`.
 * `ProbabilityTheory.indepFun_poissonRandomMeasure_apply` — the counts in two disjoint finite-mass
   sets are independent (the two-set API).
 * `ProbabilityTheory.iIndepFun_poissonRandomMeasure_apply` — **mutual independence**: the counts in a
@@ -157,7 +163,7 @@ private lemma lintegral_poissonRandomMeasure_apply [IsProbabilityMeasure μ]
   exact tsum_measure_prmPiece_inter hA
 
 /-- The total count in a finite-mass set is almost surely finite. -/
-private lemma ae_poissonRandomMeasure_apply_lt_top [IsProbabilityMeasure μ]
+theorem ae_poissonRandomMeasure_apply_lt_top [IsProbabilityMeasure μ]
     (hd : IsPoissonPointFamily K X m μ) (hA : MeasurableSet A) (hfin : m A < ⊤) :
     ∀ᵐ ω ∂μ, poissonRandomMeasure K X ω A < ⊤ :=
   ae_lt_top (measurable_poissonRandomMeasure_apply hd.measurable_count hd.measurable_point hA)
@@ -395,6 +401,26 @@ private lemma charFun_natCast_poissonRandomMeasure_apply [IsProbabilityMeasure �
       (tendsto_rate_prmPartialCount hA hfin)
   exact tendsto_nhds_unique hdct hrate
 
+/-- The `ℝ`-valued count pushes forward to the `ℕ`-cast of the Poisson law of mean `m A`: the
+pushforward `μ.map (fun ω => (poissonRandomMeasure K X ω A).toReal)` equals
+`(poissonMeasure (m A).toNNReal).map (Nat.cast : ℕ → ℝ)`. This is the characteristic-function
+identification underlying the superposition law, kept as a standalone lemma so that both the
+`ℝ≥0∞`-valued law and the real integrability/mean lemmas can reuse it. -/
+private lemma map_toReal_poissonRandomMeasure_apply [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X m μ) (hA : MeasurableSet A) (hfin : m A < ⊤) :
+    (μ.map fun ω => (poissonRandomMeasure K X ω A).toReal)
+      = (poissonMeasure (m A).toNNReal).map (Nat.cast : ℕ → ℝ) := by
+  have hN_meas : Measurable fun ω => (poissonRandomMeasure K X ω A).toReal :=
+    (measurable_poissonRandomMeasure_apply hd.measurable_count hd.measurable_point hA).ennreal_toReal
+  haveI : IsProbabilityMeasure (μ.map fun ω => (poissonRandomMeasure K X ω A).toReal) :=
+    Measure.isProbabilityMeasure_map hN_meas.aemeasurable
+  haveI : IsProbabilityMeasure ((poissonMeasure (m A).toNNReal).map (Nat.cast : ℕ → ℝ)) :=
+    Measure.isProbabilityMeasure_map measurable_from_top.aemeasurable
+  apply Measure.ext_of_charFun
+  funext ξ
+  rw [charFun_natCast_poissonRandomMeasure_apply hd hA hfin, charFun_poissonMeasure_eq,
+    ENNReal.coe_toNNReal_eq_toReal]
+
 /-- **Superposition (the evaluation law).** The total number of realized points landing in a
 finite-mass measurable set `A` is Poisson-distributed with mean `m A`. This is the defining property
 of a Poisson random measure. The `ℝ≥0∞`-valued count is identified via its `ℝ`-pushforward, whose
@@ -406,16 +432,7 @@ theorem map_poissonRandomMeasure_apply [IsProbabilityMeasure μ] (hd : IsPoisson
       = (poissonMeasure (m A).toNNReal).map (Nat.cast : ℕ → ℝ≥0∞) := by
   have hN_meas : Measurable fun ω => (poissonRandomMeasure K X ω A).toReal :=
     (measurable_poissonRandomMeasure_apply hd.measurable_count hd.measurable_point hA).ennreal_toReal
-  have hRlaw : (μ.map fun ω => (poissonRandomMeasure K X ω A).toReal)
-      = (poissonMeasure (m A).toNNReal).map (Nat.cast : ℕ → ℝ) := by
-    haveI : IsProbabilityMeasure (μ.map fun ω => (poissonRandomMeasure K X ω A).toReal) :=
-      Measure.isProbabilityMeasure_map hN_meas.aemeasurable
-    haveI : IsProbabilityMeasure ((poissonMeasure (m A).toNNReal).map (Nat.cast : ℕ → ℝ)) :=
-      Measure.isProbabilityMeasure_map measurable_from_top.aemeasurable
-    apply Measure.ext_of_charFun
-    funext ξ
-    rw [charFun_natCast_poissonRandomMeasure_apply hd hA hfin, charFun_poissonMeasure_eq,
-      ENNReal.coe_toNNReal_eq_toReal]
+  have hRlaw := map_toReal_poissonRandomMeasure_apply hd hA hfin
   have hae : (fun ω => poissonRandomMeasure K X ω A)
       =ᵐ[μ] fun ω => ENNReal.ofReal ((poissonRandomMeasure K X ω A).toReal) := by
     filter_upwards [ae_poissonRandomMeasure_apply_lt_top hd hA hfin] with ω hω
@@ -428,6 +445,54 @@ theorem map_poissonRandomMeasure_apply [IsProbabilityMeasure μ] (hd : IsPoisson
   congr 1
   funext n
   rw [Function.comp_apply, ENNReal.ofReal_natCast]
+
+/-- The identity `ℕ → ℝ` is integrable against a Poisson law: its first absolute moment is the
+mean `r`, supplied by `poissonExpectation_hasSum`. -/
+private lemma integrable_natCast_poissonMeasure (r : ℝ≥0) :
+    Integrable (fun n : ℕ => (n : ℝ)) (poissonMeasure r) := by
+  refine ⟨Measurable.of_discrete.aestronglyMeasurable, ?_⟩
+  rw [hasFiniteIntegral_iff_enorm, lintegral_countable']
+  have hsummable : Summable fun n : ℕ => ‖(n : ℝ)‖ * poissonPMFReal r n :=
+    (poissonExpectation_hasSum r).summable.congr fun n => by
+      rw [Real.norm_of_nonneg (Nat.cast_nonneg n)]
+  have hterm : ∀ n : ℕ, ‖(n : ℝ)‖ₑ * poissonMeasure r {n}
+      = ENNReal.ofReal (‖(n : ℝ)‖ * poissonPMFReal r n) := fun n => by
+    rw [show (poissonMeasure r) {n} = ENNReal.ofReal (poissonPMFReal r n) from
+        PMF.toMeasure_apply_singleton _ _ (measurableSet_singleton n),
+      ← ofReal_norm_eq_enorm, ← ENNReal.ofReal_mul (norm_nonneg _)]
+  simp_rw [hterm]
+  rw [← ENNReal.ofReal_tsum_of_nonneg
+    (fun n => mul_nonneg (norm_nonneg _) poissonPMFReal_nonneg) hsummable]
+  exact ENNReal.ofReal_lt_top
+
+/-- The `ℝ`-valued count in a finite-mass set is integrable. -/
+theorem integrable_toReal_poissonRandomMeasure_apply [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X m μ) (hA : MeasurableSet A) (hfin : m A < ⊤) :
+    Integrable (fun ω => (poissonRandomMeasure K X ω A).toReal) μ := by
+  have hN_meas : Measurable fun ω => (poissonRandomMeasure K X ω A).toReal :=
+    (measurable_poissonRandomMeasure_apply hd.measurable_count hd.measurable_point hA).ennreal_toReal
+  have h1 : Integrable (id : ℝ → ℝ)
+      (μ.map fun ω => (poissonRandomMeasure K X ω A).toReal) := by
+    rw [map_toReal_poissonRandomMeasure_apply hd hA hfin,
+      integrable_map_measure aestronglyMeasurable_id measurable_from_top.aemeasurable]
+    exact integrable_natCast_poissonMeasure _
+  exact (integrable_map_measure aestronglyMeasurable_id hN_meas.aemeasurable).mp h1
+
+/-- The `ℝ`-valued count in a finite-mass set has mean `(m A).toReal`. -/
+theorem integral_toReal_poissonRandomMeasure_apply [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X m μ) (hA : MeasurableSet A) (hfin : m A < ⊤) :
+    ∫ ω, (poissonRandomMeasure K X ω A).toReal ∂μ = (m A).toReal := by
+  have hN_meas : Measurable fun ω => (poissonRandomMeasure K X ω A).toReal :=
+    (measurable_poissonRandomMeasure_apply hd.measurable_count hd.measurable_point hA).ennreal_toReal
+  calc ∫ ω, (poissonRandomMeasure K X ω A).toReal ∂μ
+      = ∫ y : ℝ, y ∂(μ.map fun ω => (poissonRandomMeasure K X ω A).toReal) :=
+        (integral_map hN_meas.aemeasurable aestronglyMeasurable_id).symm
+    _ = ∫ y : ℝ, y ∂((poissonMeasure (m A).toNNReal).map (Nat.cast : ℕ → ℝ)) := by
+        rw [map_toReal_poissonRandomMeasure_apply hd hA hfin]
+    _ = ∫ n : ℕ, (n : ℝ) ∂(poissonMeasure (m A).toNNReal) :=
+        integral_map measurable_from_top.aemeasurable aestronglyMeasurable_id
+    _ = (m A).toReal := by
+        rw [integral_id_poissonMeasure, ENNReal.coe_toNNReal_eq_toReal]
 
 /-! ### Pairwise independence of the counts in disjoint sets
 
