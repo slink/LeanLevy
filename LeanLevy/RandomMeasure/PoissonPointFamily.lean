@@ -12,7 +12,9 @@ import Mathlib.Probability.Distributions.Poisson
 import Mathlib.Probability.Independence.Basic
 import Mathlib.Probability.Independence.Integration
 import Mathlib.Probability.Independence.Process
+import Mathlib.Probability.Independence.CharacteristicFunction
 import Mathlib.MeasureTheory.Measure.CharacteristicFunction.Basic
+import Mathlib.MeasureTheory.Function.Floor
 import LeanLevy.Probability.Poisson
 
 /-!
@@ -70,6 +72,12 @@ contributes nothing downstream (its Poisson count is `Poisson 0 = δ₀`).
   measurable set `A` (`thinnedCount`) is Poisson with mean `m (piece ∩ A)`.
 * `ProbabilityTheory.indepFun_thinnedCount_thinnedCount` — within a piece, the thinned counts of two
   disjoint sets are (pairwise) independent.
+* `ProbabilityTheory.integral_prod_pow_thinnedCount`,
+  `ProbabilityTheory.charFunDual_pi_thinnedCount` — the joint probability-generating and
+  characteristic functions of a finite family of thinned counts over a pairwise disjoint family
+  factorize across the pieces.
+* `ProbabilityTheory.iIndepFun_thinnedCount` — within a piece, the thinned counts of a pairwise
+  disjoint finite family of sets are mutually independent.
 
 This file opens the `LeanLevy/RandomMeasure/` directory; the Poisson point family, the random measure
 itself, and the compensated `L²` integral are built on top of this partition.
@@ -1298,6 +1306,145 @@ theorem indepFun_thinnedCount_thinnedCount [IsProbabilityMeasure μ]
   rw [charFunDual_prod_thinnedCount hd hA hB hAB L,
     charFunDual_natCast_thinnedCount hd hA (L.comp (.inl ℝ ℝ ℝ)),
     charFunDual_natCast_thinnedCount hd hB (L.comp (.inr ℝ ℝ ℝ))]
+
+/-- A linear form on a finite pi-power of `ℝ` acts by weighted coordinate sums:
+`L x = ∑ i, x i · L (Pi.single i 1)`. -/
+private lemma pi_dual_apply {ι : Type} [Fintype ι] [DecidableEq ι]
+    (L : StrongDual ℝ (ι → ℝ)) (x : ι → ℝ) :
+    L x = ∑ i, x i * L (Pi.single i 1) := by
+  rw [← ContinuousLinearMap.sum_comp_single ℝ (fun _ : ι => ℝ) L x]
+  refine Finset.sum_congr rfl fun i _ => ?_
+  rw [real_dual_apply (L.comp (ContinuousLinearMap.single ℝ (fun _ : ι => ℝ) i)) (x i)]
+  rfl
+
+open Classical in
+omit [MeasurableSpace E] [Nonempty E] in
+/-- On a pairwise disjoint family, the product of two-valued `if`s telescopes to a sum: each point
+lies in at most one `A i`, so at most one factor differs from `1`. -/
+private lemma prod_ite_eq_one_add_sum_indicator {ι : Type} [Fintype ι] {A : ι → Set E}
+    (hdisj : Pairwise (Function.onFun Disjoint A)) (z : ι → ℂ) (x : E) :
+    ∏ i, (if x ∈ A i then z i else 1)
+      = 1 + ∑ i, (A i).indicator (fun _ => z i - 1) x := by
+  by_cases hx : ∃ i, x ∈ A i
+  · obtain ⟨i₀, hi₀⟩ := hx
+    have huniq : ∀ i, i ≠ i₀ → x ∉ A i := fun i hi hmem =>
+      Set.disjoint_left.mp (hdisj hi) hmem hi₀
+    rw [Finset.prod_eq_single i₀ (fun i _ hi => if_neg (huniq i hi)) (by simp), if_pos hi₀,
+      Finset.sum_eq_single i₀ (fun i _ hi => Set.indicator_of_notMem (huniq i hi) _) (by simp),
+      Set.indicator_of_mem hi₀]
+    ring
+  · push_neg at hx
+    rw [Finset.prod_eq_one (fun i _ => if_neg (hx i)),
+      Finset.sum_eq_zero (fun i _ => Set.indicator_of_notMem (hx i) _)]
+    ring
+
+/-- **Joint pgf identity within a piece.** For a pairwise disjoint family of measurable sets, the
+joint probability-generating function of the thinned counts factorizes across the pieces:
+`E[∏ᵢ zᵢ ^ (thinnedCount (A i))] = ∏ᵢ exp (m (piece k ∩ A i) · (zᵢ − 1))` for `‖zᵢ‖ ≤ 1`. -/
+lemma integral_prod_pow_thinnedCount {ι : Type} [Fintype ι] [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X m μ) {A : ι → Set E} (hA : ∀ i, MeasurableSet (A i))
+    (hdisj : Pairwise (Function.onFun Disjoint A)) (z : ι → ℂ) (hz : ∀ i, ‖z i‖ ≤ 1) :
+    ∫ ω, ∏ i, (z i) ^ (thinnedCount K X (A i) k ω) ∂μ
+      = ∏ i, Complex.exp ((m (prmPiece m k ∩ A i)).toReal * (z i - 1)) := by
+  classical
+  set w : E → ℂ := fun x => ∏ i, (if x ∈ A i then z i else 1) with hw_def
+  have hwmeas : Measurable w :=
+    Finset.measurable_prod _ fun i _ => Measurable.ite (hA i) measurable_const measurable_const
+  have hwbdd : ∀ x, ‖w x‖ ≤ 1 := by
+    intro x
+    rw [hw_def, norm_prod]
+    refine Finset.prod_le_one (fun _ _ => norm_nonneg _) fun i _ => ?_
+    split_ifs with hx
+    · exact hz i
+    · simp
+  have hprod : ∀ ω, ∏ i, (z i) ^ (thinnedCount K X (A i) k ω)
+      = ∏ n ∈ Finset.range (K k ω), w (X k n ω) := by
+    intro ω
+    simp only [hw_def]
+    rw [Finset.prod_comm]
+    refine Finset.prod_congr rfl fun i _ => ?_
+    rw [prod_ite_const (Finset.range (K k ω)) (fun n => X k n ω ∈ A i) (z i), thinnedCount]
+  simp_rw [hprod]
+  rw [integral_pieceProd_eq_exp hd hwmeas hwbdd]
+  have hint : ∫ x, w x ∂(prmPieceLaw m k)
+      = 1 + ∑ i, (z i - 1) * ((prmPieceLaw m k).real (A i)) := by
+    have hwrw : w = fun x => (1 : ℂ) + ∑ i, (A i).indicator (fun _ => z i - 1) x := by
+      funext x; rw [hw_def]; exact prod_ite_eq_one_add_sum_indicator hdisj z x
+    have hintegrable : ∀ i,
+        Integrable (fun x => (A i).indicator (fun _ => z i - 1) x) (prmPieceLaw m k) :=
+      fun i => (integrable_const (z i - 1)).indicator (hA i)
+    have hone : ∫ _ : E, (1 : ℂ) ∂(prmPieceLaw m k) = 1 := by simp
+    rw [hwrw, integral_add (integrable_const 1) (integrable_finset_sum _ fun i _ => hintegrable i),
+      integral_finset_sum _ (fun i _ => hintegrable i), hone]
+    congr 1
+    refine Finset.sum_congr rfl fun i _ => ?_
+    rw [integral_indicator_const_complex (z i - 1) (hA i)]
+    ring
+  rw [hint,
+    show ((m (prmPiece m k)).toReal : ℂ)
+          * ((1 + ∑ i, (z i - 1) * ((prmPieceLaw m k).real (A i))) - 1)
+        = ∑ i, (((m (prmPiece m k)).toReal * (prmPieceLaw m k).real (A i) : ℝ) : ℂ) * (z i - 1) from ?_]
+  · rw [Complex.exp_sum]
+    refine Finset.prod_congr rfl fun i _ => ?_
+    rw [toReal_mul_real_prmPieceLaw (hA i)]
+  · push_cast
+    rw [add_sub_cancel_left, Finset.mul_sum]
+    exact Finset.sum_congr rfl fun i _ => by ring
+
+/-- The joint characteristic function (via the dual of `ι → ℝ`) of the pushforward of a finite family
+of thinned counts factorizes across the pieces, by the joint pgf identity. Public: consumed by the
+mutual-independence identification. -/
+lemma charFunDual_pi_thinnedCount {ι : Type} [Fintype ι] [DecidableEq ι] [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X m μ) {A : ι → Set E} (hA : ∀ i, MeasurableSet (A i))
+    (hdisj : Pairwise (Function.onFun Disjoint A)) (L : StrongDual ℝ (ι → ℝ)) :
+    charFunDual (μ.map fun ω (i : ι) => (thinnedCount K X (A i) k ω : ℝ)) L
+      = ∏ i, Complex.exp ((m (prmPiece m k ∩ A i)).toReal
+          * (Complex.exp (↑(L (Pi.single i 1)) * I) - 1)) := by
+  have hT : ∀ i, Measurable (thinnedCount K X (A i) k) := fun i =>
+    measurable_thinnedCount (hd.measurable_count k) (hd.measurable_point k) (hA i)
+  rw [charFunDual_apply, integral_map
+      (φ := fun ω (i : ι) => (thinnedCount K X (A i) k ω : ℝ))
+      (measurable_pi_lambda _ fun i => (measurable_from_top.comp (hT i))).aemeasurable (by fun_prop)]
+  have hpow : ∀ ω, Complex.exp (↑(L fun i => (thinnedCount K X (A i) k ω : ℝ)) * I)
+      = ∏ i, (Complex.exp (↑(L (Pi.single i 1)) * I)) ^ (thinnedCount K X (A i) k ω) := by
+    intro ω
+    rw [pi_dual_apply L (fun i => (thinnedCount K X (A i) k ω : ℝ)),
+      show (↑(∑ i, (thinnedCount K X (A i) k ω : ℝ) * L (Pi.single i 1)) : ℂ) * I
+          = ∑ i, ↑(thinnedCount K X (A i) k ω) * (↑(L (Pi.single i 1)) * I) from by
+        push_cast; rw [Finset.sum_mul]; exact Finset.sum_congr rfl fun i _ => by ring,
+      Complex.exp_sum]
+    exact Finset.prod_congr rfl fun i _ => Complex.exp_nat_mul _ _
+  simp_rw [hpow]
+  exact integral_prod_pow_thinnedCount hd hA hdisj
+    (fun i => Complex.exp (↑(L (Pi.single i 1)) * I))
+    (fun i => le_of_eq (Complex.norm_exp_ofReal_mul_I _))
+
+/-- **Mutual independence of thinned counts within a piece.** Within a single piece `k`, the counts
+of points landing in a pairwise disjoint finite family of measurable sets `A i` are mutually
+independent. The joint characteristic function of the `ℝ`-pushforward factorizes (the joint pgf
+identity), so the family is independent as `ℝ`-valued variables; descend along `Nat.floor` to the
+`ℕ`-valued counts. -/
+theorem iIndepFun_thinnedCount {ι : Type} [Fintype ι] [DecidableEq ι] [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X m μ) {A : ι → Set E} (hA : ∀ i, MeasurableSet (A i))
+    (hdisj : Pairwise (Function.onFun Disjoint A)) :
+    iIndepFun (fun i => thinnedCount K X (A i) k) μ := by
+  have hT : ∀ i, Measurable (thinnedCount K X (A i) k) := fun i =>
+    measurable_thinnedCount (hd.measurable_count k) (hd.measurable_point k) (hA i)
+  have hReal : iIndepFun (fun i ω => (thinnedCount K X (A i) k ω : ℝ)) μ := by
+    rw [iIndepFun_iff_charFunDual_pi (X := fun i ω => (thinnedCount K X (A i) k ω : ℝ))
+      fun i => (measurable_from_top.comp (hT i)).aemeasurable]
+    intro L
+    rw [charFunDual_pi_thinnedCount hd hA hdisj L]
+    refine Finset.prod_congr rfl fun i _ => ?_
+    have hmap : (μ.map fun ω => (thinnedCount K X (A i) k ω : ℝ))
+        = (μ.map (thinnedCount K X (A i) k)).map (Nat.cast : ℕ → ℝ) := by
+      rw [Measure.map_map measurable_from_top (hT i)]; rfl
+    rw [hmap, charFunDual_natCast_thinnedCount hd (hA i)
+      (L.comp (ContinuousLinearMap.single ℝ (fun _ : ι => ℝ) i))]
+    rfl
+  have hfloor := hReal.comp (fun _ => Nat.floor) (fun _ => Nat.measurable_floor)
+  simp only [Function.comp_def, Nat.floor_natCast] at hfloor
+  exact hfloor
 
 end Thinning
 
