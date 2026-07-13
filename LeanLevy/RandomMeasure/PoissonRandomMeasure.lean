@@ -702,7 +702,7 @@ The pairwise statement above upgrades verbatim to a finite family `A : ι → Se
 finite-mass sets: the counts `poissonRandomMeasure K X · (A i)` are **mutually** independent. The proof
 is the `ι`-indexed mirror of the pairwise chain — the pair `(A, B)` is replaced by the family `A`, the
 codomain `ℝ × ℝ` by `ι → ℝ`, and the two-set factorizations by the joint pgf identity
-`charFunDual_pi_thinnedCount` of Task 1. The joint characteristic function of the partial-count vector
+`charFunDual_pi_thinnedCount` (PoissonPointFamily). The joint characteristic function of the partial-count vector
 factorizes across coordinates (by induction on the number of pieces), passes to the limit by dominated
 convergence, and identifies the joint characteristic function of the count vector as a product; the
 mathlib vehicle `iIndepFun_iff_charFunDual_pi` then delivers mutual independence. -/
@@ -770,7 +770,7 @@ private lemma indepFun_prmPartialCountVec_thinnedCountVec {ι : Type} [Fintype �
 
 /-- **Joint characteristic function of the partial superposition-count vector.** It factorizes across
 the family into the Poisson pgfs with the accumulated `A i`-rates, by induction on the number of
-pieces: the base case is Task 1's within-piece factorization `charFunDual_pi_thinnedCount`, and each
+pieces: the base case is the within-piece factorization `charFunDual_pi_thinnedCount`, and each
 step adds an independent block. -/
 private lemma charFunDual_prmPartialCountVec {ι : Type} [Fintype ι] [DecidableEq ι]
     [IsProbabilityMeasure μ] (hd : IsPoissonPointFamily K X m μ) {A : ι → Set E}

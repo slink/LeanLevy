@@ -2685,7 +2685,7 @@ theorem exists_levyMeasure :
           Tendsto (fun n => (t_seq n).val⁻¹ *
               ∫ x, f x ∂(S.measure (t_seq n) : Measure ℝ))
             atTop (𝓝 (∫ x, f x ∂ν))) := by
-  -- The canonical (tilted) limit from Task 3.
+  -- The canonical (tilted) limit, extracted via `S.exists_canonicalMeasure`.
   obtain ⟨η, hη_fin, t_seq, ht_seq_tendsto, hconv⟩ := S.exists_canonicalMeasure
   haveI : IsFiniteMeasure η := hη_fin
   -- Measurability of the tilt density and its (pointwise) inverse.
