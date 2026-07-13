@@ -51,6 +51,8 @@ isometry `ProbabilityTheory.compensatedPoissonIntegral : L²(m) → L²(μ)` on 
   `‖compensatedPoissonIntegral hd f‖ = ‖f‖` of the `L²(m) → L²(μ)` extension.
 * `ProbabilityTheory.compensatedPoissonIntegral_eq_sum` — the extension agrees a.e. with the
   explicit pathwise `compensatedPoissonSum` on `L¹(m) ∩ L²(m)`.
+* `ProbabilityTheory.integral_compensatedPoissonIntegral` — the `L²(m) → L²(μ)` extension has
+  mean zero on all of `L²(m)`.
 -/
 
 open MeasureTheory Filter
@@ -773,6 +775,50 @@ theorem norm_compensatedPoissonIntegral [IsProbabilityMeasure μ]
     (hd : IsPoissonPointFamily K X m μ) (f : Lp ℝ 2 m) :
     ‖compensatedPoissonIntegral hd f‖ = ‖f‖ := by
   rw [Lp.norm_def, Lp.norm_def, eLpNorm_compensatedPoissonIntegral hd f]
+
+/-- On a probability space, the Bochner integral is continuous along `L²(μ)` convergence: if
+`gn → g` in `L²(μ)`, then `∫ gn → ∫ g`.  This is the elementary bound
+`|∫ gn − ∫ g| ≤ ‖gn − g‖₁ ≤ ‖gn − g‖₂` (the last step uses `IsProbabilityMeasure μ`). -/
+private theorem tendsto_integral_of_tendsto_Lp2 [IsProbabilityMeasure μ]
+    {gn : ℕ → Lp ℝ 2 μ} {g : Lp ℝ 2 μ} (h : Tendsto gn atTop (𝓝 g)) :
+    Tendsto (fun n => ∫ ω, gn n ω ∂μ) atTop (𝓝 (∫ ω, g ω ∂μ)) := by
+  refine tendsto_iff_dist_tendsto_zero.mpr
+    (squeeze_zero (g := fun n => dist (gn n) g) (fun n => dist_nonneg) (fun n => ?_) ?_)
+  · set H : Lp ℝ 2 μ := gn n - g with hH
+    have hint_gn : Integrable (⇑(gn n)) μ := (Lp.memLp (gn n)).integrable (by norm_num)
+    have hint_g : Integrable (⇑g) μ := (Lp.memLp g).integrable (by norm_num)
+    have key : (∫ ω, gn n ω ∂μ) - ∫ ω, g ω ∂μ = ∫ ω, H ω ∂μ := by
+      rw [hH, integral_congr_ae (Lp.coeFn_sub (gn n) g)]
+      simp only [Pi.sub_apply]
+      rw [integral_sub hint_gn hint_g]
+    rw [Real.dist_eq, key]
+    calc |∫ ω, H ω ∂μ|
+        = ‖∫ ω, H ω ∂μ‖ := (Real.norm_eq_abs _).symm
+      _ ≤ ∫ ω, ‖H ω‖ ∂μ := norm_integral_le_integral_norm _
+      _ = (eLpNorm H 1 μ).toReal := by
+            rw [integral_norm_eq_lintegral_enorm (Lp.aestronglyMeasurable H),
+              ← eLpNorm_one_eq_lintegral_enorm]
+      _ ≤ (eLpNorm H 2 μ).toReal :=
+            ENNReal.toReal_mono (Lp.eLpNorm_ne_top H)
+              (eLpNorm_le_eLpNorm_of_exponent_le (by norm_num) (Lp.aestronglyMeasurable H))
+      _ = ‖H‖ := (Lp.norm_def H).symm
+      _ = dist (gn n) g := by rw [hH, ← dist_eq_norm]
+  · have hdist := h.dist (tendsto_const_nhds (x := g))
+    simpa using hdist
+
+/-- The compensated Poisson integral of any `L²` function has mean zero. -/
+theorem integral_compensatedPoissonIntegral [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X m μ) (f : Lp ℝ 2 m) :
+    ∫ ω, compensatedPoissonIntegral hd f ω ∂μ = 0 := by
+  have htend := tendsto_integral_of_tendsto_Lp2 (compApproxSeq_tendsto hd f)
+  have hzero : ∀ n, ∫ ω, compensatedPoissonToLp hd (approxSimple_measurable f n)
+      (approxSimple_integrable f n) (approxSimple_memLp f n) ω ∂μ = 0 := by
+    intro n
+    rw [integral_congr_ae (coeFn_compensatedPoissonToLp hd _ _ _)]
+    exact integral_compensatedPoissonSum hd (approxSimple_measurable f n)
+      (approxSimple_integrable f n) (approxSimple_memLp f n)
+  simp only [hzero] at htend
+  exact tendsto_nhds_unique htend tendsto_const_nhds
 
 /-- **Agreement with the explicit sum.** On `L¹ ∩ L²`, the extended integral of `f` agrees a.e.
 with the pathwise compensated Poisson sum. -/
