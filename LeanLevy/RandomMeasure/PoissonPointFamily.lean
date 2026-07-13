@@ -1424,10 +1424,11 @@ of points landing in a pairwise disjoint finite family of measurable sets `A i` 
 independent. The joint characteristic function of the `ℝ`-pushforward factorizes (the joint pgf
 identity), so the family is independent as `ℝ`-valued variables; descend along `Nat.floor` to the
 `ℕ`-valued counts. -/
-theorem iIndepFun_thinnedCount {ι : Type} [Fintype ι] [DecidableEq ι] [IsProbabilityMeasure μ]
+theorem iIndepFun_thinnedCount {ι : Type} [Fintype ι] [IsProbabilityMeasure μ]
     (hd : IsPoissonPointFamily K X m μ) {A : ι → Set E} (hA : ∀ i, MeasurableSet (A i))
     (hdisj : Pairwise (Function.onFun Disjoint A)) :
     iIndepFun (fun i => thinnedCount K X (A i) k) μ := by
+  classical
   have hT : ∀ i, Measurable (thinnedCount K X (A i) k) := fun i =>
     measurable_thinnedCount (hd.measurable_count k) (hd.measurable_point k) (hA i)
   have hReal : iIndepFun (fun i ω => (thinnedCount K X (A i) k ω : ℝ)) μ := by
