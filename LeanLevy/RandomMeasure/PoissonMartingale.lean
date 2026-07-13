@@ -37,6 +37,8 @@ which is precisely the compensator that is subtracted.
   respect to the evaluation sigma-algebra of `R`.
 * `ProbabilityTheory.levyCompensatedSmallJumpVersion` — a `prmFiltration`-adapted representative of
   the compensated small-jump integral of a Lévy measure.
+* `ProbabilityTheory.levyCompensatedSmallJumpVersion_ae_eq` — that representative is almost everywhere
+  equal to `levyCompensatedSmallJump` at each time.
 * `ProbabilityTheory.martingale_levyCompensatedSmallJump` — **the compensated small-jump process of a
   Lévy measure is a martingale** for the natural filtration.
 
