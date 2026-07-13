@@ -36,6 +36,10 @@ window `(s, t]`; the running count `poissonTimeCount K X A t` is its value on th
   over consecutive disjoint time bands are mutually independent.
 * `ProbabilityTheory.memLp_two_smallJumpFun` — the small-jump test function is square-integrable
   against `volume.prod ν` for any Lévy measure `ν`.
+* `ProbabilityTheory.memLp_two_smallJumpBandFun` — the same for the band test function supported on a
+  time window `(s, t]`.
+* `ProbabilityTheory.levyCompensatedSmallJump_sub` — the increment of the compensated small-jump
+  integral over `(s, t]` is the compensated integral of the band test function.
 * `ProbabilityTheory.integral_levyCompensatedSmallJump` — the compensated small-jump integral has
   mean zero.
 * `ProbabilityTheory.eLpNorm_sq_levyCompensatedSmallJump` — **Campbell's isometry**: its second
@@ -157,13 +161,13 @@ private lemma eLpNorm_two_sq {α : Type*} {mα : MeasurableSpace α} {τ : Measu
 
 omit [SigmaFinite ν] in
 /-- The pointwise square of the small-jump indicator integrates to the set-lintegral of `x²`. -/
-private lemma lintegral_enorm_rpow_smallJump (t : ℝ) :
-    ∫⁻ p, ‖(Set.Ioc 0 t ×ˢ Set.Ioo (-1) 1).indicator (fun q : ℝ × ℝ => q.2) p‖ₑ ^ (2 : ℝ)
+private lemma lintegral_enorm_rpow_smallJump (s t : ℝ) :
+    ∫⁻ p, ‖(Set.Ioc s t ×ˢ Set.Ioo (-1) 1).indicator (fun q : ℝ × ℝ => q.2) p‖ₑ ^ (2 : ℝ)
         ∂(volume.prod ν)
-      = ∫⁻ p in Set.Ioc 0 t ×ˢ Set.Ioo (-1) 1, ENNReal.ofReal (p.2 ^ 2) ∂(volume.prod ν) := by
+      = ∫⁻ p in Set.Ioc s t ×ˢ Set.Ioo (-1) 1, ENNReal.ofReal (p.2 ^ 2) ∂(volume.prod ν) := by
   rw [← lintegral_indicator (measurableSet_Ioc.prod measurableSet_Ioo)]
   refine lintegral_congr fun p => ?_
-  by_cases hp : p ∈ Set.Ioc 0 t ×ˢ Set.Ioo (-1 : ℝ) 1
+  by_cases hp : p ∈ Set.Ioc s t ×ˢ Set.Ioo (-1 : ℝ) 1
   · rw [Set.indicator_of_mem hp, Set.indicator_of_mem hp, Real.enorm_eq_ofReal_abs,
       ENNReal.ofReal_rpow_of_nonneg (abs_nonneg _) (by norm_num)]
     congr 1
@@ -171,17 +175,17 @@ private lemma lintegral_enorm_rpow_smallJump (t : ℝ) :
   · rw [Set.indicator_of_notMem hp, Set.indicator_of_notMem hp, enorm_zero,
       ENNReal.zero_rpow_of_pos (by norm_num)]
 
-/-- Tonelli for the small-jump band: `∫_{(0,t]×(-1,1)} x² = t · ∫_{(-1,1)} x²`. -/
-private lemma setLIntegral_smallJump_snd_sq (t : ℝ) :
-    ∫⁻ p in Set.Ioc 0 t ×ˢ Set.Ioo (-1) 1, ENNReal.ofReal (p.2 ^ 2) ∂(volume.prod ν)
-      = ENNReal.ofReal t * ∫⁻ x in Set.Ioo (-1) 1, ENNReal.ofReal (x ^ 2) ∂ν := by
+/-- Tonelli for the small-jump band: `∫_{(s,t]×(-1,1)} x² = (t - s) · ∫_{(-1,1)} x²`. -/
+private lemma setLIntegral_smallJump_snd_sq (s t : ℝ) :
+    ∫⁻ p in Set.Ioc s t ×ˢ Set.Ioo (-1) 1, ENNReal.ofReal (p.2 ^ 2) ∂(volume.prod ν)
+      = ENNReal.ofReal (t - s) * ∫⁻ x in Set.Ioo (-1) 1, ENNReal.ofReal (x ^ 2) ∂ν := by
   rw [← Measure.prod_restrict,
     lintegral_prod (fun p : ℝ × ℝ => ENNReal.ofReal (p.2 ^ 2))
       (measurable_snd.pow_const 2).ennreal_ofReal.aemeasurable]
-  have hinner : ∀ s : ℝ,
-      ∫⁻ x, ENNReal.ofReal ((s, x).2 ^ 2) ∂(ν.restrict (Set.Ioo (-1) 1))
+  have hinner : ∀ r : ℝ,
+      ∫⁻ x, ENNReal.ofReal ((r, x).2 ^ 2) ∂(ν.restrict (Set.Ioo (-1) 1))
         = ∫⁻ x in Set.Ioo (-1) 1, ENNReal.ofReal (x ^ 2) ∂ν := fun _ => rfl
-  rw [lintegral_congr hinner, setLIntegral_const, Real.volume_Ioc, sub_zero, mul_comm]
+  rw [lintegral_congr hinner, setLIntegral_const, Real.volume_Ioc, mul_comm]
 
 omit [SigmaFinite ν] in
 /-- The set-lintegral of `x²` over `(-1,1)` against a Lévy measure is finite. -/
@@ -196,17 +200,23 @@ private lemma lintegral_Ioo_sq_lt_top (hν : IsLevyMeasure ν) :
     exact ENNReal.ofReal_le_ofReal (le_min (by nlinarith) le_rfl)
   · rw [Set.indicator_of_notMem hx]; exact zero_le _
 
-/-- The small-jump test function `1_{(0,t] × (-1,1)}(s, x) · x` is square-integrable against
+/-- The small-jump band test function `1_{(s,t] × (-1,1)}(r, x) · x` is square-integrable against
 `volume.prod ν` for any Lévy measure `ν`. -/
-theorem memLp_two_smallJumpFun (hν : IsLevyMeasure ν) (t : ℝ) :
-    MemLp ((Set.Ioc 0 t ×ˢ Set.Ioo (-1) 1).indicator fun p : ℝ × ℝ => p.2) 2 (volume.prod ν) := by
+theorem memLp_two_smallJumpBandFun (hν : IsLevyMeasure ν) (s t : ℝ) :
+    MemLp ((Set.Ioc s t ×ˢ Set.Ioo (-1) 1).indicator fun p : ℝ × ℝ => p.2) 2 (volume.prod ν) := by
   refine ⟨(measurable_snd.indicator
     (measurableSet_Ioc.prod measurableSet_Ioo)).aestronglyMeasurable, ?_⟩
   rw [eLpNorm_eq_lintegral_rpow_enorm_toReal (by norm_num) (by norm_num),
     show ((2 : ℝ≥0∞).toReal) = (2 : ℝ) from by norm_num]
   refine ENNReal.rpow_lt_top_of_nonneg (by norm_num) ?_
-  rw [lintegral_enorm_rpow_smallJump t, setLIntegral_smallJump_snd_sq t]
+  rw [lintegral_enorm_rpow_smallJump s t, setLIntegral_smallJump_snd_sq s t]
   exact (ENNReal.mul_lt_top ENNReal.ofReal_lt_top (lintegral_Ioo_sq_lt_top hν)).ne
+
+/-- The small-jump test function `1_{(0,t] × (-1,1)}(s, x) · x` is square-integrable against
+`volume.prod ν` for any Lévy measure `ν`. -/
+theorem memLp_two_smallJumpFun (hν : IsLevyMeasure ν) (t : ℝ) :
+    MemLp ((Set.Ioc 0 t ×ˢ Set.Ioo (-1) 1).indicator fun p : ℝ × ℝ => p.2) 2 (volume.prod ν) :=
+  memLp_two_smallJumpBandFun hν 0 t
 
 /-- The compensated small-jump integral of a Lévy measure at time `t`, as an element of `L²(μ)`. -/
 noncomputable def levyCompensatedSmallJump [IsProbabilityMeasure μ]
@@ -229,7 +239,7 @@ theorem eLpNorm_sq_levyCompensatedSmallJump [IsProbabilityMeasure μ]
       = ENNReal.ofReal t * ∫⁻ x in Set.Ioo (-1) 1, ENNReal.ofReal (x ^ 2) ∂ν := by
   rw [levyCompensatedSmallJump, eLpNorm_compensatedPoissonIntegral,
     eLpNorm_congr_ae (MemLp.coeFn_toLp _), eLpNorm_two_sq,
-    lintegral_enorm_rpow_smallJump t, setLIntegral_smallJump_snd_sq t]
+    lintegral_enorm_rpow_smallJump 0 t, setLIntegral_smallJump_snd_sq 0 t, sub_zero]
 
 /-- The number of large jumps up to time `t` is Poisson with mean `t · ν {x | 1 ≤ |x|}`. -/
 theorem map_levyLargeJumpCount [IsProbabilityMeasure μ]
@@ -240,6 +250,31 @@ theorem map_levyLargeJumpCount [IsProbabilityMeasure μ]
           (Nat.cast : ℕ → ℝ≥0∞) :=
   map_poissonTimeCount hd (measurableSet_le measurable_const continuous_abs.measurable)
     (hν.measure_setOf_abs_ge_lt_top one_pos) ht
+
+/-- The increment of the compensated small-jump integral over a time step is the compensated
+integral of the band test function `1_{(s,t] × (-1,1)}(r, x) · x`. -/
+theorem levyCompensatedSmallJump_sub [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X (volume.prod ν) μ) (hν : IsLevyMeasure ν) {s t : ℝ}
+    (h0 : 0 ≤ s) (hst : s ≤ t) :
+    levyCompensatedSmallJump hd hν t - levyCompensatedSmallJump hd hν s
+      = compensatedPoissonIntegral hd ((memLp_two_smallJumpBandFun hν s t).toLp _) := by
+  have hdisj : Disjoint (Set.Ioc 0 s ×ˢ Set.Ioo (-1 : ℝ) 1) (Set.Ioc s t ×ˢ Set.Ioo (-1 : ℝ) 1) :=
+    Set.Disjoint.set_prod_left (Set.Ioc_disjoint_Ioc_of_le (le_refl s)) _ _
+  have hfun : ((Set.Ioc 0 t ×ˢ Set.Ioo (-1 : ℝ) 1).indicator fun p : ℝ × ℝ => p.2)
+      = (Set.Ioc 0 s ×ˢ Set.Ioo (-1 : ℝ) 1).indicator (fun p : ℝ × ℝ => p.2)
+        + (Set.Ioc s t ×ˢ Set.Ioo (-1 : ℝ) 1).indicator (fun p : ℝ × ℝ => p.2) := by
+    rw [← Set.Ioc_union_Ioc_eq_Ioc h0 hst, Set.union_prod, Set.indicator_union_of_disjoint hdisj]
+    rfl
+  have htoLp : (memLp_two_smallJumpFun hν t).toLp
+        ((Set.Ioc 0 t ×ˢ Set.Ioo (-1 : ℝ) 1).indicator fun p : ℝ × ℝ => p.2)
+      = (memLp_two_smallJumpFun hν s).toLp
+          ((Set.Ioc 0 s ×ˢ Set.Ioo (-1 : ℝ) 1).indicator fun p : ℝ × ℝ => p.2)
+        + (memLp_two_smallJumpBandFun hν s t).toLp
+          ((Set.Ioc s t ×ˢ Set.Ioo (-1 : ℝ) 1).indicator fun p : ℝ × ℝ => p.2) := by
+    rw [← MemLp.toLp_add]
+    exact MemLp.toLp_congr _ _ (Filter.EventuallyEq.of_eq hfun)
+  simp only [levyCompensatedSmallJump]
+  rw [htoLp, compensatedPoissonIntegral_add, add_sub_cancel_left]
 
 end LevyIntensity
 
