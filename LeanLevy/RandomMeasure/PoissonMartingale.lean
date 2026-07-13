@@ -5,6 +5,7 @@ Authors: LeanLevy Contributors
 -/
 import Mathlib.Probability.Martingale.Basic
 import Mathlib.Probability.ConditionalExpectation
+import Mathlib.MeasureTheory.Function.ConditionalExpectation.AEMeasurable
 import LeanLevy.RandomMeasure.PoissonFiltration
 import LeanLevy.RandomMeasure.TimeSpacePoisson
 
@@ -29,6 +30,11 @@ which is precisely the compensator that is subtracted.
   sigma-algebra of the prefix region `(-∞, t] × E`.
 * `ProbabilityTheory.martingale_centeredPoissonTimeCount` — **the centered count process
   `(poissonTimeCount K X A t).toReal - t · (m A).toReal` is a martingale** for the natural filtration.
+* `ProbabilityTheory.compensatedPoissonSum_indicator_ae_eq` — the compensated Poisson sum of a
+  finite-mass indicator is, almost everywhere, the centered evaluation of the random measure.
+* `ProbabilityTheory.aestronglyMeasurable_compensatedPoissonIntegral_prmEvalSigma` — **locality:**
+  the compensated Poisson integral of a test function supported in a region `R` is measurable with
+  respect to the evaluation sigma-algebra of `R`.
 
 The martingale property is the conditional-expectation form of the independent-increment law: the
 band increment is measurable with respect to the disjoint band region, hence independent of the past
@@ -166,5 +172,164 @@ theorem martingale_centeredPoissonTimeCount [IsProbabilityMeasure μ]
   calc fs + μ[cb | prmEvalSigma K X (volume.prod m) (Set.Iic (s : ℝ) ×ˢ Set.univ)]
       =ᵐ[μ] fs + (0 : Ω → ℝ) := EventuallyEq.add EventuallyEq.rfl hcb0
     _ = fs := add_zero fs
+
+/-! ### Locality of the compensated Poisson integral
+
+For a general mark space `E` and intensity `m`, the compensated Poisson integral of a test function
+supported inside a region `R` carries no information beyond the evaluation sigma-algebra
+`prmEvalSigma K X m R` of that region. We prove this by approximating the test function in `L²(m)`
+by simple functions supported in `R`, whose compensated integrals are explicit finite combinations
+of centered evaluations of finite-mass subsets of `R` — manifestly measurable in `prmEvalSigma R` —
+and then passing to the `L²(μ)` limit inside the closed subspace of functions almost everywhere
+strongly measurable with respect to `prmEvalSigma R`. -/
+
+section EvalSigmaSupport
+
+variable {E Ω : Type} [MeasurableSpace E] [MeasurableSpace Ω] [Nonempty E] {K : ℕ → Ω → ℕ}
+  {X : ℕ → ℕ → Ω → E} {m : Measure E} [SigmaFinite m] {μ : Measure Ω}
+
+omit [Nonempty E] in
+/-- The pieces of the intensity partition intersected with a measurable set exhaust its mass. -/
+private lemma tsum_measure_prmPiece_inter {D : Set E} (hD : MeasurableSet D) :
+    ∑' k, m (prmPiece m k ∩ D) = m D := by
+  rw [← measure_iUnion (fun i j hij =>
+        (pairwise_disjoint_prmPiece hij).mono Set.inter_subset_left Set.inter_subset_left)
+      (fun k => measurableSet_prmPiece.inter hD),
+    ← Set.iUnion_inter, iUnion_prmPiece, Set.univ_inter]
+
+omit [Nonempty E] [SigmaFinite m] in
+/-- A finite-mass indicator is measurable. -/
+private lemma measurable_indicatorConst {D : Set E} (hD : MeasurableSet D) (c : ℝ) :
+    Measurable (D.indicator (fun _ => c)) :=
+  measurable_const.indicator hD
+
+omit [Nonempty E] [SigmaFinite m] in
+/-- A finite-mass indicator is integrable against a finite-mass region. -/
+private lemma integrable_indicatorConst {D : Set E} (hD : MeasurableSet D) (hfin : m D < ⊤)
+    (c : ℝ) : Integrable (D.indicator (fun _ => c)) m :=
+  memLp_one_iff_integrable.mp (memLp_indicator_const 1 hD c (Or.inr hfin.ne))
+
+omit [Nonempty E] [SigmaFinite m] in
+/-- A finite-mass indicator lies in `L²`. -/
+private lemma memLp_two_indicatorConst {D : Set E} (hD : MeasurableSet D) (hfin : m D < ⊤)
+    (c : ℝ) : MemLp (D.indicator (fun _ => c)) 2 m :=
+  memLp_indicator_const 2 hD c (Or.inr hfin.ne)
+
+/-- **The compensated sum of a finite-mass indicator is the centered evaluation.** -/
+theorem compensatedPoissonSum_indicator_ae_eq [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X m μ) {D : Set E} (hD : MeasurableSet D) (hfin : m D < ⊤)
+    (c : ℝ) :
+    compensatedPoissonSum K X (D.indicator fun _ => c) m
+      =ᵐ[μ] fun ω => c * ((poissonRandomMeasure K X ω D).toReal - (m D).toReal) := by
+  classical
+  -- per-piece identity
+  have hpiece : ∀ ω k, compensatedPieceSum K X (D.indicator fun _ => c) m k ω
+      = c * ((thinnedCount K X D k ω : ℝ) - (m (prmPiece m k ∩ D)).toReal) := by
+    intro ω k
+    have hsum : pieceSum K X (D.indicator fun _ => c) k ω = c * (thinnedCount K X D k ω : ℝ) := by
+      simp only [pieceSum, thinnedCount]
+      rw [Finset.card_filter, Nat.cast_sum, Finset.mul_sum]
+      refine Finset.sum_congr rfl fun n _ => ?_
+      by_cases hx : X k n ω ∈ D
+      · rw [Set.indicator_of_mem hx, if_pos hx, Nat.cast_one, mul_one]
+      · rw [Set.indicator_of_notMem hx, if_neg hx, Nat.cast_zero, mul_zero]
+    have hint : ∫ x in prmPiece m k, (D.indicator fun _ => c) x ∂m
+        = c * (m (prmPiece m k ∩ D)).toReal := by
+      rw [setIntegral_indicator hD]
+      simp only [setIntegral_const, smul_eq_mul, measureReal_def]
+      ring
+    rw [compensatedPieceSum, hsum, hint, ← mul_sub]
+  -- the mark-mass series
+  have hb_ne : ∀ k, m (prmPiece m k ∩ D) ≠ ⊤ :=
+    fun k => (lt_of_le_of_lt (measure_mono Set.inter_subset_right) hfin).ne
+  have hb_summable : Summable (fun k => (m (prmPiece m k ∩ D)).toReal) :=
+    ENNReal.summable_toReal (by rw [tsum_measure_prmPiece_inter hD]; exact hfin.ne)
+  have hb_tsum : ∑' k, (m (prmPiece m k ∩ D)).toReal = (m D).toReal := by
+    rw [← ENNReal.tsum_toReal_eq hb_ne, tsum_measure_prmPiece_inter hD]
+  filter_upwards [ae_poissonRandomMeasure_apply_lt_top hd hD hfin] with ω hω
+  -- the count series
+  have ha_ne : ∀ k, (thinnedCount K X D k ω : ℝ≥0∞) ≠ ⊤ := fun k => ENNReal.natCast_ne_top _
+  have ha_fin : ∑' k, (thinnedCount K X D k ω : ℝ≥0∞) ≠ ⊤ := by
+    rw [← poissonRandomMeasure_apply hD]; exact hω.ne
+  have ha_summable : Summable (fun k => (thinnedCount K X D k ω : ℝ)) := by
+    simpa only [ENNReal.toReal_natCast] using ENNReal.summable_toReal ha_fin
+  have ha_tsum : ∑' k, (thinnedCount K X D k ω : ℝ) = (poissonRandomMeasure K X ω D).toReal := by
+    rw [poissonRandomMeasure_apply hD, ENNReal.tsum_toReal_eq ha_ne]
+    simp only [ENNReal.toReal_natCast]
+  show compensatedPoissonSum K X (D.indicator fun _ => c) m ω = _
+  simp only [compensatedPoissonSum]
+  rw [tsum_congr (hpiece ω), tsum_mul_left,
+    (ha_summable.hasSum.sub hb_summable.hasSum).tsum_eq, ha_tsum, hb_tsum]
+
+omit [Nonempty E] [SigmaFinite m] in
+/-- A finite sum of finite-mass indicators is measurable. -/
+private lemma measurable_finsetSumIndicatorConst {ι : Type*} (p : Finset ι) (c : ι → ℝ)
+    (D : ι → Set E) (hDm : ∀ i ∈ p, MeasurableSet (D i)) :
+    Measurable (fun x => ∑ i ∈ p, (D i).indicator (fun _ => c i) x) :=
+  Finset.measurable_sum p fun i hi => measurable_indicatorConst (hDm i hi) (c i)
+
+omit [Nonempty E] [SigmaFinite m] in
+/-- A finite sum of finite-mass indicators is integrable. -/
+private lemma integrable_finsetSumIndicatorConst {ι : Type*} (p : Finset ι) (c : ι → ℝ)
+    (D : ι → Set E) (hDm : ∀ i ∈ p, MeasurableSet (D i)) (hDfin : ∀ i ∈ p, m (D i) < ⊤) :
+    Integrable (fun x => ∑ i ∈ p, (D i).indicator (fun _ => c i) x) m :=
+  integrable_finset_sum p fun i hi => integrable_indicatorConst (hDm i hi) (hDfin i hi) (c i)
+
+omit [Nonempty E] [SigmaFinite m] in
+/-- A finite sum of finite-mass indicators lies in `L²`. -/
+private lemma memLp_two_finsetSumIndicatorConst {ι : Type*} (p : Finset ι) (c : ι → ℝ)
+    (D : ι → Set E) (hDm : ∀ i ∈ p, MeasurableSet (D i)) (hDfin : ∀ i ∈ p, m (D i) < ⊤) :
+    MemLp (fun x => ∑ i ∈ p, (D i).indicator (fun _ => c i) x) 2 m :=
+  memLp_finset_sum p fun i hi => memLp_two_indicatorConst (hDm i hi) (hDfin i hi) (c i)
+
+/-- The compensated sum of a finite combination of finite-mass indicators is the corresponding
+finite combination of centered evaluations. -/
+private theorem compensatedPoissonSum_finsetSumIndicatorConst_ae_eq [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X m μ) {ι : Type*} (p : Finset ι) (c : ι → ℝ) (D : ι → Set E)
+    (hDm : ∀ i ∈ p, MeasurableSet (D i)) (hDfin : ∀ i ∈ p, m (D i) < ⊤) :
+    compensatedPoissonSum K X (fun x => ∑ i ∈ p, (D i).indicator (fun _ => c i) x) m
+      =ᵐ[μ] fun ω => ∑ i ∈ p, c i * ((poissonRandomMeasure K X ω (D i)).toReal
+        - (m (D i)).toReal) := by
+  classical
+  revert hDm hDfin
+  induction p using Finset.induction with
+  | empty =>
+    intro _ _
+    filter_upwards with ω
+    simp [compensatedPoissonSum, compensatedPieceSum, pieceSum]
+  | insert i p hip ih =>
+    intro hDm hDfin
+    have hi_m : MeasurableSet (D i) := hDm i (Finset.mem_insert_self i p)
+    have hi_fin : m (D i) < ⊤ := hDfin i (Finset.mem_insert_self i p)
+    have hDm' : ∀ j ∈ p, MeasurableSet (D j) := fun j hj => hDm j (Finset.mem_insert_of_mem hj)
+    have hDfin' : ∀ j ∈ p, m (D j) < ⊤ := fun j hj => hDfin j (Finset.mem_insert_of_mem hj)
+    have hadd := compensatedPoissonSum_add hd
+      (measurable_indicatorConst hi_m (c i))
+      (integrable_indicatorConst hi_m hi_fin (c i))
+      (memLp_two_indicatorConst hi_m hi_fin (c i))
+      (measurable_finsetSumIndicatorConst p c D hDm')
+      (integrable_finsetSumIndicatorConst p c D hDm' hDfin')
+      (memLp_two_finsetSumIndicatorConst p c D hDm' hDfin')
+    have hone := compensatedPoissonSum_indicator_ae_eq hd hi_m hi_fin (c i)
+    filter_upwards [hadd, hone, ih hDm' hDfin'] with ω hadd' hone' ih'
+    have hfeq : (fun x => ∑ j ∈ insert i p, (D j).indicator (fun _ => c j) x)
+        = fun x => (D i).indicator (fun _ => c i) x
+            + ∑ j ∈ p, (D j).indicator (fun _ => c j) x :=
+      funext fun x => Finset.sum_insert hip
+    calc compensatedPoissonSum K X
+            (fun x => ∑ j ∈ insert i p, (D j).indicator (fun _ => c j) x) m ω
+        = compensatedPoissonSum K X (fun x => (D i).indicator (fun _ => c i) x
+            + ∑ j ∈ p, (D j).indicator (fun _ => c j) x) m ω := by rw [hfeq]
+      _ = compensatedPoissonSum K X ((D i).indicator (fun _ => c i)) m ω
+            + compensatedPoissonSum K X
+              (fun x => ∑ j ∈ p, (D j).indicator (fun _ => c j) x) m ω := hadd'
+      _ = c i * ((poissonRandomMeasure K X ω (D i)).toReal - (m (D i)).toReal)
+            + ∑ j ∈ p, c j * ((poissonRandomMeasure K X ω (D j)).toReal - (m (D j)).toReal) := by
+          rw [hone', ih']
+      _ = ∑ j ∈ insert i p, c j
+            * ((poissonRandomMeasure K X ω (D j)).toReal - (m (D j)).toReal) := by
+          rw [Finset.sum_insert hip]
+
+end EvalSigmaSupport
 
 end ProbabilityTheory
