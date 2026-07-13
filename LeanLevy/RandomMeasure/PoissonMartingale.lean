@@ -44,7 +44,7 @@ cancels the centering.
 
 open MeasureTheory Filter
 
-open scoped ENNReal NNReal
+open scoped ENNReal NNReal Topology
 
 namespace ProbabilityTheory
 
@@ -329,6 +329,130 @@ private theorem compensatedPoissonSum_finsetSumIndicatorConst_ae_eq [IsProbabili
       _ = ∑ j ∈ insert i p, c j
             * ((poissonRandomMeasure K X ω (D j)).toReal - (m (D j)).toReal) := by
           rw [Finset.sum_insert hip]
+
+/-- **Locality of the compensated Poisson integral.** If a test function `f ∈ L²(m)` vanishes
+almost everywhere outside a measurable region `R`, then its compensated Poisson integral is
+measurable with respect to the evaluation sigma-algebra `prmEvalSigma K X m R` of that region. -/
+theorem aestronglyMeasurable_compensatedPoissonIntegral_prmEvalSigma [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X m μ) {R : Set E} (hR : MeasurableSet R) {f : Lp ℝ 2 m}
+    (hf : ∀ᵐ x ∂m, x ∉ R → f x = 0) :
+    AEStronglyMeasurable[prmEvalSigma K X m R] (compensatedPoissonIntegral hd f) μ := by
+  classical
+  have hm' : prmEvalSigma K X m R ≤ (inferInstance : MeasurableSpace Ω) :=
+    prmEvalSigma_le hd.measurable_count hd.measurable_point R
+  have hSclosed : IsClosed {g : Lp ℝ 2 μ | AEStronglyMeasurable[prmEvalSigma K X m R] (⇑g) μ} :=
+    isClosed_aestronglyMeasurable hm'
+  -- simple-function approximants of `f` in `L²(m)`
+  have happrox : ∀ n : ℕ, ∃ φ : SimpleFunc E ℝ,
+      eLpNorm (⇑f - ⇑φ) 2 m < ENNReal.ofReal (1 / (n + 1)) ∧ MemLp (⇑φ) 2 m :=
+    fun n => (Lp.memLp f).exists_simpleFunc_eLpNorm_sub_lt (by norm_num)
+      (ENNReal.ofReal_pos.mpr (by positivity)).ne'
+  choose φ hφ_lt hφ_memLp using happrox
+  -- properties of the `R`-restricted approximants `R.indicator (φ n)`
+  have hind_meas : ∀ n, Measurable (R.indicator (⇑(φ n))) :=
+    fun n => (φ n).measurable.indicator hR
+  have hind_memLp : ∀ n, MemLp (R.indicator (⇑(φ n))) 2 m :=
+    fun n => (hφ_memLp n).indicator hR
+  have hind_int : ∀ n, Integrable (R.indicator (⇑(φ n))) m :=
+    fun n => ((SimpleFunc.memLp_iff_integrable two_ne_zero (by norm_num)).mp
+      (hφ_memLp n)).indicator hR
+  -- fiber-sum representation of `R.indicator (φ n)`
+  have hg_eq : ∀ n,
+      (fun x => ∑ z ∈ (φ n).range \ {0}, (R ∩ (φ n) ⁻¹' {z}).indicator (fun _ => z) x)
+      = R.indicator (⇑(φ n)) := by
+    intro n
+    funext x
+    by_cases hxR : x ∈ R
+    · rw [Set.indicator_of_mem hxR, Finset.sum_eq_single (φ n x)]
+      · have hmem : x ∈ R ∩ (φ n) ⁻¹' {φ n x} := ⟨hxR, rfl⟩
+        rw [Set.indicator_of_mem hmem]
+      · intro z _ hz
+        apply Set.indicator_of_notMem
+        rintro ⟨-, hzx⟩
+        rw [Set.mem_preimage, Set.mem_singleton_iff] at hzx
+        exact hz hzx.symm
+      · intro hns
+        have hzero : φ n x = 0 := by
+          by_contra h0
+          exact hns (Finset.mem_sdiff.mpr
+            ⟨(φ n).mem_range_self x, Finset.notMem_singleton.mpr h0⟩)
+        rw [hzero]; simp
+    · rw [Set.indicator_of_notMem hxR]
+      refine Finset.sum_eq_zero fun z _ => ?_
+      apply Set.indicator_of_notMem
+      exact fun hmem => hxR hmem.1
+  -- the compensated images in `L²(μ)`
+  set y : ℕ → Lp ℝ 2 μ :=
+    fun n => compensatedPoissonIntegral hd ((hind_memLp n).toLp (R.indicator (⇑(φ n)))) with hydef
+  -- each image lives in the closed subspace
+  have hyS : ∀ n, AEStronglyMeasurable[prmEvalSigma K X m R] (⇑(y n)) μ := by
+    intro n
+    have hHmeas : StronglyMeasurable[prmEvalSigma K X m R] (fun ω => ∑ z ∈ (φ n).range \ {0},
+        z * ((poissonRandomMeasure K X ω (R ∩ (φ n) ⁻¹' {z})).toReal
+          - (m (R ∩ (φ n) ⁻¹' {z})).toReal)) := by
+      refine Finset.stronglyMeasurable_fun_sum _ fun z hz => ?_
+      have hz0 : z ≠ 0 := Finset.notMem_singleton.mp (Finset.mem_sdiff.mp hz).2
+      have hzfin : m (R ∩ (φ n) ⁻¹' {z}) < ⊤ :=
+        lt_of_le_of_lt (measure_mono Set.inter_subset_right)
+          (SimpleFunc.measure_preimage_lt_top_of_memLp two_ne_zero (by norm_num) (φ n)
+            (hφ_memLp n) z hz0)
+      exact ((((measurable_prmEvalSigma_apply (hR.inter ((φ n).measurableSet_fiber z))
+        Set.inter_subset_left hzfin).ennreal_toReal).sub measurable_const).const_mul z).stronglyMeasurable
+    have hcombo : compensatedPoissonSum K X
+          (fun x => ∑ z ∈ (φ n).range \ {0}, (R ∩ (φ n) ⁻¹' {z}).indicator (fun _ => z) x) m
+        =ᵐ[μ] fun ω => ∑ z ∈ (φ n).range \ {0},
+          z * ((poissonRandomMeasure K X ω (R ∩ (φ n) ⁻¹' {z})).toReal
+            - (m (R ∩ (φ n) ⁻¹' {z})).toReal) :=
+      compensatedPoissonSum_finsetSumIndicatorConst_ae_eq hd ((φ n).range \ {0}) (fun z => z)
+        (fun z => R ∩ (φ n) ⁻¹' {z})
+        (fun z _ => hR.inter ((φ n).measurableSet_fiber z))
+        (fun z hz => lt_of_le_of_lt (measure_mono Set.inter_subset_right)
+          (SimpleFunc.measure_preimage_lt_top_of_memLp two_ne_zero (by norm_num) (φ n)
+            (hφ_memLp n) z (Finset.notMem_singleton.mp (Finset.mem_sdiff.mp hz).2)))
+    have heqsum : ⇑(y n) =ᵐ[μ] compensatedPoissonSum K X (R.indicator (⇑(φ n))) m := by
+      simp only [hydef]
+      exact compensatedPoissonIntegral_eq_sum hd (hind_meas n) (hind_int n) (hind_memLp n)
+    refine ⟨_, hHmeas, heqsum.trans ?_⟩
+    rw [← hg_eq n]
+    exact hcombo
+  -- the images converge to `compensatedPoissonIntegral hd f`
+  have hnorm_eq : ∀ n, ‖y n - compensatedPoissonIntegral hd f‖
+      = (eLpNorm (⇑f - R.indicator (⇑(φ n))) 2 m).toReal := by
+    intro n
+    have h1 : y n - compensatedPoissonIntegral hd f
+        = compensatedPoissonIntegral hd ((hind_memLp n).toLp (R.indicator (⇑(φ n))) - f) := by
+      simp only [hydef]
+      rw [← compensatedPoissonIntegral_sub]
+    rw [h1, norm_compensatedPoissonIntegral, Lp.norm_def]
+    congr 1
+    have hcoe : ⇑((hind_memLp n).toLp (R.indicator (⇑(φ n))) - f)
+        =ᵐ[m] (R.indicator (⇑(φ n)) - ⇑f) := by
+      filter_upwards [Lp.coeFn_sub ((hind_memLp n).toLp (R.indicator (⇑(φ n)))) f,
+        MemLp.coeFn_toLp (hind_memLp n)] with x hx1 hx2
+      simp only [Pi.sub_apply] at hx1 ⊢
+      rw [hx1, hx2]
+    rw [eLpNorm_congr_ae hcoe, eLpNorm_sub_comm]
+  have hbound : ∀ n, (eLpNorm (⇑f - R.indicator (⇑(φ n))) 2 m).toReal ≤ 1 / (n + 1) := by
+    intro n
+    have hRindic : (⇑f - R.indicator (⇑(φ n))) =ᵐ[m] R.indicator (⇑f - ⇑(φ n)) := by
+      filter_upwards [hf] with x hx
+      by_cases hxR : x ∈ R
+      · simp only [Pi.sub_apply, Set.indicator_of_mem hxR]
+      · simp only [Pi.sub_apply, Set.indicator_of_notMem hxR, sub_zero, hx hxR]
+    have hle : eLpNorm (⇑f - R.indicator (⇑(φ n))) 2 m ≤ ENNReal.ofReal (1 / (n + 1)) :=
+      calc eLpNorm (⇑f - R.indicator (⇑(φ n))) 2 m
+          = eLpNorm (R.indicator (⇑f - ⇑(φ n))) 2 m := eLpNorm_congr_ae hRindic
+        _ ≤ eLpNorm (⇑f - ⇑(φ n)) 2 m := eLpNorm_indicator_le _
+        _ ≤ ENNReal.ofReal (1 / (n + 1)) := (hφ_lt n).le
+    calc (eLpNorm (⇑f - R.indicator (⇑(φ n))) 2 m).toReal
+        ≤ (ENNReal.ofReal (1 / (n + 1))).toReal := ENNReal.toReal_mono ENNReal.ofReal_ne_top hle
+      _ = 1 / (n + 1) := ENNReal.toReal_ofReal (by positivity)
+  have hconv : Tendsto y atTop (𝓝 (compensatedPoissonIntegral hd f)) := by
+    rw [tendsto_iff_norm_sub_tendsto_zero]
+    simp only [hnorm_eq]
+    exact squeeze_zero (fun n => ENNReal.toReal_nonneg) hbound
+      tendsto_one_div_add_atTop_nhds_zero_nat
+  exact hSclosed.mem_of_tendsto hconv (Filter.Eventually.of_forall hyS)
 
 end EvalSigmaSupport
 
