@@ -6,6 +6,7 @@ Authors: LeanLevy Contributors
 import LeanLevy.Levy.LevyMeasure
 import Mathlib.Analysis.Complex.Exponential
 import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Mathlib.MeasureTheory.Integral.Bochner.Set
 
 /-!
 # Compensated Integrand for the Lévy-Khintchine Formula
@@ -162,5 +163,36 @@ theorem integrable_levyCompensatedIntegrand
     Integrable (levyCompensatedIntegrand ξ) ν :=
   ⟨(measurable_levyCompensatedIntegrand ξ).aestronglyMeasurable,
     lintegral_enorm_levyCompensatedIntegrand_lt_top hν ξ⟩
+
+/-- The Lévy–Khintchine jump integral splits at radius 1: the compensated part over
+`(-1, 1)` plus the uncompensated part over `{|x| ≥ 1}`. -/
+theorem integral_levyCompensatedIntegrand_eq_small_add_large
+    {ν : Measure ℝ} (hν : IsLevyMeasure ν) (ξ : ℝ) :
+    ∫ x, levyCompensatedIntegrand ξ x ∂ν
+      = (∫ x in Set.Ioo (-1) 1,
+          (Complex.exp (x * ξ * Complex.I) - 1 - x * ξ * Complex.I) ∂ν)
+        + ∫ x in {x : ℝ | 1 ≤ |x|}, (Complex.exp (x * ξ * Complex.I) - 1) ∂ν := by
+  have hcompl : (Set.Ioo (-1 : ℝ) 1)ᶜ = {x : ℝ | 1 ≤ |x|} := by
+    ext x
+    simp only [Set.mem_compl_iff, Set.mem_Ioo, not_and_or, not_lt, Set.mem_setOf_eq]
+    constructor
+    · rintro (h | h)
+      · exact le_trans (by linarith) (neg_le_abs x)
+      · exact le_trans h (le_abs_self x)
+    · intro h
+      rcases le_total 0 x with hx | hx
+      · right; rwa [abs_of_nonneg hx] at h
+      · left; rw [abs_of_nonpos hx] at h; linarith
+  rw [← integral_add_compl measurableSet_Ioo (integrable_levyCompensatedIntegrand hν ξ)]
+  congr 1
+  · apply setIntegral_congr_fun measurableSet_Ioo
+    intro x hx
+    rw [Set.mem_Ioo] at hx
+    simp only [levyCompensatedIntegrand, abs_lt.mpr hx, if_true, mul_one]
+  · rw [hcompl]
+    apply setIntegral_congr_fun (hcompl ▸ measurableSet_Ioo.compl)
+    intro x hx
+    simp only [Set.mem_setOf_eq] at hx
+    simp only [levyCompensatedIntegrand, not_lt.mpr hx, if_false, mul_zero, sub_zero]
 
 end ProbabilityTheory

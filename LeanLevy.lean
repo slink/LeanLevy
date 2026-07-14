@@ -29,3 +29,4 @@ import LeanLevy.RandomMeasure.PoissonFiltration
 import LeanLevy.RandomMeasure.PoissonCompensated
 import LeanLevy.RandomMeasure.TimeSpacePoisson
 import LeanLevy.RandomMeasure.PoissonMartingale
+import LeanLevy.RandomMeasure.LevyJumpLaw
