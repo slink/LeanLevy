@@ -1166,6 +1166,89 @@ theorem charFun_map_compensatedBandSum [IsProbabilityMeasure μ]
   have hval := tendsto_nhds_unique hdct hprodlim
   rw [charFun_apply_real, integral_map hmeas_sum.aemeasurable (by fun_prop), hval, hfinal]
 
+/-! ### The law of the compensated small-jump integral
+
+The compensated small-jump integral `levyCompensatedSmallJump` has characteristic function
+`exp (t · ∫_{(-1,1)} (e^{ixξ} − 1 − ixξ) dν)` — the small-jump factor of the Lévy–Khintchine
+exponent. The proof truncates the mark set to the annuli `A n := (-1, 1) ∩ {x | 1/(n+1) ≤ |x|}`,
+each of finite `ν`-mass, so that `charFun_map_compensatedBandSum` applies to the truncated integral;
+the truncated integral converges to `levyCompensatedSmallJump` in `L²(μ)`, hence its characteristic
+function converges, and the exponent converges by dominated convergence. -/
+
+/-- The charFun distance of two real random variables is controlled by their L¹ distance. -/
+private lemma norm_charFun_map_sub_le [IsProbabilityMeasure μ] {V W : Ω → ℝ}
+    (hV : AEMeasurable V μ) (hW : AEMeasurable W μ)
+    (hVW : Integrable (fun ω => V ω - W ω) μ) (ξ : ℝ) :
+    ‖charFun (μ.map V) ξ - charFun (μ.map W) ξ‖ ≤ |ξ| * ∫ ω, |V ω - W ω| ∂μ := by
+  have hgV : AEMeasurable (fun ω => Complex.exp (↑ξ * ↑(V ω) * Complex.I)) μ :=
+    Complex.measurable_exp.comp_aemeasurable
+      (((Complex.measurable_ofReal.comp_aemeasurable hV).const_mul (↑ξ)).mul_const Complex.I)
+  have hgW : AEMeasurable (fun ω => Complex.exp (↑ξ * ↑(W ω) * Complex.I)) μ :=
+    Complex.measurable_exp.comp_aemeasurable
+      (((Complex.measurable_ofReal.comp_aemeasurable hW).const_mul (↑ξ)).mul_const Complex.I)
+  have hbV : ∀ ω, ‖Complex.exp (↑ξ * ↑(V ω) * Complex.I)‖ ≤ 1 := fun ω => by
+    rw [show (↑ξ * ↑(V ω) * Complex.I : ℂ) = ↑(ξ * V ω) * Complex.I from by push_cast; ring,
+      Complex.norm_exp_ofReal_mul_I]
+  have hbW : ∀ ω, ‖Complex.exp (↑ξ * ↑(W ω) * Complex.I)‖ ≤ 1 := fun ω => by
+    rw [show (↑ξ * ↑(W ω) * Complex.I : ℂ) = ↑(ξ * W ω) * Complex.I from by push_cast; ring,
+      Complex.norm_exp_ofReal_mul_I]
+  have hIV : Integrable (fun ω => Complex.exp (↑ξ * ↑(V ω) * Complex.I)) μ :=
+    Integrable.of_bound hgV.aestronglyMeasurable 1 (Filter.Eventually.of_forall hbV)
+  have hIW : Integrable (fun ω => Complex.exp (↑ξ * ↑(W ω) * Complex.I)) μ :=
+    Integrable.of_bound hgW.aestronglyMeasurable 1 (Filter.Eventually.of_forall hbW)
+  rw [charFun_apply_real, charFun_apply_real,
+    integral_map hV (by fun_prop), integral_map hW (by fun_prop),
+    ← integral_sub hIV hIW]
+  calc ‖∫ ω, (Complex.exp (↑ξ * ↑(V ω) * Complex.I)
+            - Complex.exp (↑ξ * ↑(W ω) * Complex.I)) ∂μ‖
+      ≤ ∫ ω, ‖Complex.exp (↑ξ * ↑(V ω) * Complex.I)
+            - Complex.exp (↑ξ * ↑(W ω) * Complex.I)‖ ∂μ := norm_integral_le_integral_norm _
+    _ ≤ ∫ ω, |ξ| * |V ω - W ω| ∂μ := by
+        refine integral_mono ((hIV.sub hIW).norm) (hVW.abs.const_mul |ξ|) fun ω => ?_
+        have hfactor : Complex.exp (↑ξ * ↑(V ω) * Complex.I)
+              - Complex.exp (↑ξ * ↑(W ω) * Complex.I)
+            = Complex.exp (↑ξ * ↑(W ω) * Complex.I)
+              * (Complex.exp (Complex.I * ↑(ξ * (V ω - W ω))) - 1) := by
+          rw [mul_sub, mul_one, ← Complex.exp_add]
+          congr 2
+          push_cast; ring
+        rw [hfactor, norm_mul,
+          show (↑ξ * ↑(W ω) * Complex.I : ℂ) = ↑(ξ * W ω) * Complex.I from by push_cast; ring,
+          Complex.norm_exp_ofReal_mul_I, one_mul]
+        calc ‖Complex.exp (Complex.I * ↑(ξ * (V ω - W ω))) - 1‖
+            ≤ ‖ξ * (V ω - W ω)‖ := Real.norm_exp_I_mul_ofReal_sub_one_le
+          _ = |ξ| * |V ω - W ω| := by rw [Real.norm_eq_abs, abs_mul]
+    _ = |ξ| * ∫ ω, |V ω - W ω| ∂μ := integral_const_mul _ _
+
+omit [SigmaFinite ν] in
+/-- The pointwise square of a band indicator over a measurable mark set integrates to the set
+lintegral of `x²`. -/
+private lemma lintegral_enorm_rpow_band {B : Set ℝ} (hB : MeasurableSet B) (s t : ℝ) :
+    ∫⁻ p, ‖(Set.Ioc s t ×ˢ B).indicator (fun q : ℝ × ℝ => q.2) p‖ₑ ^ (2 : ℝ)
+        ∂(volume.prod ν)
+      = ∫⁻ p in Set.Ioc s t ×ˢ B, ENNReal.ofReal (p.2 ^ 2) ∂(volume.prod ν) := by
+  rw [← lintegral_indicator (measurableSet_Ioc.prod hB)]
+  refine lintegral_congr fun p => ?_
+  by_cases hp : p ∈ Set.Ioc s t ×ˢ B
+  · rw [Set.indicator_of_mem hp, Set.indicator_of_mem hp, Real.enorm_eq_ofReal_abs,
+      ENNReal.ofReal_rpow_of_nonneg (abs_nonneg _) (by norm_num)]
+    congr 1
+    rw [show (2 : ℝ) = ((2 : ℕ) : ℝ) from by norm_num, Real.rpow_natCast, sq_abs]
+  · rw [Set.indicator_of_notMem hp, Set.indicator_of_notMem hp, enorm_zero,
+      ENNReal.zero_rpow_of_pos (by norm_num)]
+
+/-- Tonelli for a band over a measurable mark set: `∫_{(s,t]×B} x² = (t - s) · ∫_B x²`. -/
+private lemma setLIntegral_band_snd_sq {B : Set ℝ} (_hB : MeasurableSet B) (s t : ℝ) :
+    ∫⁻ p in Set.Ioc s t ×ˢ B, ENNReal.ofReal (p.2 ^ 2) ∂(volume.prod ν)
+      = ENNReal.ofReal (t - s) * ∫⁻ x in B, ENNReal.ofReal (x ^ 2) ∂ν := by
+  rw [← Measure.prod_restrict,
+    lintegral_prod (fun p : ℝ × ℝ => ENNReal.ofReal (p.2 ^ 2))
+      (measurable_snd.pow_const 2).ennreal_ofReal.aemeasurable]
+  have hinner : ∀ r : ℝ,
+      ∫⁻ x, ENNReal.ofReal ((r, x).2 ^ 2) ∂(ν.restrict B)
+        = ∫⁻ x in B, ENNReal.ofReal (x ^ 2) ∂ν := fun _ => rfl
+  rw [lintegral_congr hinner, setLIntegral_const, Real.volume_Ioc, mul_comm]
+
 end LevyIntensity
 
 end ProbabilityTheory
