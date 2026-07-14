@@ -47,6 +47,11 @@ theory of the random measure with respect to that filtration:
   equal to `levyCompensatedSmallJump` at each time.
 * `ProbabilityTheory.martingale_levyCompensatedSmallJump` — **the compensated small-jump process of a
   Lévy measure is a martingale** for the natural filtration.
+* `ProbabilityTheory.aestronglyMeasurable_levyLargeJumpSum_prmEvalSigma` — the large-jump sum is
+  almost everywhere strongly measurable with respect to the evaluation sigma-algebra of the
+  large-jump band region.
+* `ProbabilityTheory.indepFun_levyLargeJumpSum_levyCompensatedSmallJump` — **the large-jump sum and
+  the compensated small-jump integral at the same time are independent.**
 
 The martingale property is the conditional-expectation form of the independent-increment law: the
 band increment is measurable with respect to the disjoint band region, hence independent of the past
@@ -597,6 +602,86 @@ theorem martingale_levyCompensatedSmallJump [IsProbabilityMeasure μ]
       =ᵐ[μ] levyCompensatedSmallJumpVersion hd hν s + (0 : Ω → ℝ) :=
         EventuallyEq.add EventuallyEq.rfl hcb0
     _ = levyCompensatedSmallJumpVersion hd hν s := add_zero _
+
+/-! ### Independence of the large-jump sum from the compensated small jumps
+
+The large-jump sum reads only the counts inside the large-jump band `(0, t] × {x | 1 ≤ |x|}`, while
+the compensated small-jump integral reads only the counts inside the disjoint small-jump band
+`(0, t] × (-1, 1)`. Since the two mark regions are disjoint, the corresponding evaluation
+sigma-algebras are independent (`indep_prmEvalSigma`), and the two processes -- each almost everywhere
+strongly measurable with respect to its own band -- are independent random variables. -/
+
+/-- The small-jump test function `1_{(0,t] × (-1,1)}(u, x) · x`, viewed in `L²`, vanishes almost
+everywhere outside the small-jump band region `(0, t] × (-1, 1)`. -/
+private lemma smallJumpFun_toLp_ae_zero_off (hν : IsLevyMeasure ν) (t : ℝ) :
+    ∀ᵐ p ∂((volume : Measure ℝ).prod ν), p ∉ Set.Ioc 0 t ×ˢ Set.Ioo (-1 : ℝ) 1 →
+      (memLp_two_smallJumpFun hν t).toLp
+          ((Set.Ioc 0 t ×ˢ Set.Ioo (-1) 1).indicator fun q : ℝ × ℝ => q.2) p = 0 := by
+  filter_upwards [MemLp.coeFn_toLp (memLp_two_smallJumpFun hν t)] with p hp hpR
+  rw [hp]
+  exact Set.indicator_of_notMem hpR _
+
+/-- The large-jump sum at time `t` is almost-everywhere strongly measurable with respect to the
+evaluation sigma-algebra of the large-jump band region `(0, t] × {x | 1 ≤ |x|}`: a difference of
+region-supported Lebesgue integrals against the random measure, honestly measurable in that
+sigma-algebra, agrees with it almost everywhere. -/
+theorem aestronglyMeasurable_levyLargeJumpSum_prmEvalSigma [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν)
+    {t : ℝ} (ht : 0 ≤ t) :
+    AEStronglyMeasurable[prmEvalSigma K X ((volume : Measure ℝ).prod ν)
+      (Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|})] (levyLargeJumpSum K X t) μ := by
+  have hRmeas : MeasurableSet (Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}) :=
+    measurableSet_Ioc.prod (measurableSet_le measurable_const continuous_abs.measurable)
+  have hRfin : (volume.prod ν) (Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}) < ⊤ :=
+    volume_prod_Ioc_prod_lt_top (m := ν) (s := 0) (t := t)
+      (hν.measure_setOf_abs_ge_lt_top one_pos)
+  have hmeas_pos : Measurable[prmEvalSigma K X (volume.prod ν)
+      (Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|})]
+      fun ω => (∫⁻ p, (Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator
+        (fun q : ℝ × ℝ => ENNReal.ofReal q.2) p ∂(poissonRandomMeasure K X ω)).toReal :=
+    (measurable_lintegral_poissonRandomMeasure_prmEvalSigma hRmeas hRfin
+      (measurable_snd.ennreal_ofReal.indicator hRmeas)
+      (fun _ hx => Set.indicator_of_notMem hx _)).ennreal_toReal
+  have hmeas_neg : Measurable[prmEvalSigma K X (volume.prod ν)
+      (Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|})]
+      fun ω => (∫⁻ p, (Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator
+        (fun q : ℝ × ℝ => ENNReal.ofReal (-q.2)) p ∂(poissonRandomMeasure K X ω)).toReal :=
+    (measurable_lintegral_poissonRandomMeasure_prmEvalSigma hRmeas hRfin
+      (measurable_snd.neg.ennreal_ofReal.indicator hRmeas)
+      (fun _ hx => Set.indicator_of_notMem hx _)).ennreal_toReal
+  exact ⟨_, (hmeas_pos.sub hmeas_neg).stronglyMeasurable,
+    levyLargeJumpSum_ae_eq_toReal_sub hd hν ht⟩
+
+/-- **Independence of the jump components:** the large-jump sum and the compensated small-jump
+integral at the same time are independent. -/
+theorem indepFun_levyLargeJumpSum_levyCompensatedSmallJump [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν)
+    {t : ℝ} (ht : 0 ≤ t) :
+    IndepFun (levyLargeJumpSum K X t) (fun ω => levyCompensatedSmallJump hd hν t ω) μ := by
+  -- the two mark regions are disjoint, so the band regions are disjoint
+  have hmark : Disjoint {x : ℝ | 1 ≤ |x|} (Set.Ioo (-1 : ℝ) 1) := by
+    rw [Set.disjoint_left]
+    intro x hx hx2
+    rw [Set.mem_Ioo] at hx2
+    exact absurd (abs_lt.mpr hx2) (not_lt.mpr hx)
+  have hdisj : Disjoint (Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|})
+      (Set.Ioc 0 t ×ˢ Set.Ioo (-1 : ℝ) 1) :=
+    Set.Disjoint.set_prod_right hmark _ _
+  have hindep := indep_prmEvalSigma hd hdisj
+  -- honest region-adapted representatives of the two processes
+  obtain ⟨Wlarge, hWlarge_sm, hWlarge_ae⟩ :=
+    aestronglyMeasurable_levyLargeJumpSum_prmEvalSigma hd hν ht
+  obtain ⟨Wsmall, hWsmall_sm, hWsmall_ae⟩ :
+      AEStronglyMeasurable[prmEvalSigma K X (volume.prod ν)
+        (Set.Ioc 0 t ×ˢ Set.Ioo (-1 : ℝ) 1)] (levyCompensatedSmallJump hd hν t) μ :=
+    aestronglyMeasurable_compensatedPoissonIntegral_prmEvalSigma hd
+      (measurableSet_Ioc.prod measurableSet_Ioo) (smallJumpFun_toLp_ae_zero_off hν t)
+  -- the representatives are independent, then transfer along both almost-everywhere equalities
+  have hindepW : IndepFun Wlarge Wsmall μ := by
+    rw [IndepFun_iff_Indep]
+    exact indep_of_indep_of_le hindep hWlarge_sm.measurable.comap_le
+      hWsmall_sm.measurable.comap_le
+  exact hindepW.congr hWlarge_ae.symm hWsmall_ae.symm
 
 end LevyMartingale
 
