@@ -10,14 +10,20 @@ import LeanLevy.RandomMeasure.PoissonFiltration
 import LeanLevy.RandomMeasure.TimeSpacePoisson
 
 /-!
-# The centered count martingale of a Poisson random measure
+# Martingales of the Poisson random measure
 
 For the time-indexed Poisson random measure on `ℝ × E` with intensity `volume.prod m`, the natural
 filtration `prmFiltration` records at time `t` the information carried by the evaluations of
-finite-mass sets inside the time-prefix region `(-∞, t] × E`. With respect to this filtration the
-**centered running count** `(poissonTimeCount K X A t).toReal - t · (m A)` is a martingale: each
-increment over a band `(s, t] × A` is independent of the past and has mean exactly `(t - s) · m A`,
-which is precisely the compensator that is subtracted.
+finite-mass sets inside the time-prefix region `(-∞, t] × E`. This file establishes the martingale
+theory of the random measure with respect to that filtration:
+
+* the **centered running count** `(poissonTimeCount K X A t).toReal - t · (m A)` is a martingale —
+  each increment over a band `(s, t] × A` is independent of the past and has mean exactly
+  `(t - s) · m A`, which is precisely the compensator that is subtracted;
+* the **compensated Poisson integral** of a test function supported in a region `R` is local: it is
+  measurable with respect to the evaluation sigma-algebra of `R`;
+* the **compensated small-jump integral** of a Lévy measure `ν` is a martingale, its increments
+  being the compensated integrals of the disjoint band test functions.
 
 ## Main definitions
 

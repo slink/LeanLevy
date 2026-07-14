@@ -200,7 +200,7 @@ private lemma lintegral_Ioo_sq_lt_top (hν : IsLevyMeasure ν) :
     exact ENNReal.ofReal_le_ofReal (le_min (by nlinarith) le_rfl)
   · rw [Set.indicator_of_notMem hx]; exact zero_le _
 
-/-- The small-jump band test function `1_{(s,t] × (-1,1)}(r, x) · x` is square-integrable against
+/-- The small-jump band test function `1_{(s,t] × (-1,1)}(u, x) · x` is square-integrable against
 `volume.prod ν` for any Lévy measure `ν`. -/
 theorem memLp_two_smallJumpBandFun (hν : IsLevyMeasure ν) (s t : ℝ) :
     MemLp ((Set.Ioc s t ×ˢ Set.Ioo (-1) 1).indicator fun p : ℝ × ℝ => p.2) 2 (volume.prod ν) := by
@@ -212,7 +212,7 @@ theorem memLp_two_smallJumpBandFun (hν : IsLevyMeasure ν) (s t : ℝ) :
   rw [lintegral_enorm_rpow_smallJump s t, setLIntegral_smallJump_snd_sq s t]
   exact (ENNReal.mul_lt_top ENNReal.ofReal_lt_top (lintegral_Ioo_sq_lt_top hν)).ne
 
-/-- The small-jump test function `1_{(0,t] × (-1,1)}(s, x) · x` is square-integrable against
+/-- The small-jump test function `1_{(0,t] × (-1,1)}(u, x) · x` is square-integrable against
 `volume.prod ν` for any Lévy measure `ν`. -/
 theorem memLp_two_smallJumpFun (hν : IsLevyMeasure ν) (t : ℝ) :
     MemLp ((Set.Ioc 0 t ×ˢ Set.Ioo (-1) 1).indicator fun p : ℝ × ℝ => p.2) 2 (volume.prod ν) :=
