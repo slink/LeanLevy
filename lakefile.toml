@@ -12,6 +12,7 @@ root = "Main"
 [[require]]
 name = "mathlib4"
 git = "https://github.com/leanprover-community/mathlib4"
+rev = "1f165a51dee3b8cf9dbd45716c0b7fe05fa6bf00"
 
 [[require]]
 name = "repl"
