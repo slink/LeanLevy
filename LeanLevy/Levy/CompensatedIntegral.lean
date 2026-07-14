@@ -24,6 +24,8 @@ which appears in the Lévy-Khintchine representation of infinitely divisible dis
 * `ProbabilityTheory.norm_levyCompensatedIntegrand_le` — pointwise norm bound in terms of `min(1, x²)`.
 * `ProbabilityTheory.measurable_levyCompensatedIntegrand` — measurability in `x` for fixed `ξ`.
 * `ProbabilityTheory.integrable_levyCompensatedIntegrand` — Bochner integrability under a Lévy measure.
+* `ProbabilityTheory.integral_levyCompensatedIntegrand_eq_small_add_large` — the integral against a
+  Lévy measure splits at radius 1 into the compensated small-jump and uncompensated large-jump parts.
 -/
 
 open MeasureTheory Complex ENNReal Set
