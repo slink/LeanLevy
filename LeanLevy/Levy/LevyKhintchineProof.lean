@@ -159,7 +159,7 @@ private theorem charFun_half_eq_zero_of_charFun_eq_zero
   rw [← norm_eq_zero]
   suffices hle : ∀ n : ℕ, 0 < n → ‖charFun μ (ξ₀ / 2)‖ ≤ (3 / 4 : ℝ) ^ n by
     apply le_antisymm _ (norm_nonneg _)
-    by_contra hc; push_neg at hc
+    by_contra hc; push Not at hc
     have htend : Tendsto (fun n : ℕ => (3 / 4 : ℝ) ^ n) atTop (nhds 0) :=
       tendsto_pow_atTop_nhds_zero_of_lt_one (by positivity) (by norm_num)
     have hev := htend.eventually (Iio_mem_nhds hc)
@@ -507,17 +507,17 @@ theorem cnd_integral_levyCompensatedIntegrand {ν : Measure ℝ} (hν : IsLevyMe
     fun i j => (integrable_levyCompensatedIntegrand hν _).const_mul _
   have hG_int : Integrable (fun x => ∑ i, ∑ j, starRingEnd ℂ (c i) * c j *
       levyCompensatedIntegrand (ξ i - ξ j) x) ν :=
-    integrable_finset_sum Finset.univ fun i _ =>
-      integrable_finset_sum Finset.univ fun j _ => hint i j
+    integrable_finsetSum Finset.univ fun i _ =>
+      integrable_finsetSum Finset.univ fun j _ => hint i j
   -- Pull the finite double sum through the integral (no Fubini).
   have key : (∫ x, ∑ i, ∑ j, starRingEnd ℂ (c i) * c j *
       levyCompensatedIntegrand (ξ i - ξ j) x ∂ν) =
       ∑ i, ∑ j, starRingEnd ℂ (c i) * c j *
         ∫ x, levyCompensatedIntegrand (ξ i - ξ j) x ∂ν := by
-    rw [integral_finset_sum Finset.univ
-      fun i _ => integrable_finset_sum Finset.univ fun j _ => hint i j]
+    rw [integral_finsetSum Finset.univ
+      fun i _ => integrable_finsetSum Finset.univ fun j _ => hint i j]
     refine Finset.sum_congr rfl fun i _ => ?_
-    rw [integral_finset_sum Finset.univ fun j _ => hint i j]
+    rw [integral_finsetSum Finset.univ fun j _ => hint i j]
     refine Finset.sum_congr rfl fun j _ => ?_
     exact integral_const_mul _ _
   show 0 ≤ (∑ i, ∑ j, starRingEnd ℂ (c i) * c j *
@@ -767,9 +767,9 @@ theorem IsInfinitelyDivisible.isConditionallyNegativeDefinite_log
       (nhds (∑ i : Fin n, ∑ j : Fin n,
         starRingEnd ℂ (c i) * c j * (-ψ (ξ i - ξ j))).re) := by
     apply Complex.continuous_re.continuousAt.tendsto.comp
-    apply tendsto_finset_sum
+    apply tendsto_finsetSum
     intro i _
-    apply tendsto_finset_sum
+    apply tendsto_finsetSum
     intro j _
     apply Filter.Tendsto.const_mul
     exact tendsto_mul_one_sub_exp_div (ψ (ξ i - ξ j))
@@ -1194,7 +1194,7 @@ private theorem exp_pd_kernel
         (1 + ↑t / (↑N : ℂ) * M i j) ^ N)
       Filter.atTop
       (nhds (∑ i : Fin n, ∑ j : Fin n, starRingEnd ℂ (c i) * c j * exp (↑t * M i j))) :=
-    tendsto_finset_sum _ fun i _ => tendsto_finset_sum _ fun j _ => hlim i j
+    tendsto_finsetSum _ fun i _ => tendsto_finsetSum _ fun j _ => hlim i j
   -- Step 5: limit of nonneg is nonneg
   exact ge_of_tendsto hsum_lim (by filter_upwards [hpow_pd] with N hN; exact hN c)
 
@@ -1427,18 +1427,17 @@ private lemma abs_sub_sin_le_sq_div_two {x : ℝ} (hx : |x| ≤ 1) :
     rcases eq_or_lt_of_le hx0 with rfl | hx_pos
     · simp
     · rw [abs_of_nonneg (sub_nonneg.mpr (Real.sin_le hx0))]
-      have h1 : x - Real.sin x < x ^ 3 / 4 := by linarith [Real.sin_gt_sub_cube hx_pos hx1]
-      nlinarith [sq_nonneg x]
+      nlinarith [Real.sin_gt_sub_cube hx_pos,
+        mul_nonneg (show (0 : ℝ) ≤ 3 - x by linarith) (sq_nonneg x)]
   · -- x < 0: use sin(-x) = -sin x and (-x) ∈ (0, 1]
-    push_neg at hx0
+    push Not at hx0
     have hmx_pos : 0 < -x := neg_pos.mpr hx0
     have hmx1 : -x ≤ 1 := by linarith [show |x| = -x from abs_of_neg hx0]
     rw [show x - Real.sin x = -((-x) - Real.sin (-x)) from by simp [Real.sin_neg]; ring,
         abs_neg,
         abs_of_nonneg (sub_nonneg.mpr (Real.sin_le (le_of_lt hmx_pos)))]
-    have h1 : -x - Real.sin (-x) < (-x) ^ 3 / 4 := by
-      linarith [Real.sin_gt_sub_cube hmx_pos hmx1]
-    nlinarith [sq_nonneg x]
+    nlinarith [Real.sin_gt_sub_cube hmx_pos, sq_nonneg x,
+      mul_nonneg (show (0 : ℝ) ≤ 3 - (-x) by linarith) (sq_nonneg (-x))]
 
 /-! ### Sinc identity and two-sided quadratic bounds
 
@@ -1720,7 +1719,7 @@ private lemma scaled_mass_bound_real (ε : ℝ) (hε : 0 < ε) :
         _ = 2 * ‖S.exponent ξ‖ := by field_simp [ne_of_gt t.prop]
         _ ≤ 2 * M := by linarith
     · -- Large regime: t⁻¹ ≤ ‖ψ(ξ)‖, use (1-exp).re ≤ 2
-      push_neg at h
+      push Not at h
       have hψ_pos : (0 : ℝ) < ‖S.exponent ξ‖ := by
         rcases ne_or_eq (S.exponent ξ) 0 with hne | h0
         · exact norm_pos_iff.mpr hne
@@ -1735,7 +1734,6 @@ private lemma scaled_mass_bound_real (ε : ℝ) (hε : 0 < ε) :
         _ = 2 * M := by ring
   -- Use C = 4*M + 1 as the uniform bound
   refine ⟨⟨4 * M + 1, by positivity⟩, fun t => ?_⟩
-  simp only [NNReal.coe_mk]
   set μ := (S.measure t : Measure ℝ)
   haveI : IsProbabilityMeasure μ := inferInstance
   -- The integrand 1-cos(ξ*x) is nonneg and bounded
@@ -1912,7 +1910,7 @@ private lemma scaled_mass_bound_real_with_max (ε : ℝ) (hε : 0 < ε)
               mul_le_mul_of_nonneg_left h_re (le_of_lt (inv_pos.mpr t.prop))
         _ = 2 * ‖S.exponent ξ‖ := by field_simp [ne_of_gt t.prop]
         _ ≤ 2 * M := by linarith
-    · push_neg at h
+    · push Not at h
       have hψ_pos : (0 : ℝ) < ‖S.exponent ξ‖ := by
         rcases ne_or_eq (S.exponent ξ) 0 with hne | h0
         · exact norm_pos_iff.mpr hne
@@ -2109,13 +2107,13 @@ lemma exists_atomFree_radius (ν : Measure ℝ) [IsFiniteMeasure ν] {a b : ℝ}
     countable_meas_level_set_pos continuous_abs.measurable
   -- A countable set has Lebesgue measure zero, so removing it preserves the volume of `Ioc a b`.
   have aux : volume (Set.Ioc a b \ {t : ℝ | 0 < ν {x : ℝ | |x| = t}}) = volume (Set.Ioc a b) :=
-    measure_diff_null (key.measure_zero volume)
+    measure_sdiff_null (key.measure_zero volume)
   have len_pos : 0 < volume (Set.Ioc a b) := by
     rw [Real.volume_Ioc]; simp only [ENNReal.ofReal_pos, sub_pos]; exact hab
   rw [← aux] at len_pos
   obtain ⟨r, hr⟩ := nonempty_of_measure_ne_zero len_pos.ne'
   refine ⟨r, hr.1, ?_⟩
-  exact le_antisymm (not_lt.mp hr.2) (zero_le _)
+  exact le_antisymm (not_lt.mp hr.2) (zero_le)
 
 /-! ### 3.2d — Atom-free radius selection for (possibly infinite) Lévy measures
 
@@ -2277,7 +2275,7 @@ private lemma second_moment_le_scaled_re (t : {t : ℝ // 0 < t}) :
     (Integrable.of_bound
       ((continuous_const.sub Real.continuous_cos).aestronglyMeasurable)
       2 (ae_of_all _ fun x => by
-        simp only [Real.norm_eq_abs, abs_of_nonneg (sub_nonneg.mpr (Real.cos_le_one _))]
+        simp only [Real.norm_eq_abs, Pi.sub_apply, abs_of_nonneg (sub_nonneg.mpr (Real.cos_le_one x))]
         linarith [Real.neg_one_le_cos x])).integrableOn
   calc 2 / Real.pi ^ 2 * ∫ x in smallSet, x ^ 2 ∂(S.measure t : Measure ℝ)
       = ∫ x in smallSet, 2 / Real.pi ^ 2 * x ^ 2 ∂(S.measure t : Measure ℝ) :=
@@ -2289,7 +2287,7 @@ private lemma second_moment_le_scaled_re (t : {t : ℝ // 0 < t}) :
           (Integrable.of_bound
             ((continuous_const.sub Real.continuous_cos).aestronglyMeasurable)
             2 (ae_of_all _ fun x => by
-              simp only [Real.norm_eq_abs, abs_of_nonneg (sub_nonneg.mpr (Real.cos_le_one _))]
+              simp only [Real.norm_eq_abs, abs_of_nonneg (sub_nonneg.mpr (Real.cos_le_one x))]
               linarith [Real.neg_one_le_cos x]))
           (ae_of_all _ fun x => sub_nonneg.mpr (Real.cos_le_one _))
 
@@ -2745,7 +2743,7 @@ theorem exists_levyMeasure :
         filter_upwards [hmem] with y hy
         rw [hf_zero y hy, zero_div]
       exact continuousAt_const.congr heq
-    · push_neg at hx₀
+    · push Not at hx₀
       have hx0_ne : x₀ ≠ 0 := by rintro rfl; rw [abs_zero] at hx₀; linarith
       have hden_ne : min 1 (x₀ ^ 2) ≠ 0 :=
         ne_of_gt (min_one_sq_pos_of_ne_zero hx0_ne)
@@ -2757,7 +2755,7 @@ theorem exists_levyMeasure :
     have hden_r_pos : 0 < min 1 (r ^ 2) := lt_min one_pos (by positivity)
     by_cases hx : |x| < r
     · rw [hf_zero x hx, zero_div, abs_zero]; positivity
-    · push_neg at hx
+    · push Not at hx
       have hxr2 : r ^ 2 ≤ x ^ 2 := by nlinarith [sq_abs x, hx, hr_pos.le, abs_nonneg x]
       have hmono : min 1 (r ^ 2) ≤ min 1 (x ^ 2) := min_le_min le_rfl hxr2
       have hden_x_pos : 0 < min 1 (x ^ 2) := lt_of_lt_of_le hden_r_pos hmono
@@ -2775,7 +2773,7 @@ theorem exists_levyMeasure :
     rw [hG_apply x]
     by_cases hx : |x| < r
     · rw [hf_zero x hx, zero_div, zero_mul]
-    · push_neg at hx
+    · push Not at hx
       have hx0 : x ≠ 0 := by rintro rfl; rw [abs_zero] at hx; linarith
       have hden_ne : min 1 (x ^ 2) ≠ 0 :=
         ne_of_gt (min_one_sq_pos_of_ne_zero hx0)
@@ -2938,7 +2936,7 @@ lemma drift_limit
             (fun x _ => show ‖Real.sin x‖ ≤ 1 by
               simp only [Real.norm_eq_abs]
               exact abs_le.mpr ⟨by linarith [Real.neg_one_le_sin x], Real.sin_le_one x⟩)
-        simpa [one_mul] using h
+        simpa [one_mul, measureReal_def] using h
       rw [abs_mul, abs_of_pos (inv_pos.mpr t_pos)]
       calc (t_seq n).val⁻¹ * |∫ x in largeSet r, Real.sin x ∂(S.measure (t_seq n) : Measure ℝ)|
           ≤ (t_seq n).val⁻¹ * ((S.measure (t_seq n) : Measure ℝ) (largeSet r)).toReal := by
@@ -2953,7 +2951,7 @@ lemma drift_limit
     have hdom : ∫ x in {x | |x| < r}, x ^ 2 ∂(S.measure (t_seq n) : Measure ℝ) ≤
         ∫ x in smallSet, x ^ 2 ∂(S.measure (t_seq n) : Measure ℝ) :=
       setIntegral_mono_set hint_sq_small (ae_of_all _ fun x => sq_nonneg x)
-        (HasSubset.Subset.eventuallyLE hsubset)
+        (LE.le.eventuallyLE hsubset)
     -- Bound |t⁻¹∫_{|x|<r} (x - sin x)|: |x - sin x| ≤ x²/2 on {|x|<r}, then dominate by smallSet.
     have hS : |(t_seq n).val⁻¹ *
         ∫ x in {x | |x| < r}, (x - Real.sin x) ∂(S.measure (t_seq n) : Measure ℝ)| ≤ C₂ := by
@@ -3200,7 +3198,7 @@ private lemma largeUpperBCF_tendsto_indicator (ρ : ℝ) (hρ : 0 < ρ) (x : ℝ
   · rw [Set.indicator_of_mem (show x ∈ {y | ρ ≤ |y|} from hx)]
     refine tendsto_atTop_of_eventually_const (i₀ := 0) (fun n _ => ?_)
     exact largeUpperBCF_eq_one ρ hρ n hx
-  · push_neg at hx
+  · push Not at hx
     rw [Set.indicator_of_notMem (show x ∉ {y | ρ ≤ |y|} from not_le.mpr hx)]
     have h_pos : 0 < ρ - |x| := by linarith
     obtain ⟨N, hN⟩ := exists_nat_gt (ρ/(ρ - |x|))
@@ -3394,7 +3392,7 @@ private lemma largeUpperMulBCF_tendsto_indicator
     by_cases hx : ρ ≤ |x|
     · rw [Set.indicator_of_mem (show x ∈ {y : ℝ | ρ ≤ |y|} from hx),
           Set.indicator_of_mem (show x ∈ largeSet ρ from hx), one_mul]
-    · push_neg at hx
+    · push Not at hx
       rw [Set.indicator_of_notMem (show x ∉ {y : ℝ | ρ ≤ |y|} from not_le.mpr hx),
           Set.indicator_of_notMem (show x ∉ largeSet ρ from not_le.mpr hx), zero_mul]
   rw [← h_eq]
@@ -3415,13 +3413,13 @@ private lemma largeUpperMulBCF_sub_indicator_abs_le
         largeUpperBCF_eq_one ρ hρ n hx, one_mul]
     rw [show g x - g x = 0 from sub_self (g x), abs_zero]
     exact mul_nonneg hM_nn (largeAnnulusBCF_nonneg ρ hρ n x)
-  · push_neg at hx
+  · push Not at hx
     rw [Set.indicator_of_notMem (show x ∉ largeSet ρ from not_le.mpr hx), sub_zero,
         abs_mul, abs_of_nonneg (largeUpperBCF_nonneg ρ hρ n x)]
     by_cases hx' : |x| ≤ ρ - ρ/(n + 1 : ℝ)
     · rw [largeUpperBCF_eq_zero ρ hρ n hx', zero_mul]
       exact mul_nonneg hM_nn (largeAnnulusBCF_nonneg ρ hρ n x)
-    · push_neg at hx'
+    · push Not at hx'
       have h_in_annulus : |(|x| - ρ)| ≤ ρ/(n + 1 : ℝ) := by
         rw [abs_of_nonpos (by linarith : |x| - ρ ≤ 0), neg_sub]; linarith
       rw [largeAnnulusBCF_eq_one ρ hρ n h_in_annulus, mul_one]
@@ -3801,7 +3799,7 @@ private lemma scaled_band_integral_tendsto
   have h_sub : largeSet ρ ⊆ largeSet δ := largeSet_antitone (le_of_lt hδρ)
   have h_band_eq : {x | δ ≤ |x| ∧ |x| < ρ} = largeSet δ \ largeSet ρ := by
     ext x
-    simp only [Set.mem_setOf_eq, Set.mem_diff, mem_largeSet, not_le]
+    simp only [Set.mem_setOf_eq, Set.mem_sdiff, mem_largeSet, not_le]
   -- On the band, `clamp x = x`, hence `g' = g`.
   have h_clamp_eq : ∀ x ∈ {x | δ ≤ |x| ∧ |x| < ρ}, clamp x = x := by
     intro x hx
@@ -3820,7 +3818,7 @@ private lemma scaled_band_integral_tendsto
         (fun x => by simpa [Real.norm_eq_abs] using hg'_bnd x)
     have h_diff : ∫ x in largeSet δ \ largeSet ρ, g' x ∂m =
         (∫ x in largeSet δ, g' x ∂m) - ∫ x in largeSet ρ, g' x ∂m :=
-      integral_diff (measurableSet_largeSet ρ) hg'_intOn h_sub
+      setIntegral_sdiff (measurableSet_largeSet ρ) hg'_intOn h_sub
     have h_congr : ∫ x in {x | δ ≤ |x| ∧ |x| < ρ}, g x ∂m =
         ∫ x in {x | δ ≤ |x| ∧ |x| < ρ}, g' x ∂m := by
       refine (setIntegral_congr_fun ?_ (fun x hx => ?_)).symm
@@ -3986,7 +3984,7 @@ private lemma smallBall_second_moment_nu_le
       rw [h_band, h_ball]
       exact setIntegral_mono_set hg_int_ball
         (ae_restrict_of_forall_mem h_meas_ball (fun x _ => hg_nn x))
-        (HasSubset.Subset.eventuallyLE h_band_sub)
+        (LE.le.eventuallyLE h_band_sub)
     exact le_of_tendsto_of_tendsto' h_band_lim hσ h_compare
   -- Step 3: `m → ∞`. The bands exhaust the punctured ball; `x²·1_{band m} → x²·1_{ball∖{0}}`
   -- pointwise off `{0}`, dominated by `r²`, so the band integrals tend to the ball integral.
@@ -4438,7 +4436,7 @@ private lemma scaled_smallBall_remainder_tendsto
     refine setIntegral_mono_set (sq_integrableOn_ball_levy hν r)
       (ae_restrict_of_forall_mem
         ((isOpen_lt continuous_abs continuous_const).measurableSet) (fun x _ => sq_nonneg x))
-      (HasSubset.Subset.eventuallyLE (fun x hx => lt_trans hx (hδ_ltr m)))
+      (LE.le.eventuallyLE (fun x hx => lt_trans hx (hδ_ltr m)))
   -- Use the `Metric` characterisation of convergence in `ℂ`.
   rw [Metric.tendsto_atTop]
   intro ε hε
@@ -4520,7 +4518,7 @@ private lemma scaled_smallBall_remainder_tendsto
                     (ae_restrict_of_forall_mem
                       ((isOpen_lt continuous_abs continuous_const).measurableSet)
                       (fun x _ => sq_nonneg x))
-                    (HasSubset.Subset.eventuallyLE (fun x hx => lt_trans hx (hδ_ltr m)))
+                    (LE.le.eventuallyLE (fun x hx => lt_trans hx (hδ_ltr m)))
               _ ≤ C := hC k
     -- ν-side inner ball.
     have hν_norm : ‖iν‖ ≤ (2 / 9 : ℝ) * |ξ| ^ 3 * δ m * Bν := by
@@ -4707,7 +4705,7 @@ theorem exists_drift_variance_jumpMeasure_along_seq :
     have hdom : ∫ x in {x | |x| < r}, x ^ 2 ∂(S.measure (t_seq_ν (φ₁ n)) : Measure ℝ) ≤
         ∫ x in smallSet, x ^ 2 ∂(S.measure (t_seq_ν (φ₁ n)) : Measure ℝ) :=
       setIntegral_mono_set hint_sq_small (ae_of_all _ fun x => sq_nonneg x)
-        (HasSubset.Subset.eventuallyLE hsubset)
+        (LE.le.eventuallyLE hsubset)
     calc a n
         ≤ (t_seq_ν (φ₁ n)).val⁻¹ *
             ∫ x in smallSet, x ^ 2 ∂(S.measure (t_seq_ν (φ₁ n)) : Measure ℝ) :=
