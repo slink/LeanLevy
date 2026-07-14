@@ -265,8 +265,8 @@ private lemma hasDerivAt_survivalPoly (R : ℝ) (n : ℕ) (s : ℝ) :
         ((n + 1 : ℕ) * (R * s) ^ (n + 1 - 1) * (R * 1)) s :=
       ((hasDerivAt_id s).const_mul R).pow (n + 1)
     have hg := hE.mul (hP.div_const ((n + 1).factorial : ℝ))
-    convert ih.add hg using 1
-    rw [arrivalDensityReal, arrivalDensityReal, Nat.factorial_succ]
+    refine (ih.add hg).congr_deriv ?_
+    simp only [arrivalDensityReal, Nat.factorial_succ]
     push_cast
     field_simp
     ring
@@ -277,7 +277,9 @@ private lemma integral_arrivalDensityReal {R : ℝ} (n : ℕ) {t : ℝ} :
   have hderiv : ∀ s ∈ Set.uIcc (0 : ℝ) t,
       HasDerivAt (fun s => -survivalPoly R n s) (arrivalDensityReal R n s) s := by
     intro s _
-    simpa using (hasDerivAt_survivalPoly R n s).neg
+    have h := (hasDerivAt_survivalPoly R n s).neg
+    rw [neg_neg] at h
+    exact h
   rw [intervalIntegral.integral_eq_sub_of_hasDerivAt hderiv
     ((continuous_arrivalDensityReal R n).intervalIntegrable _ _)]
   have h0 : survivalPoly R n 0 = 1 := by
@@ -368,8 +370,8 @@ theorem map_jumpCount_arrival [IsProbabilityMeasure μ]
   | succ m =>
     have hsub : {ω | jc ω ≤ m} ⊆ {ω | jc ω ≤ m + 1} := fun ω h => le_trans h (Nat.le_succ m)
     rw [show {ω | jc ω = m + 1} = {ω | jc ω ≤ m + 1} \ {ω | jc ω ≤ m} from by
-        ext ω; simp only [Set.mem_setOf_eq, Set.mem_diff]; omega,
-      measure_diff hsub (hmeas_le m).nullMeasurableSet (measure_ne_top _ _),
+        ext ω; simp only [Set.mem_setOf_eq, Set.mem_sdiff]; omega,
+      measure_sdiff hsub (hmeas_le m).nullMeasurableSet (measure_ne_top _ _),
       hle (m + 1), hle m, ← ENNReal.ofReal_sub _ (survivalPoly_nonneg hR.le ht m)]
     congr 1
     simp only [survivalPoly, Finset.sum_range_succ, NNReal.coe_mul]
@@ -451,6 +453,9 @@ private lemma charFun_finset_sum_marks (hd : IsCompoundPoissonDriver τ Y r ν' 
   rw [Finset.prod_congr rfl fun i _ => by rw [(hd.law_mark (i : ℕ)).map_eq]]
   rw [Finset.prod_const, Finset.card_univ, Fintype.card_fin]
 
+-- This large conditioning proof (independence factorization + Poisson generating series) became
+-- slower after the mathlib bump; the elaboration budget is raised to accommodate it.
+set_option maxHeartbeats 800000 in
 /-- **The characteristic function of the compound Poisson marginal.** At each fixed time `t ≥ 0`,
 the compound-Poisson-with-drift random variable `Xₜ = b·t + ∑_{n ≤ N(t)} Yₙ` has characteristic
 function
