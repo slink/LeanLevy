@@ -41,6 +41,10 @@ evaluations.
   finite pairwise-disjoint family of finite-mass sets are mutually independent.
 * `ProbabilityTheory.tsum_measure_prmPiece_inter` — the per-piece intensities of a measurable set sum
   to its total mass, `∑ₖ m (piece k ∩ A) = m A`.
+* `ProbabilityTheory.lintegral_poissonRandomMeasure` — the Lebesgue integral of a measurable `g`
+  against the random measure is the sum of `g` over the realized points.
+* `ProbabilityTheory.lintegral_lintegral_poissonRandomMeasure` — **Campbell's formula**: the mean of
+  `∫⁻ g dN` over `ω` is `∫⁻ g dm`.
 
 The evaluation laws are read off the thinning and within-piece factorization of
 `PoissonPointFamily` by superposing the independent pieces: the count in `A` is the sum of the
@@ -153,8 +157,9 @@ private lemma lintegral_thinnedCount [IsProbabilityMeasure μ] (hd : IsPoissonPo
     ENNReal.coe_toNNReal (lt_of_le_of_lt (measure_mono Set.inter_subset_left)
       measure_prmPiece_lt_top).ne]
 
-/-- The total count in `A` has `ℝ≥0∞`-mean `m A`. -/
-private lemma lintegral_poissonRandomMeasure_apply [IsProbabilityMeasure μ]
+/-- **Evaluation mean of the Poisson random measure.** The total count in a measurable set `A` has
+`ℝ≥0∞`-mean equal to the intensity `m A` (both sides may be `⊤`). -/
+theorem lintegral_poissonRandomMeasure_apply [IsProbabilityMeasure μ]
     (hd : IsPoissonPointFamily K X m μ) (hA : MeasurableSet A) :
     ∫⁻ ω, poissonRandomMeasure K X ω A ∂μ = m A := by
   simp_rw [poissonRandomMeasure_apply hA]
@@ -947,5 +952,68 @@ theorem iIndepFun_poissonRandomMeasure_apply {ι : Type} [Fintype ι] [IsProbabi
   refine (iIndepFun_congr fun i => ?_).mp hcomp
   filter_upwards [ae_poissonRandomMeasure_apply_lt_top hd (hA i) (hfin i)] with ω hω
   rw [Function.comp_apply, ENNReal.ofReal_toReal hω.ne]
+
+/-! ### Lebesgue integration against the random measure
+
+The Lebesgue integral of a measurable `g : E → ℝ≥0∞` against `poissonRandomMeasure K X ω` collapses
+to the sum of `g` over the realized points, and **Campbell's formula** identifies its mean over `ω`
+with `∫⁻ g dm`. The mean is proved by monotone simple-function approximation, reducing to the
+evaluation mean `lintegral_poissonRandomMeasure_apply` on each fiber of an approximant. -/
+
+omit [SigmaFinite m] [Nonempty E] [MeasurableSpace Ω] in
+/-- **Lebesgue integral against the random measure.** The integral of a measurable `g` against the
+Poisson random measure is the sum of `g` over the realized points `X k n ω` (for `n < K k ω`). -/
+theorem lintegral_poissonRandomMeasure {g : E → ℝ≥0∞} (hg : Measurable g) (ω : Ω) :
+    ∫⁻ x, g x ∂(poissonRandomMeasure K X ω)
+      = ∑' k, ∑ n ∈ Finset.range (K k ω), g (X k n ω) := by
+  rw [poissonRandomMeasure, lintegral_sum_measure]
+  refine tsum_congr fun k => ?_
+  rw [lintegral_sum_measure]
+  have hterm : ∀ n, ∫⁻ x, g x ∂(if n < K k ω then Measure.dirac (X k n ω) else 0)
+      = if n < K k ω then g (X k n ω) else 0 := fun n => by
+    by_cases h : n < K k ω
+    · rw [if_pos h, if_pos h, lintegral_dirac' _ hg]
+    · rw [if_neg h, if_neg h, lintegral_zero_measure]
+  simp_rw [hterm]
+  rw [tsum_eq_sum (s := Finset.range (K k ω))
+    fun n hn => if_neg (by simpa [Finset.mem_range] using hn)]
+  exact Finset.sum_congr rfl fun n hn => if_pos (by simpa [Finset.mem_range] using hn)
+
+omit [SigmaFinite m] [Nonempty E] in
+/-- The integral of a simple function against the random measure is a measurable function of `ω`, as
+a finite sum of set evaluations weighted by the values of the simple function. -/
+private lemma measurable_simpleFunc_lintegral_poissonRandomMeasure (hK : ∀ k, Measurable (K k))
+    (hX : ∀ k n, Measurable (X k n)) (s : SimpleFunc E ℝ≥0∞) :
+    Measurable fun ω => s.lintegral (poissonRandomMeasure K X ω) := by
+  simp only [SimpleFunc.lintegral]
+  exact Finset.measurable_sum _ fun x _ => measurable_const.mul
+    (measurable_poissonRandomMeasure_apply hK hX (s.measurableSet_fiber x))
+
+/-- Campbell's formula for a simple function: the mean of its integral against the random measure is
+its integral against the intensity. Reduces to the evaluation mean on each fiber. -/
+private lemma lintegral_simpleFunc_lintegral_poissonRandomMeasure [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X m μ) (s : SimpleFunc E ℝ≥0∞) :
+    ∫⁻ ω, s.lintegral (poissonRandomMeasure K X ω) ∂μ = s.lintegral m := by
+  simp only [SimpleFunc.lintegral]
+  rw [lintegral_finsetSum s.range
+    (f := fun x ω => x * poissonRandomMeasure K X ω (s ⁻¹' {x}))
+    fun x _ => measurable_const.mul (measurable_poissonRandomMeasure_apply hd.measurable_count
+      hd.measurable_point (s.measurableSet_fiber x))]
+  refine Finset.sum_congr rfl fun x _ => ?_
+  rw [lintegral_const_mul _ (measurable_poissonRandomMeasure_apply hd.measurable_count
+      hd.measurable_point (s.measurableSet_fiber x)),
+    lintegral_poissonRandomMeasure_apply hd (s.measurableSet_fiber x)]
+
+/-- **Campbell's formula** (Lebesgue form): the mean of `∫⁻ g dN` over `ω` is `∫⁻ g dm`. -/
+theorem lintegral_lintegral_poissonRandomMeasure [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X m μ) {g : E → ℝ≥0∞} (hg : Measurable g) :
+    ∫⁻ ω, ∫⁻ x, g x ∂(poissonRandomMeasure K X ω) ∂μ = ∫⁻ x, g x ∂m := by
+  simp_rw [lintegral_eq_iSup_eapprox_lintegral hg]
+  rw [lintegral_iSup
+    (fun n => measurable_simpleFunc_lintegral_poissonRandomMeasure hd.measurable_count
+      hd.measurable_point (SimpleFunc.eapprox g n))
+    (fun i j h ω => SimpleFunc.lintegral_mono (SimpleFunc.monotone_eapprox g h) le_rfl)]
+  exact iSup_congr fun n =>
+    lintegral_simpleFunc_lintegral_poissonRandomMeasure hd (SimpleFunc.eapprox g n)
 
 end ProbabilityTheory
