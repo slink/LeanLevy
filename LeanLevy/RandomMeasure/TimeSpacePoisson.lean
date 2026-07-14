@@ -68,6 +68,10 @@ window `(s, t]`; the running count `poissonTimeCount K X A t` is its value on th
 * `ProbabilityTheory.charFun_map_levyCompensatedSmallJump` — **the law of the compensated small-jump
   integral**: its characteristic function is `exp (t · ∫_{(-1,1)} (e^{ixξ} − 1 − ixξ) dν)`, the
   small-jump factor of the Lévy–Khintchine exponent.
+* `ProbabilityTheory.charFun_map_levyLargeJumpSum_sub`,
+  `ProbabilityTheory.charFun_map_levyCompensatedSmallJump_sub` — **the increment laws over a time band
+  `(s, t]`**: the large-jump increment is compound Poisson and the compensated small-jump increment
+  carries the small-jump factor, both at rate `(t − s)`.
 
 Every statement is read off the abstract superposition and disjoint-family independence laws of
 `poissonRandomMeasure` on `ℝ × E`; the band mass factorizes as `volume (Ioc s t) * m A` through
@@ -298,6 +302,18 @@ theorem levyCompensatedSmallJump_sub [IsProbabilityMeasure μ]
   simp only [levyCompensatedSmallJump]
   rw [htoLp, compensatedPoissonIntegral_add, add_sub_cancel_left]
 
+/-- The compensated small-jump integral vanishes a.e. at time zero: its `(0, 0]` band is empty. -/
+theorem levyCompensatedSmallJump_zero_ae_eq [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν) :
+    (fun ω => levyCompensatedSmallJump hd hν 0 ω) =ᵐ[μ] fun _ => 0 := by
+  have hz : levyCompensatedSmallJump hd hν 0 = 0 := by
+    rw [← norm_eq_zero, Lp.norm_def, levyCompensatedSmallJump,
+      eLpNorm_compensatedPoissonIntegral, eLpNorm_congr_ae (MemLp.coeFn_toLp _),
+      Set.Ioc_self, Set.empty_prod, Set.indicator_empty]
+    simp
+  rw [hz]
+  exact Lp.coeFn_zero ℝ 2 μ
+
 /-! ### The large-jump sum process
 
 The **large-jump sum** `levyLargeJumpSum` is the sum of the jump sizes of the realized marks in the
@@ -307,15 +323,15 @@ agrees a.s. with the Bochner integral of the jump size against the random measur
 splits into positive and negative Lebesgue parts. Under a first moment on the large jumps its mean is
 `t · ∫_{|x|≥1} x dν` (Campbell's formula). -/
 
-/-- The large-jump band `(0, t] × {x | 1 ≤ |x|}` is measurable. -/
-private lemma measurableSet_largeBand (t : ℝ) :
-    MeasurableSet (Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}) :=
+/-- The large-jump band `(s, t] × {x | 1 ≤ |x|}` is measurable. -/
+private lemma measurableSet_largeBand (s t : ℝ) :
+    MeasurableSet (Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}) :=
   measurableSet_Ioc.prod (measurableSet_le measurable_const continuous_abs.measurable)
 
-/-- The band jump-size test function `1_{(0,t] × {|x|≥1}}(u, x) · x` is measurable. -/
-private lemma measurable_largeBandFun (t : ℝ) :
-    Measurable ((Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator fun p : ℝ × ℝ => p.2) :=
-  measurable_snd.indicator (measurableSet_largeBand t)
+/-- The band jump-size test function `1_{(s,t] × {|x|≥1}}(u, x) · x` is measurable. -/
+private lemma measurable_largeBandFun (s t : ℝ) :
+    Measurable ((Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator fun p : ℝ × ℝ => p.2) :=
+  measurable_snd.indicator (measurableSet_largeBand s t)
 
 /-- Integral of a measurable function against a per-piece Dirac sum: it collapses to the finite sum
 of the function over the realized points of the piece. -/
@@ -395,8 +411,8 @@ private lemma ae_lintegral_enorm_largeBand_lt_top [IsProbabilityMeasure μ]
   have hbandfin : (volume.prod ν) (Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}) < ⊤ :=
     volume_prod_Ioc_prod_lt_top (m := ν) (s := 0) (t := t)
       (hν.measure_setOf_abs_ge_lt_top one_pos)
-  filter_upwards [ae_finite_pieces_mem hd (measurableSet_largeBand t) hbandfin] with ω hω
-  rw [lintegral_poissonRandomMeasure (measurable_largeBandFun t).enorm ω,
+  filter_upwards [ae_finite_pieces_mem hd (measurableSet_largeBand 0 t) hbandfin] with ω hω
+  rw [lintegral_poissonRandomMeasure (measurable_largeBandFun 0 t).enorm ω,
     tsum_eq_sum (s := hω.toFinset) ?_]
   · exact ENNReal.sum_lt_top.mpr fun k _ => ENNReal.sum_lt_top.mpr fun n _ => enorm_lt_top
   · intro k hk
@@ -415,7 +431,15 @@ noncomputable def levyLargeJumpSum (K : ℕ → Ω → ℕ) (X : ℕ → ℕ →
 theorem measurable_levyLargeJumpSum (hK : ∀ k, Measurable (K k))
     (hX : ∀ k n, Measurable (X k n)) : Measurable (levyLargeJumpSum K X t) :=
   Measurable.tsum fun k =>
-    measurable_pieceSum (hK k) (fun n => hX k n) (measurable_largeBandFun t)
+    measurable_pieceSum (hK k) (fun n => hX k n) (measurable_largeBandFun 0 t)
+
+omit [MeasurableSpace Ω] in
+/-- The large-jump sum vanishes at time zero: the band `(0, 0] × {x | 1 ≤ |x|}` is empty. -/
+@[simp] theorem levyLargeJumpSum_zero (ω : Ω) : levyLargeJumpSum K X 0 ω = 0 := by
+  have hband : ((Set.Ioc (0 : ℝ) 0 ×ˢ {x : ℝ | 1 ≤ |x|}).indicator fun p : ℝ × ℝ => p.2)
+      = fun _ => 0 := by
+    rw [Set.Ioc_self, Set.empty_prod, Set.indicator_empty]
+  simp only [levyLargeJumpSum, hband, pieceSum, Finset.sum_const_zero, tsum_zero]
 
 /-- Almost surely, the large-jump sum is the Bochner integral of the jump size against the random
 measure over the band. -/
@@ -424,12 +448,12 @@ theorem levyLargeJumpSum_ae_eq_integral [IsProbabilityMeasure μ]
     {t : ℝ} (_ht : 0 ≤ t) :
     levyLargeJumpSum K X t =ᵐ[μ] fun ω =>
       ∫ p in Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}, p.2 ∂(poissonRandomMeasure K X ω) := by
-  have hbandmeas : MeasurableSet (Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}) := measurableSet_largeBand t
+  have hbandmeas : MeasurableSet (Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}) := measurableSet_largeBand 0 t
   filter_upwards [ae_lintegral_enorm_largeBand_lt_top hd hν (t := t)] with ω hω_fin
   have hInt : Integrable
       ((Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator fun p : ℝ × ℝ => p.2)
       (poissonRandomMeasure K X ω) :=
-    ⟨(measurable_largeBandFun t).aestronglyMeasurable, hω_fin⟩
+    ⟨(measurable_largeBandFun 0 t).aestronglyMeasurable, hω_fin⟩
   have hval : ∫ p, (Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator (fun p : ℝ × ℝ => p.2) p
         ∂(poissonRandomMeasure K X ω)
       = ∑' k, pieceSum K X
@@ -452,13 +476,13 @@ theorem levyLargeJumpSum_ae_eq_toReal_sub [IsProbabilityMeasure μ]
         (fun q => ENNReal.ofReal q.2) p ∂(poissonRandomMeasure K X ω)).toReal
       - (∫⁻ p, (Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator
         (fun q => ENNReal.ofReal (-q.2)) p ∂(poissonRandomMeasure K X ω)).toReal := by
-  have hbandmeas : MeasurableSet (Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}) := measurableSet_largeBand t
+  have hbandmeas : MeasurableSet (Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}) := measurableSet_largeBand 0 t
   filter_upwards [levyLargeJumpSum_ae_eq_integral hd hν ht,
     ae_lintegral_enorm_largeBand_lt_top hd hν (t := t)] with ω hω_int hω_fin
   have hInt : Integrable
       ((Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator fun p : ℝ × ℝ => p.2)
       (poissonRandomMeasure K X ω) :=
-    ⟨(measurable_largeBandFun t).aestronglyMeasurable, hω_fin⟩
+    ⟨(measurable_largeBandFun 0 t).aestronglyMeasurable, hω_fin⟩
   have hpos : ∀ p : ℝ × ℝ,
       ENNReal.ofReal ((Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator (fun q : ℝ × ℝ => q.2) p)
         = (Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator (fun q : ℝ × ℝ => ENNReal.ofReal q.2) p := by
@@ -485,9 +509,9 @@ theorem integral_levyLargeJumpSum [IsProbabilityMeasure μ]
     {t : ℝ} (ht : 0 ≤ t)
     (hx : Integrable (fun x => x) (ν.restrict {x : ℝ | 1 ≤ |x|})) :
     ∫ ω, levyLargeJumpSum K X t ω ∂μ = t * ∫ x in {x : ℝ | 1 ≤ |x|}, x ∂ν := by
-  have hbandmeas : MeasurableSet (Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}) := measurableSet_largeBand t
+  have hbandmeas : MeasurableSet (Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}) := measurableSet_largeBand 0 t
   set f := (Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator fun p : ℝ × ℝ => p.2 with hf_def
-  have hfmeas : Measurable f := measurable_largeBandFun t
+  have hfmeas : Measurable f := measurable_largeBandFun 0 t
   have hband_enorm : ∫⁻ p, ‖f p‖ₑ ∂(volume.prod ν)
       = ENNReal.ofReal t * ∫⁻ x in {x : ℝ | 1 ≤ |x|}, ‖x‖ₑ ∂ν := by
     have hcongr : (fun p : ℝ × ℝ => ‖f p‖ₑ)
@@ -729,40 +753,42 @@ private lemma charFun_partial_largeJumpSum [IsProbabilityMeasure μ]
 /-- Almost surely only finitely many pieces carry a realized point in the large-jump band, so the
 piece sums of the band test function have finite support. -/
 private lemma ae_finite_support_pieceSum_largeBand [IsProbabilityMeasure μ]
-    (hd : IsPoissonPointFamily K X (volume.prod ν) μ) (hν : IsLevyMeasure ν) {t : ℝ} :
+    (hd : IsPoissonPointFamily K X (volume.prod ν) μ) (hν : IsLevyMeasure ν) {s t : ℝ} :
     ∀ᵐ ω ∂μ, {k | pieceSum K X
-        ((Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator fun p => p.2) k ω ≠ 0}.Finite := by
-  have hbandfin : (volume.prod ν) (Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}) < ⊤ :=
-    volume_prod_Ioc_prod_lt_top (m := ν) (s := 0) (t := t)
+        ((Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator fun p => p.2) k ω ≠ 0}.Finite := by
+  have hbandfin : (volume.prod ν) (Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}) < ⊤ :=
+    volume_prod_Ioc_prod_lt_top (m := ν) (s := s) (t := t)
       (hν.measure_setOf_abs_ge_lt_top one_pos)
-  exact ae_finite_support_pieceSum hd (measurableSet_largeBand t) hbandfin
+  exact ae_finite_support_pieceSum hd (measurableSet_largeBand s t) hbandfin
     fun p hp => Set.indicator_of_notMem hp _
 
-/-- **The large-jump sum is compound Poisson:** its characteristic function is
-`exp (t · ∫_{|x|≥1} (e^{iξx} − 1) dν)`. -/
-theorem charFun_map_levyLargeJumpSum [IsProbabilityMeasure μ]
+/-- **The band large-jump sum is compound Poisson over `(s, t]`:** the characteristic function of the
+piece-sum series on the band `(s, t] × {x | 1 ≤ |x|}` is `exp ((t − s) · ∫_{|x|≥1} (e^{iξx} − 1) dν)`.
+This is the band-generic engine behind the running large-jump sum and its increments. -/
+private lemma charFun_map_bandJumpSum [IsProbabilityMeasure μ]
     (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν)
-    {t : ℝ} (ht : 0 ≤ t) (ξ : ℝ) :
-    charFun (μ.map (levyLargeJumpSum K X t)) ξ
-      = Complex.exp ((t : ℂ) *
+    {s t : ℝ} (hst : s ≤ t) (ξ : ℝ) :
+    charFun (μ.map (fun ω => ∑' k,
+        pieceSum K X ((Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator fun p => p.2) k ω)) ξ
+      = Complex.exp (((t - s : ℝ) : ℂ) *
           ∫ x in {x : ℝ | 1 ≤ |x|}, (Complex.exp (x * ξ * Complex.I) - 1) ∂ν) := by
-  have hbandmeas : MeasurableSet (Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}) := measurableSet_largeBand t
-  have hbandFnmeas : Measurable ((Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator fun p : ℝ × ℝ => p.2) :=
-    measurable_largeBandFun t
-  have hbandfin : (volume.prod ν) (Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}) < ⊤ :=
-    volume_prod_Ioc_prod_lt_top (m := ν) (s := 0) (t := t)
+  have hbandmeas : MeasurableSet (Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}) := measurableSet_largeBand s t
+  have hbandFnmeas : Measurable ((Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator fun p : ℝ × ℝ => p.2) :=
+    measurable_largeBandFun s t
+  have hbandfin : (volume.prod ν) (Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}) < ⊤ :=
+    volume_prod_Ioc_prod_lt_top (m := ν) (s := s) (t := t)
       (hν.measure_setOf_abs_ge_lt_top one_pos)
   have hgmeas : Measurable fun r : ℝ => Complex.exp (↑ξ * ↑r * Complex.I) :=
     Complex.measurable_exp.comp ((Complex.measurable_ofReal.const_mul (↑ξ)).mul_const Complex.I)
   have hgcont : Continuous fun r : ℝ => Complex.exp (↑ξ * ↑r * Complex.I) := by fun_prop
   -- The band exponential integrand, in indicator form and its norm bound.
   have hf'eq : (fun x : ℝ × ℝ =>
-        Complex.exp (↑ξ * ↑((Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator
+        Complex.exp (↑ξ * ↑((Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator
           (fun p : ℝ × ℝ => p.2) x) * Complex.I) - 1)
-      = (Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator
+      = (Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator
           fun q : ℝ × ℝ => Complex.exp (↑ξ * ↑q.2 * Complex.I) - 1 := by
     funext x
-    by_cases hx : x ∈ Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}
+    by_cases hx : x ∈ Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}
     · rw [Set.indicator_of_mem hx, Set.indicator_of_mem hx]
     · rw [Set.indicator_of_notMem hx, Set.indicator_of_notMem hx, Complex.ofReal_zero,
         mul_zero, zero_mul, Complex.exp_zero, sub_self]
@@ -779,74 +805,79 @@ theorem charFun_map_levyLargeJumpSum [IsProbabilityMeasure μ]
         Complex.I)).sub measurable_const
   have hband_intOn : IntegrableOn
       (fun q : ℝ × ℝ => Complex.exp (↑ξ * ↑q.2 * Complex.I) - 1)
-      (Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}) (volume.prod ν) :=
+      (Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}) (volume.prod ν) :=
     IntegrableOn.of_bound hbandfin hintegrand_meas.aestronglyMeasurable 2
       (Filter.Eventually.of_forall hbound2)
   have hf'_int : Integrable (fun x : ℝ × ℝ =>
-      Complex.exp (↑ξ * ↑((Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator
+      Complex.exp (↑ξ * ↑((Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator
         (fun p : ℝ × ℝ => p.2) x) * Complex.I) - 1) (volume.prod ν) := by
     rw [hf'eq]; exact (integrable_indicator_iff hbandmeas).mpr hband_intOn
   -- The piece-partition sum of the band-integral factors (HasSum of the per-piece exponents).
   have hFpiece_hassum : HasSum
       (fun k => ∫ x in prmPiece (volume.prod ν) k,
-        (Complex.exp (↑ξ * ↑((Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator
+        (Complex.exp (↑ξ * ↑((Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator
           (fun p : ℝ × ℝ => p.2) x) * Complex.I) - 1) ∂(volume.prod ν))
-      (∫ x, (Complex.exp (↑ξ * ↑((Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator
+      (∫ x, (Complex.exp (↑ξ * ↑((Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator
         (fun p : ℝ × ℝ => p.2) x) * Complex.I) - 1) ∂(volume.prod ν)) := by
     have h := hasSum_integral_iUnion (μ := volume.prod ν)
-      (f := fun x : ℝ × ℝ => Complex.exp (↑ξ * ↑((Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator
+      (f := fun x : ℝ × ℝ => Complex.exp (↑ξ * ↑((Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator
         (fun p : ℝ × ℝ => p.2) x) * Complex.I) - 1)
       (fun k => measurableSet_prmPiece (m := volume.prod ν))
       (pairwise_disjoint_prmPiece (m := volume.prod ν))
       (by rw [iUnion_prmPiece]; exact hf'_int.integrableOn)
     rwa [iUnion_prmPiece, setIntegral_univ] at h
   -- The band-integral equals the compound-Poisson exponent.
-  have hfinal : (∫ x, (Complex.exp (↑ξ * ↑((Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator
+  have hfinal : (∫ x, (Complex.exp (↑ξ * ↑((Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator
         (fun p : ℝ × ℝ => p.2) x) * Complex.I) - 1) ∂(volume.prod ν))
-      = (t : ℂ) * ∫ x in {x : ℝ | 1 ≤ |x|}, (Complex.exp (x * ξ * Complex.I) - 1) ∂ν := by
+      = ((t - s : ℝ) : ℂ) * ∫ x in {x : ℝ | 1 ≤ |x|}, (Complex.exp (x * ξ * Complex.I) - 1) ∂ν := by
     rw [hf'eq, integral_indicator hbandmeas,
       setIntegral_prod (fun z : ℝ × ℝ => Complex.exp (↑ξ * ↑z.2 * Complex.I) - 1) hband_intOn]
     dsimp only
-    rw [setIntegral_const, measureReal_def, Real.volume_Ioc, sub_zero, ENNReal.toReal_ofReal ht,
-      Complex.real_smul]
-    refine congrArg (fun z => (↑t : ℂ) * z) ?_
+    rw [setIntegral_const, measureReal_def, Real.volume_Ioc,
+      ENNReal.toReal_ofReal (sub_nonneg.mpr hst), Complex.real_smul]
+    refine congrArg (fun z => ((↑(t - s) : ℂ)) * z) ?_
     refine integral_congr_ae (Filter.Eventually.of_forall fun y => ?_)
     dsimp only
     rw [mul_comm (↑ξ : ℂ) (↑y : ℂ)]
-  -- Dominated convergence: partial sums of piece sums converge a.e. to the large-jump sum.
-  have hmeas_sum : Measurable (levyLargeJumpSum K X t) :=
-    measurable_levyLargeJumpSum hd.measurable_count hd.measurable_point
+  -- Dominated convergence: partial sums of piece sums converge a.e. to the band large-jump sum.
+  have hmeas_sum : Measurable fun ω =>
+      ∑' k, pieceSum K X ((Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator fun p => p.2) k ω :=
+    Measurable.tsum fun k =>
+      measurable_pieceSum (hd.measurable_count k) (hd.measurable_point k) hbandFnmeas
   have hFmeas : ∀ n, Measurable fun ω =>
       Complex.exp (↑ξ * ↑(∑ k ∈ Finset.range (n + 1),
-        pieceSum K X ((Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator fun p => p.2) k ω)
+        pieceSum K X ((Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator fun p => p.2) k ω)
         * Complex.I) := fun n =>
     hgmeas.comp (Finset.measurable_sum _ fun k _ =>
       measurable_pieceSum (hd.measurable_count k) (hd.measurable_point k) hbandFnmeas)
   have hbound : ∀ n, ∀ᵐ ω ∂μ, ‖Complex.exp (↑ξ * ↑(∑ k ∈ Finset.range (n + 1),
-        pieceSum K X ((Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator fun p => p.2) k ω)
+        pieceSum K X ((Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator fun p => p.2) k ω)
         * Complex.I)‖ ≤ (fun _ : Ω => (1 : ℝ)) ω := fun n => by
     filter_upwards with ω
     rw [show (↑ξ * ↑(∑ k ∈ Finset.range (n + 1),
-          pieceSum K X ((Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator fun p => p.2) k ω)
+          pieceSum K X ((Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator fun p => p.2) k ω)
           * Complex.I : ℂ)
         = ↑(ξ * ∑ k ∈ Finset.range (n + 1),
-          pieceSum K X ((Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator fun p => p.2) k ω)
+          pieceSum K X ((Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator fun p => p.2) k ω)
           * Complex.I from by push_cast; ring,
       Complex.norm_exp_ofReal_mul_I]
   have hlim : ∀ᵐ ω ∂μ, Tendsto (fun n =>
       Complex.exp (↑ξ * ↑(∑ k ∈ Finset.range (n + 1),
-        pieceSum K X ((Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator fun p => p.2) k ω)
+        pieceSum K X ((Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator fun p => p.2) k ω)
         * Complex.I)) atTop
-      (𝓝 (Complex.exp (↑ξ * ↑(levyLargeJumpSum K X t ω) * Complex.I))) := by
-    filter_upwards [ae_finite_support_pieceSum_largeBand hd hν (t := t)] with ω hωfin
+      (𝓝 (Complex.exp (↑ξ * ↑(∑' k,
+        pieceSum K X ((Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator fun p => p.2) k ω)
+        * Complex.I))) := by
+    filter_upwards [ae_finite_support_pieceSum_largeBand hd hν (s := s) (t := t)] with ω hωfin
     have hsummable : Summable (fun k =>
-        pieceSum K X ((Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator fun p => p.2) k ω) :=
+        pieceSum K X ((Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator fun p => p.2) k ω) :=
       summable_of_ne_finset_zero (s := hωfin.toFinset) fun k hk => by
         by_contra hne
         exact hk (hωfin.mem_toFinset.mpr hne)
     have htends : Tendsto (fun n => ∑ k ∈ Finset.range (n + 1),
-          pieceSum K X ((Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator fun p => p.2) k ω) atTop
-        (𝓝 (levyLargeJumpSum K X t ω)) :=
+          pieceSum K X ((Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator fun p => p.2) k ω) atTop
+        (𝓝 (∑' k,
+          pieceSum K X ((Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator fun p => p.2) k ω)) :=
       hsummable.hasSum.tendsto_sum_nat.comp (tendsto_add_atTop_nat 1)
     exact (hgcont.tendsto _).comp htends
   have hdct := tendsto_integral_of_dominated_convergence (μ := μ) (fun _ => (1 : ℝ))
@@ -855,24 +886,82 @@ theorem charFun_map_levyLargeJumpSum [IsProbabilityMeasure μ]
   -- The product side converges to the compound-Poisson exponential.
   have hprodexp : ∀ n, ∏ k ∈ Finset.range (n + 1),
         Complex.exp (∫ x in prmPiece (volume.prod ν) k,
-          (Complex.exp (↑ξ * ↑((Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator
+          (Complex.exp (↑ξ * ↑((Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator
             (fun p : ℝ × ℝ => p.2) x) * Complex.I) - 1) ∂(volume.prod ν))
       = Complex.exp (∑ k ∈ Finset.range (n + 1),
           ∫ x in prmPiece (volume.prod ν) k,
-            (Complex.exp (↑ξ * ↑((Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator
+            (Complex.exp (↑ξ * ↑((Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator
               (fun p : ℝ × ℝ => p.2) x) * Complex.I) - 1) ∂(volume.prod ν)) :=
     fun n => (Complex.exp_sum _ _).symm
   simp_rw [hprodexp] at hdct
   have hprodlim : Tendsto (fun n => Complex.exp (∑ k ∈ Finset.range (n + 1),
         ∫ x in prmPiece (volume.prod ν) k,
-          (Complex.exp (↑ξ * ↑((Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator
+          (Complex.exp (↑ξ * ↑((Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator
             (fun p : ℝ × ℝ => p.2) x) * Complex.I) - 1) ∂(volume.prod ν))) atTop
-      (𝓝 (Complex.exp (∫ x, (Complex.exp (↑ξ * ↑((Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator
+      (𝓝 (Complex.exp (∫ x, (Complex.exp (↑ξ * ↑((Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator
         (fun p : ℝ × ℝ => p.2) x) * Complex.I) - 1) ∂(volume.prod ν)))) :=
     (Complex.continuous_exp.tendsto _).comp
       (hFpiece_hassum.tendsto_sum_nat.comp (tendsto_add_atTop_nat 1))
   have hval := tendsto_nhds_unique hdct hprodlim
   rw [charFun_apply_real, integral_map hmeas_sum.aemeasurable (by fun_prop), hval, hfinal]
+
+/-- **The large-jump sum is compound Poisson:** its characteristic function is
+`exp (t · ∫_{|x|≥1} (e^{iξx} − 1) dν)`. -/
+theorem charFun_map_levyLargeJumpSum [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν)
+    {t : ℝ} (ht : 0 ≤ t) (ξ : ℝ) :
+    charFun (μ.map (levyLargeJumpSum K X t)) ξ
+      = Complex.exp ((t : ℂ) *
+          ∫ x in {x : ℝ | 1 ≤ |x|}, (Complex.exp (x * ξ * Complex.I) - 1) ∂ν) := by
+  have h := charFun_map_bandJumpSum hd hν (s := 0) ht ξ
+  rw [sub_zero] at h
+  exact h
+
+/-- The large-jump increment over `(s, t]` is a.e. the banded piece-sum series on
+`(s, t] × {x | 1 ≤ |x|}`. -/
+theorem levyLargeJumpSum_sub_ae_eq [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν)
+    {s t : ℝ} (h0 : 0 ≤ s) (hst : s ≤ t) :
+    (fun ω => levyLargeJumpSum K X t ω - levyLargeJumpSum K X s ω) =ᵐ[μ] fun ω =>
+      ∑' k, pieceSum K X ((Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator fun p => p.2) k ω := by
+  filter_upwards [ae_finite_support_pieceSum_largeBand hd hν (s := 0) (t := s),
+    ae_finite_support_pieceSum_largeBand hd hν (s := s) (t := t)] with ω hω_s hω_st
+  have hsplit : ∀ k,
+      pieceSum K X ((Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator fun p => p.2) k ω
+        = pieceSum K X ((Set.Ioc 0 s ×ˢ {x : ℝ | 1 ≤ |x|}).indicator fun p => p.2) k ω
+          + pieceSum K X ((Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator fun p => p.2) k ω := by
+    intro k
+    have hdisj : Disjoint (Set.Ioc 0 s ×ˢ {x : ℝ | 1 ≤ |x|})
+        (Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}) :=
+      Set.Disjoint.set_prod_left (Set.Ioc_disjoint_Ioc_of_le (le_refl s)) _ _
+    have hfun : ((Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator fun p : ℝ × ℝ => p.2)
+        = (Set.Ioc 0 s ×ˢ {x : ℝ | 1 ≤ |x|}).indicator (fun p : ℝ × ℝ => p.2)
+          + (Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator (fun p : ℝ × ℝ => p.2) := by
+      rw [← Set.Ioc_union_Ioc_eq_Ioc h0 hst, Set.union_prod,
+        Set.indicator_union_of_disjoint hdisj]
+      rfl
+    simp only [pieceSum, hfun, Pi.add_apply, Finset.sum_add_distrib]
+  have hsum_s : Summable (fun k =>
+      pieceSum K X ((Set.Ioc 0 s ×ˢ {x : ℝ | 1 ≤ |x|}).indicator fun p => p.2) k ω) :=
+    summable_of_ne_finset_zero (s := hω_s.toFinset) fun k hk => by
+      by_contra hne; exact hk (hω_s.mem_toFinset.mpr hne)
+  have hsum_st : Summable (fun k =>
+      pieceSum K X ((Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator fun p => p.2) k ω) :=
+    summable_of_ne_finset_zero (s := hω_st.toFinset) fun k hk => by
+      by_contra hne; exact hk (hω_st.mem_toFinset.mpr hne)
+  simp only [levyLargeJumpSum]
+  rw [tsum_congr hsplit, hsum_s.tsum_add hsum_st]
+  ring
+
+/-- The large-jump increment over `(s, t]` is compound Poisson with rate `(t − s)`. -/
+theorem charFun_map_levyLargeJumpSum_sub [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν)
+    {s t : ℝ} (h0 : 0 ≤ s) (hst : s ≤ t) (ξ : ℝ) :
+    charFun (μ.map (fun ω => levyLargeJumpSum K X t ω - levyLargeJumpSum K X s ω)) ξ
+      = Complex.exp (((t - s : ℝ) : ℂ) *
+          ∫ x in {x : ℝ | 1 ≤ |x|}, (Complex.exp (x * ξ * Complex.I) - 1) ∂ν) := by
+  rw [Measure.map_congr (levyLargeJumpSum_sub_ae_eq hd hν h0 hst)]
+  exact charFun_map_bandJumpSum hd hν hst ξ
 
 /-! ### The characteristic function of compensated band sums
 
@@ -883,20 +972,20 @@ with the per-piece compensator riding along: the compensated partial sums factor
 factors carrying the extra `−iξ ∫ f` drift, and dominated convergence together with the
 piece-partition sum of the band integral pass to the limit. -/
 
-/-- The band test function `1_{(0,t] × A}(u, x) · x` is measurable. -/
-private lemma measurable_bandFun {A : Set ℝ} (hA : MeasurableSet A) (t : ℝ) :
-    Measurable ((Set.Ioc 0 t ×ˢ A).indicator fun p : ℝ × ℝ => p.2) :=
+/-- The band test function `1_{(s,t] × A}(u, x) · x` is measurable. -/
+private lemma measurable_bandFun {A : Set ℝ} (hA : MeasurableSet A) (s t : ℝ) :
+    Measurable ((Set.Ioc s t ×ˢ A).indicator fun p : ℝ × ℝ => p.2) :=
   measurable_snd.indicator (measurableSet_Ioc.prod hA)
 
 /-- The band test function is integrable against `volume.prod ν` when `A ⊆ (-1, 1)` has finite mass:
 its support has finite `volume.prod ν`-mass and `|x| ≤ 1` there. -/
 private lemma integrable_bandFun {A : Set ℝ} (hA : MeasurableSet A)
-    (hAsub : A ⊆ Set.Ioo (-1) 1) (hAfin : ν A < ⊤) (t : ℝ) :
-    Integrable ((Set.Ioc 0 t ×ˢ A).indicator fun p : ℝ × ℝ => p.2)
+    (hAsub : A ⊆ Set.Ioo (-1) 1) (hAfin : ν A < ⊤) (s t : ℝ) :
+    Integrable ((Set.Ioc s t ×ˢ A).indicator fun p : ℝ × ℝ => p.2)
       ((volume : Measure ℝ).prod ν) := by
-  have hbandmeas : MeasurableSet (Set.Ioc 0 t ×ˢ A) := measurableSet_Ioc.prod hA
-  have hbandfin : (volume.prod ν) (Set.Ioc 0 t ×ˢ A) < ⊤ :=
-    volume_prod_Ioc_prod_lt_top (m := ν) (s := 0) (t := t) hAfin
+  have hbandmeas : MeasurableSet (Set.Ioc s t ×ˢ A) := measurableSet_Ioc.prod hA
+  have hbandfin : (volume.prod ν) (Set.Ioc s t ×ˢ A) < ⊤ :=
+    volume_prod_Ioc_prod_lt_top (m := ν) (s := s) (t := t) hAfin
   rw [integrable_indicator_iff hbandmeas]
   refine IntegrableOn.of_bound hbandfin measurable_snd.aestronglyMeasurable 1 ?_
   refine (ae_restrict_mem hbandmeas).mono fun p hp => ?_
@@ -907,22 +996,22 @@ private lemma integrable_bandFun {A : Set ℝ} (hA : MeasurableSet A)
 /-- The band test function lies in `L²(volume.prod ν)` when `A ⊆ (-1, 1)` has finite mass: its
 square is bounded by `1` on the finite-mass support. -/
 private lemma memLp_two_bandFun {A : Set ℝ} (hA : MeasurableSet A)
-    (hAsub : A ⊆ Set.Ioo (-1) 1) (hAfin : ν A < ⊤) (t : ℝ) :
-    MemLp ((Set.Ioc 0 t ×ˢ A).indicator fun p : ℝ × ℝ => p.2) 2
+    (hAsub : A ⊆ Set.Ioo (-1) 1) (hAfin : ν A < ⊤) (s t : ℝ) :
+    MemLp ((Set.Ioc s t ×ˢ A).indicator fun p : ℝ × ℝ => p.2) 2
       ((volume : Measure ℝ).prod ν) := by
-  have hbandmeas : MeasurableSet (Set.Ioc 0 t ×ˢ A) := measurableSet_Ioc.prod hA
-  have hbandfin : (volume.prod ν) (Set.Ioc 0 t ×ˢ A) < ⊤ :=
-    volume_prod_Ioc_prod_lt_top (m := ν) (s := 0) (t := t) hAfin
+  have hbandmeas : MeasurableSet (Set.Ioc s t ×ˢ A) := measurableSet_Ioc.prod hA
+  have hbandfin : (volume.prod ν) (Set.Ioc s t ×ˢ A) < ⊤ :=
+    volume_prod_Ioc_prod_lt_top (m := ν) (s := s) (t := t) hAfin
   refine ⟨(measurable_snd.indicator hbandmeas).aestronglyMeasurable, ?_⟩
   rw [eLpNorm_eq_lintegral_rpow_enorm_toReal (by norm_num) (by norm_num),
     show ((2 : ℝ≥0∞).toReal) = (2 : ℝ) from by norm_num]
   refine ENNReal.rpow_lt_top_of_nonneg (by norm_num) ?_
   have hle : (fun p : ℝ × ℝ =>
-        ‖(Set.Ioc 0 t ×ˢ A).indicator (fun q : ℝ × ℝ => q.2) p‖ₑ ^ (2 : ℝ))
-      ≤ (Set.Ioc 0 t ×ˢ A).indicator fun _ : ℝ × ℝ => (1 : ℝ≥0∞) := by
+        ‖(Set.Ioc s t ×ˢ A).indicator (fun q : ℝ × ℝ => q.2) p‖ₑ ^ (2 : ℝ))
+      ≤ (Set.Ioc s t ×ˢ A).indicator fun _ : ℝ × ℝ => (1 : ℝ≥0∞) := by
     intro p
     dsimp only
-    by_cases hp : p ∈ Set.Ioc 0 t ×ˢ A
+    by_cases hp : p ∈ Set.Ioc s t ×ˢ A
     · rw [Set.indicator_of_mem hp, Set.indicator_of_mem hp]
       obtain ⟨h1, h2⟩ := hAsub hp.2
       have habs : |p.2| ≤ 1 := abs_le.mpr ⟨le_of_lt h1, le_of_lt h2⟩
@@ -1022,34 +1111,34 @@ private lemma charFun_partial_compensatedBandSum [IsProbabilityMeasure μ]
     charFun_partial_largeJumpSum hd hf ξ n]
   exact halg
 
-/-- **Characteristic function of a compensated band sum.** For a mark set `A` inside the unit
-interval with finite `ν`-mass, the compensated Poisson sum of the band test function
-`1_{(0,t] × A}(u, x) · x` has characteristic function `exp (t · ∫_A (e^{ixξ} − 1 − ixξ) dν)`. -/
-theorem charFun_map_compensatedBandSum [IsProbabilityMeasure μ]
+/-- **Characteristic function of a compensated band sum over `(s, t]`.** For a mark set `A` inside the
+unit interval with finite `ν`-mass, the compensated Poisson sum of the band test function
+`1_{(s,t] × A}(u, x) · x` has characteristic function `exp ((t − s) · ∫_A (e^{ixξ} − 1 − ixξ) dν)`. -/
+theorem charFun_map_compensatedTimeBandSum [IsProbabilityMeasure μ]
     (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ)
     {A : Set ℝ} (hA : MeasurableSet A) (hAsub : A ⊆ Set.Ioo (-1) 1) (hAfin : ν A < ⊤)
-    {t : ℝ} (ht : 0 ≤ t) (ξ : ℝ) :
+    {s t : ℝ} (hst : s ≤ t) (ξ : ℝ) :
     charFun (μ.map (compensatedPoissonSum K X
-        ((Set.Ioc 0 t ×ˢ A).indicator fun p => p.2) ((volume : Measure ℝ).prod ν))) ξ
-      = Complex.exp ((t : ℂ) * ∫ x in A,
+        ((Set.Ioc s t ×ˢ A).indicator fun p => p.2) ((volume : Measure ℝ).prod ν))) ξ
+      = Complex.exp (((t - s : ℝ) : ℂ) * ∫ x in A,
           (Complex.exp (x * ξ * Complex.I) - 1 - x * ξ * Complex.I) ∂ν) := by
-  have hbandmeas : MeasurableSet (Set.Ioc 0 t ×ˢ A) := measurableSet_Ioc.prod hA
-  set f : ℝ × ℝ → ℝ := (Set.Ioc 0 t ×ˢ A).indicator fun p : ℝ × ℝ => p.2 with hf_def
-  have hbandFnmeas : Measurable f := measurable_bandFun hA t
-  have hbandfin : (volume.prod ν) (Set.Ioc 0 t ×ˢ A) < ⊤ :=
-    volume_prod_Ioc_prod_lt_top (m := ν) (s := 0) (t := t) hAfin
-  have hf1 : Integrable f (volume.prod ν) := integrable_bandFun hA hAsub hAfin t
-  have hf2 : MemLp f 2 (volume.prod ν) := memLp_two_bandFun hA hAsub hAfin t
+  have hbandmeas : MeasurableSet (Set.Ioc s t ×ˢ A) := measurableSet_Ioc.prod hA
+  set f : ℝ × ℝ → ℝ := (Set.Ioc s t ×ˢ A).indicator fun p : ℝ × ℝ => p.2 with hf_def
+  have hbandFnmeas : Measurable f := measurable_bandFun hA s t
+  have hbandfin : (volume.prod ν) (Set.Ioc s t ×ˢ A) < ⊤ :=
+    volume_prod_Ioc_prod_lt_top (m := ν) (s := s) (t := t) hAfin
+  have hf1 : Integrable f (volume.prod ν) := integrable_bandFun hA hAsub hAfin s t
+  have hf2 : MemLp f 2 (volume.prod ν) := memLp_two_bandFun hA hAsub hAfin s t
   have hgmeas : Measurable fun r : ℝ => Complex.exp (↑ξ * ↑r * Complex.I) :=
     Complex.measurable_exp.comp ((Complex.measurable_ofReal.const_mul (↑ξ)).mul_const Complex.I)
   have hgcont : Continuous fun r : ℝ => Complex.exp (↑ξ * ↑r * Complex.I) := by fun_prop
   -- The band integrand `e^{iξf} − 1 − iξf` in indicator form.
   have hg'eq : (fun x : ℝ × ℝ =>
         Complex.exp (↑ξ * ↑(f x) * Complex.I) - 1 - ↑ξ * ↑(f x) * Complex.I)
-      = (Set.Ioc 0 t ×ˢ A).indicator
+      = (Set.Ioc s t ×ˢ A).indicator
           fun q : ℝ × ℝ => Complex.exp (↑ξ * ↑q.2 * Complex.I) - 1 - ↑ξ * ↑q.2 * Complex.I := by
     funext x
-    by_cases hx : x ∈ Set.Ioc 0 t ×ˢ A
+    by_cases hx : x ∈ Set.Ioc s t ×ˢ A
     · rw [hf_def]; simp only [Set.indicator_of_mem hx]
     · rw [hf_def]; simp [Set.indicator_of_notMem hx]
   have hbound2 : ∀ x : ℝ × ℝ, ‖Complex.exp (↑ξ * ↑x.2 * Complex.I) - 1‖ ≤ 2 := fun x => by
@@ -1065,7 +1154,7 @@ theorem charFun_map_compensatedBandSum [IsProbabilityMeasure μ]
     exact ((Complex.measurable_exp.comp h1).sub measurable_const).sub h1
   have hband_intOn : IntegrableOn
       (fun q : ℝ × ℝ => Complex.exp (↑ξ * ↑q.2 * Complex.I) - 1 - ↑ξ * ↑q.2 * Complex.I)
-      (Set.Ioc 0 t ×ˢ A) (volume.prod ν) := by
+      (Set.Ioc s t ×ˢ A) (volume.prod ν) := by
     refine IntegrableOn.of_bound hbandfin hintegrand_meas.aestronglyMeasurable (2 + |ξ|) ?_
     refine (ae_restrict_mem hbandmeas).mono fun q hq => ?_
     obtain ⟨h1, h2⟩ := hAsub hq.2
@@ -1098,12 +1187,13 @@ theorem charFun_map_compensatedBandSum [IsProbabilityMeasure μ]
   -- The band integral equals the compensated-Poisson exponent.
   have hfinal : (∫ x, (Complex.exp (↑ξ * ↑(f x) * Complex.I) - 1 - ↑ξ * ↑(f x) * Complex.I)
         ∂(volume.prod ν))
-      = (t : ℂ) * ∫ x in A, (Complex.exp (↑x * ↑ξ * Complex.I) - 1 - ↑x * ↑ξ * Complex.I) ∂ν := by
+      = ((t - s : ℝ) : ℂ)
+          * ∫ x in A, (Complex.exp (↑x * ↑ξ * Complex.I) - 1 - ↑x * ↑ξ * Complex.I) ∂ν := by
     rw [hg'eq, integral_indicator hbandmeas, setIntegral_prod _ hband_intOn]
     dsimp only
-    rw [setIntegral_const, measureReal_def, Real.volume_Ioc, sub_zero,
-      ENNReal.toReal_ofReal ht, Complex.real_smul]
-    refine congrArg (fun z => (↑t : ℂ) * z) ?_
+    rw [setIntegral_const, measureReal_def, Real.volume_Ioc,
+      ENNReal.toReal_ofReal (sub_nonneg.mpr hst), Complex.real_smul]
+    refine congrArg (fun z => ((↑(t - s) : ℂ)) * z) ?_
     refine integral_congr_ae (Filter.Eventually.of_forall fun y => ?_)
     dsimp only
     simp only [mul_comm (↑ξ : ℂ) (↑y : ℂ)]
@@ -1172,6 +1262,20 @@ theorem charFun_map_compensatedBandSum [IsProbabilityMeasure μ]
       (hGHasSum.tendsto_sum_nat.comp (tendsto_add_atTop_nat 1))
   have hval := tendsto_nhds_unique hdct hprodlim
   rw [charFun_apply_real, integral_map hmeas_sum.aemeasurable (by fun_prop), hval, hfinal]
+
+/-- **Characteristic function of a compensated band sum.** For a mark set `A` inside the unit
+interval with finite `ν`-mass, the compensated Poisson sum of the band test function
+`1_{(0,t] × A}(u, x) · x` has characteristic function `exp (t · ∫_A (e^{ixξ} − 1 − ixξ) dν)`. -/
+theorem charFun_map_compensatedBandSum [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ)
+    {A : Set ℝ} (hA : MeasurableSet A) (hAsub : A ⊆ Set.Ioo (-1) 1) (hAfin : ν A < ⊤)
+    {t : ℝ} (ht : 0 ≤ t) (ξ : ℝ) :
+    charFun (μ.map (compensatedPoissonSum K X
+        ((Set.Ioc 0 t ×ˢ A).indicator fun p => p.2) ((volume : Measure ℝ).prod ν))) ξ
+      = Complex.exp ((t : ℂ) * ∫ x in A,
+          (Complex.exp (x * ξ * Complex.I) - 1 - x * ξ * Complex.I) ∂ν) := by
+  have h := charFun_map_compensatedTimeBandSum hd hA hAsub hAfin (s := 0) ht ξ
+  rwa [sub_zero] at h
 
 /-! ### The law of the compensated small-jump integral
 
@@ -1257,50 +1361,52 @@ private lemma setLIntegral_band_snd_sq {B : Set ℝ} (_hB : MeasurableSet B) (s 
   rw [lintegral_congr hinner, setLIntegral_const, Real.volume_Ioc, mul_comm]
 
 /-- The squared `L²` seminorm of a band indicator over a measurable mark set `C`. -/
-private lemma eLpNorm_sq_bandFun {C : Set ℝ} (hC : MeasurableSet C) (t : ℝ) :
-    (eLpNorm ((Set.Ioc 0 t ×ˢ C).indicator fun p : ℝ × ℝ => p.2) 2 (volume.prod ν)) ^ 2
-      = ENNReal.ofReal t * ∫⁻ x in C, ENNReal.ofReal (x ^ 2) ∂ν := by
-  rw [eLpNorm_two_sq, lintegral_enorm_rpow_band hC, setLIntegral_band_snd_sq hC, sub_zero]
+private lemma eLpNorm_sq_bandFun {C : Set ℝ} (hC : MeasurableSet C) (s t : ℝ) :
+    (eLpNorm ((Set.Ioc s t ×ˢ C).indicator fun p : ℝ × ℝ => p.2) 2 (volume.prod ν)) ^ 2
+      = ENNReal.ofReal (t - s) * ∫⁻ x in C, ENNReal.ofReal (x ^ 2) ∂ν := by
+  rw [eLpNorm_two_sq, lintegral_enorm_rpow_band hC, setLIntegral_band_snd_sq hC]
 
-/-- The `L²(μ)` distance between the compensated small-jump integral and its truncation to a mark set
-`B ⊆ (-1, 1)` of finite mass equals the `L²(volume.prod ν)` seminorm of the band indicator over the
-complementary slice `(-1, 1) \ B`. -/
-private lemma eLpNorm_levyCompensatedSmallJump_sub_bandFun [IsProbabilityMeasure μ]
+/-- The `L²(μ)` distance between the compensated small-jump band integral over `(s, t]` and its
+truncation to a mark set `B ⊆ (-1, 1)` of finite mass equals the `L²(volume.prod ν)` seminorm of the
+band indicator over the complementary slice `(s, t] × ((-1, 1) \ B)`. -/
+private lemma eLpNorm_smallJumpBand_sub_bandFun [IsProbabilityMeasure μ]
     (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν)
-    (t : ℝ) {B : Set ℝ} (hB : MeasurableSet B) (hBsub : B ⊆ Set.Ioo (-1) 1) (hBfin : ν B < ⊤) :
-    eLpNorm (levyCompensatedSmallJump hd hν t
-        - compensatedPoissonIntegral hd ((memLp_two_bandFun hB hBsub hBfin t).toLp
-            ((Set.Ioc 0 t ×ˢ B).indicator fun p => p.2))) 2 μ
-      = eLpNorm ((Set.Ioc 0 t ×ˢ (Set.Ioo (-1:ℝ) 1 \ B)).indicator fun p : ℝ × ℝ => p.2) 2
+    (s t : ℝ) {B : Set ℝ} (hB : MeasurableSet B) (hBsub : B ⊆ Set.Ioo (-1) 1) (hBfin : ν B < ⊤) :
+    eLpNorm (compensatedPoissonIntegral hd ((memLp_two_smallJumpBandFun hν s t).toLp
+          ((Set.Ioc s t ×ˢ Set.Ioo (-1:ℝ) 1).indicator fun p => p.2))
+        - compensatedPoissonIntegral hd ((memLp_two_bandFun hB hBsub hBfin s t).toLp
+            ((Set.Ioc s t ×ˢ B).indicator fun p => p.2))) 2 μ
+      = eLpNorm ((Set.Ioc s t ×ˢ (Set.Ioo (-1:ℝ) 1 \ B)).indicator fun p : ℝ × ℝ => p.2) 2
           (volume.prod ν) := by
-  have hunion_prod : Set.Ioc 0 t ×ˢ Set.Ioo (-1:ℝ) 1
-      = (Set.Ioc 0 t ×ˢ B) ∪ (Set.Ioc 0 t ×ˢ (Set.Ioo (-1:ℝ) 1 \ B)) := by
+  have hunion_prod : Set.Ioc s t ×ˢ Set.Ioo (-1:ℝ) 1
+      = (Set.Ioc s t ×ˢ B) ∪ (Set.Ioc s t ×ˢ (Set.Ioo (-1:ℝ) 1 \ B)) := by
     rw [← Set.prod_union, Set.union_sdiff_cancel hBsub]
-  have hdisj_prod : Disjoint (Set.Ioc 0 t ×ˢ B) (Set.Ioc 0 t ×ˢ (Set.Ioo (-1:ℝ) 1 \ B)) :=
+  have hdisj_prod : Disjoint (Set.Ioc s t ×ˢ B) (Set.Ioc s t ×ˢ (Set.Ioo (-1:ℝ) 1 \ B)) :=
     Set.Disjoint.set_prod_right disjoint_sdiff_self_right _ _
-  have hsplit_fun : ((Set.Ioc 0 t ×ˢ Set.Ioo (-1:ℝ) 1).indicator fun p : ℝ × ℝ => p.2)
-        - ((Set.Ioc 0 t ×ˢ B).indicator fun p : ℝ × ℝ => p.2)
-      = (Set.Ioc 0 t ×ˢ (Set.Ioo (-1:ℝ) 1 \ B)).indicator fun p : ℝ × ℝ => p.2 := by
+  have hsplit_fun : ((Set.Ioc s t ×ˢ Set.Ioo (-1:ℝ) 1).indicator fun p : ℝ × ℝ => p.2)
+        - ((Set.Ioc s t ×ˢ B).indicator fun p : ℝ × ℝ => p.2)
+      = (Set.Ioc s t ×ˢ (Set.Ioo (-1:ℝ) 1 \ B)).indicator fun p : ℝ × ℝ => p.2 := by
     rw [hunion_prod, Set.indicator_union_of_disjoint hdisj_prod]
     ext p
     simp only [Pi.sub_apply]
     ring
-  have hsub : levyCompensatedSmallJump hd hν t
-        - compensatedPoissonIntegral hd ((memLp_two_bandFun hB hBsub hBfin t).toLp
-            ((Set.Ioc 0 t ×ˢ B).indicator fun p => p.2))
-      = compensatedPoissonIntegral hd ((memLp_two_smallJumpFun hν t).toLp
-            ((Set.Ioc 0 t ×ˢ Set.Ioo (-1:ℝ) 1).indicator fun p => p.2)
-          - (memLp_two_bandFun hB hBsub hBfin t).toLp
-            ((Set.Ioc 0 t ×ˢ B).indicator fun p => p.2)) := by
-    rw [compensatedPoissonIntegral_sub]; rfl
+  have hsub : compensatedPoissonIntegral hd ((memLp_two_smallJumpBandFun hν s t).toLp
+          ((Set.Ioc s t ×ˢ Set.Ioo (-1:ℝ) 1).indicator fun p => p.2))
+        - compensatedPoissonIntegral hd ((memLp_two_bandFun hB hBsub hBfin s t).toLp
+            ((Set.Ioc s t ×ˢ B).indicator fun p => p.2))
+      = compensatedPoissonIntegral hd ((memLp_two_smallJumpBandFun hν s t).toLp
+            ((Set.Ioc s t ×ˢ Set.Ioo (-1:ℝ) 1).indicator fun p => p.2)
+          - (memLp_two_bandFun hB hBsub hBfin s t).toLp
+            ((Set.Ioc s t ×ˢ B).indicator fun p => p.2)) :=
+    (compensatedPoissonIntegral_sub _ _ _).symm
   rw [hsub, eLpNorm_compensatedPoissonIntegral]
   refine eLpNorm_congr_ae ?_
-  filter_upwards [Lp.coeFn_sub ((memLp_two_smallJumpFun hν t).toLp
-      ((Set.Ioc 0 t ×ˢ Set.Ioo (-1:ℝ) 1).indicator fun p => p.2))
-      ((memLp_two_bandFun hB hBsub hBfin t).toLp
-      ((Set.Ioc 0 t ×ˢ B).indicator fun p => p.2)),
-    (memLp_two_smallJumpFun hν t).coeFn_toLp,
-    (memLp_two_bandFun hB hBsub hBfin t).coeFn_toLp] with p h0 h2 h3
+  filter_upwards [Lp.coeFn_sub ((memLp_two_smallJumpBandFun hν s t).toLp
+      ((Set.Ioc s t ×ˢ Set.Ioo (-1:ℝ) 1).indicator fun p => p.2))
+      ((memLp_two_bandFun hB hBsub hBfin s t).toLp
+      ((Set.Ioc s t ×ˢ B).indicator fun p => p.2)),
+    (memLp_two_smallJumpBandFun hν s t).coeFn_toLp,
+    (memLp_two_bandFun hB hBsub hBfin s t).coeFn_toLp] with p h0 h2 h3
   rw [h0]
   simp only [Pi.sub_apply]
   rw [h2, h3]
@@ -1457,15 +1563,19 @@ private lemma tendsto_setIntegral_annulus (hν : IsLevyMeasure ν) (ξ : ℝ) :
     · rw [Set.indicator_of_notMem hxa, norm_zero]
       exact mul_nonneg (by positivity) (le_min zero_le_one (sq_nonneg x))
 
-/-- **The law of the compensated small-jump integral:** its characteristic function is
-`exp (t · ∫_{(-1,1)} (e^{ixξ} − 1 − ixξ) dν)` — the small-jump factor of the
-Lévy–Khintchine exponent. -/
-theorem charFun_map_levyCompensatedSmallJump [IsProbabilityMeasure μ]
+/-- **The law of the compensated small-jump band integral over `(s, t]`:** the compensated Poisson
+integral of the band test function on `(s, t] × (-1, 1)` has characteristic function
+`exp ((t − s) · ∫_{(-1,1)} (e^{ixξ} − 1 − ixξ) dν)` — the band-generic small-jump engine. -/
+private lemma charFun_map_smallJumpBandIntegral [IsProbabilityMeasure μ]
     (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν)
-    {t : ℝ} (ht : 0 ≤ t) (ξ : ℝ) :
-    charFun (μ.map (fun ω => levyCompensatedSmallJump hd hν t ω)) ξ
-      = Complex.exp ((t : ℂ) * ∫ x in Set.Ioo (-1) 1,
+    {s t : ℝ} (hst : s ≤ t) (ξ : ℝ) :
+    charFun (μ.map (fun ω => (compensatedPoissonIntegral hd
+        ((memLp_two_smallJumpBandFun hν s t).toLp
+          ((Set.Ioc s t ×ˢ Set.Ioo (-1:ℝ) 1).indicator fun p => p.2))) ω)) ξ
+      = Complex.exp (((t - s : ℝ) : ℂ) * ∫ x in Set.Ioo (-1) 1,
           (Complex.exp (x * ξ * Complex.I) - 1 - x * ξ * Complex.I) ∂ν) := by
+  set V : Lp ℝ 2 μ := compensatedPoissonIntegral hd ((memLp_two_smallJumpBandFun hν s t).toLp
+      ((Set.Ioc s t ×ˢ Set.Ioo (-1:ℝ) 1).indicator fun p => p.2)) with hV
   have hA_meas : ∀ n : ℕ,
       MeasurableSet (Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |x|}) :=
     fun n => measurableSet_Ioo.inter (measurableSet_le measurable_const continuous_abs.measurable)
@@ -1484,91 +1594,103 @@ theorem charFun_map_levyCompensatedSmallJump [IsProbabilityMeasure μ]
     exact ⟨fun ⟨hxo, h⟩ => ⟨hxo, h hxo⟩, fun ⟨hxo, h⟩ => ⟨hxo, fun _ => h⟩⟩
   -- The truncated compensated integral agrees a.e. with the compensated band sum.
   have hTrunc_ae : ∀ n : ℕ, (fun ω => (compensatedPoissonIntegral hd
-        ((memLp_two_bandFun (hA_meas n) (hA_sub n) (hA_fin n) t).toLp
-          ((Set.Ioc 0 t ×ˢ (Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |x|})).indicator
+        ((memLp_two_bandFun (hA_meas n) (hA_sub n) (hA_fin n) s t).toLp
+          ((Set.Ioc s t ×ˢ (Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |x|})).indicator
             fun p => p.2))) ω)
       =ᵐ[μ] compensatedPoissonSum K X
-        ((Set.Ioc 0 t ×ˢ (Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |x|})).indicator fun p => p.2)
+        ((Set.Ioc s t ×ˢ (Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |x|})).indicator fun p => p.2)
         ((volume : Measure ℝ).prod ν) := fun n =>
-    compensatedPoissonIntegral_eq_sum hd (measurable_bandFun (hA_meas n) t)
-      (integrable_bandFun (hA_meas n) (hA_sub n) (hA_fin n) t)
-      (memLp_two_bandFun (hA_meas n) (hA_sub n) (hA_fin n) t)
+    compensatedPoissonIntegral_eq_sum hd (measurable_bandFun (hA_meas n) s t)
+      (integrable_bandFun (hA_meas n) (hA_sub n) (hA_fin n) s t)
+      (memLp_two_bandFun (hA_meas n) (hA_sub n) (hA_fin n) s t)
   -- The charFun of the truncated integral is the annulus exponential.
   have hcharTrunc : ∀ n : ℕ, charFun (μ.map (fun ω => (compensatedPoissonIntegral hd
-        ((memLp_two_bandFun (hA_meas n) (hA_sub n) (hA_fin n) t).toLp
-          ((Set.Ioc 0 t ×ˢ (Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |x|})).indicator
+        ((memLp_two_bandFun (hA_meas n) (hA_sub n) (hA_fin n) s t).toLp
+          ((Set.Ioc s t ×ˢ (Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |x|})).indicator
             fun p => p.2))) ω)) ξ
-      = Complex.exp ((t : ℂ) * ∫ x in Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |x|},
+      = Complex.exp (((t - s : ℝ) : ℂ)
+          * ∫ x in Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |x|},
           (Complex.exp (↑x * ↑ξ * Complex.I) - 1 - ↑x * ↑ξ * Complex.I) ∂ν) := by
     intro n
     rw [Measure.map_congr (hTrunc_ae n),
-      charFun_map_compensatedBandSum hd (hA_meas n) (hA_sub n) (hA_fin n) ht ξ]
+      charFun_map_compensatedTimeBandSum hd (hA_meas n) (hA_sub n) (hA_fin n) hst ξ]
   -- The annulus exponentials converge to the small-jump exponential.
-  have hRHS : Tendsto (fun n : ℕ => Complex.exp ((t : ℂ) *
+  have hRHS : Tendsto (fun n : ℕ => Complex.exp (((t - s : ℝ) : ℂ) *
         ∫ x in Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |x|},
           (Complex.exp (↑x * ↑ξ * Complex.I) - 1 - ↑x * ↑ξ * Complex.I) ∂ν)) atTop
-      (𝓝 (Complex.exp ((t : ℂ) * ∫ x in Set.Ioo (-1:ℝ) 1,
+      (𝓝 (Complex.exp (((t - s : ℝ) : ℂ) * ∫ x in Set.Ioo (-1:ℝ) 1,
         (Complex.exp (↑x * ↑ξ * Complex.I) - 1 - ↑x * ↑ξ * Complex.I) ∂ν))) :=
-    (Complex.continuous_exp.tendsto _).comp ((tendsto_setIntegral_annulus hν ξ).const_mul (t : ℂ))
-  -- The `L²(μ)` distance to the small-jump integral vanishes.
-  have htend_r : Tendsto (fun n : ℕ => (eLpNorm (levyCompensatedSmallJump hd hν t
+    (Complex.continuous_exp.tendsto _).comp
+      ((tendsto_setIntegral_annulus hν ξ).const_mul ((t - s : ℝ) : ℂ))
+  -- The band distance rewrites through the increment sub-lemma.
+  have hdist : ∀ n : ℕ, eLpNorm (V - compensatedPoissonIntegral hd
+        ((memLp_two_bandFun (hA_meas n) (hA_sub n) (hA_fin n) s t).toLp
+          ((Set.Ioc s t ×ˢ (Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |x|})).indicator
+            fun p => p.2))) 2 μ
+      = eLpNorm ((Set.Ioc s t ×ˢ (Set.Ioo (-1:ℝ) 1 \
+          (Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |x|}))).indicator fun p : ℝ × ℝ => p.2) 2
+          (volume.prod ν) := by
+    intro n
+    rw [hV]
+    exact eLpNorm_smallJumpBand_sub_bandFun hd hν s t (hA_meas n) (hA_sub n) (hA_fin n)
+  -- The `L²(μ)` distance to the band integral vanishes.
+  have htend_r : Tendsto (fun n : ℕ => (eLpNorm (V
         - compensatedPoissonIntegral hd
-          ((memLp_two_bandFun (hA_meas n) (hA_sub n) (hA_fin n) t).toLp
-            ((Set.Ioc 0 t ×ˢ (Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |x|})).indicator
+          ((memLp_two_bandFun (hA_meas n) (hA_sub n) (hA_fin n) s t).toLp
+            ((Set.Ioc s t ×ˢ (Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |x|})).indicator
               fun p => p.2))) 2 μ).toReal) atTop (𝓝 0) := by
-    have hsq : ∀ n : ℕ, ((eLpNorm (levyCompensatedSmallJump hd hν t
+    have hsq : ∀ n : ℕ, ((eLpNorm (V
           - compensatedPoissonIntegral hd
-            ((memLp_two_bandFun (hA_meas n) (hA_sub n) (hA_fin n) t).toLp
-              ((Set.Ioc 0 t ×ˢ (Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |x|})).indicator
+            ((memLp_two_bandFun (hA_meas n) (hA_sub n) (hA_fin n) s t).toLp
+              ((Set.Ioc s t ×ˢ (Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |x|})).indicator
                 fun p => p.2))) 2 μ).toReal) ^ 2
-        = t * (∫⁻ x in Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | |x| < ((n:ℝ) + 1)⁻¹},
+        = (t - s) * (∫⁻ x in Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | |x| < ((n:ℝ) + 1)⁻¹},
             ENNReal.ofReal (x ^ 2) ∂ν).toReal := by
       intro n
-      rw [← ENNReal.toReal_pow,
-        eLpNorm_levyCompensatedSmallJump_sub_bandFun hd hν t (hA_meas n) (hA_sub n) (hA_fin n),
-        eLpNorm_sq_bandFun (measurableSet_Ioo.diff (hA_meas n)) t, hslice_eq n,
-        ENNReal.toReal_mul, ENNReal.toReal_ofReal ht]
+      rw [← ENNReal.toReal_pow, hdist n,
+        eLpNorm_sq_bandFun (measurableSet_Ioo.diff (hA_meas n)) s t, hslice_eq n,
+        ENNReal.toReal_mul, ENNReal.toReal_ofReal (sub_nonneg.mpr hst)]
     have hJ : Tendsto (fun n : ℕ => (∫⁻ x in Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | |x| < ((n:ℝ) + 1)⁻¹},
           ENNReal.ofReal (x ^ 2) ∂ν).toReal) atTop (𝓝 0) := by
       simpa [Function.comp_def] using
         (ENNReal.tendsto_toReal (by simp)).comp (tendsto_lintegral_slice_sq hν)
-    have hr2 : Tendsto (fun n : ℕ => ((eLpNorm (levyCompensatedSmallJump hd hν t
+    have hr2 : Tendsto (fun n : ℕ => ((eLpNorm (V
           - compensatedPoissonIntegral hd
-            ((memLp_two_bandFun (hA_meas n) (hA_sub n) (hA_fin n) t).toLp
-              ((Set.Ioc 0 t ×ˢ (Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |x|})).indicator
+            ((memLp_two_bandFun (hA_meas n) (hA_sub n) (hA_fin n) s t).toLp
+              ((Set.Ioc s t ×ˢ (Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |x|})).indicator
                 fun p => p.2))) 2 μ).toReal) ^ 2) atTop (𝓝 0) := by
-      simp_rw [hsq]; simpa using hJ.const_mul t
+      simp_rw [hsq]; simpa using hJ.const_mul (t - s)
     have hsqrt := (Real.continuous_sqrt.tendsto 0).comp hr2
     rw [Real.sqrt_zero] at hsqrt
     exact hsqrt.congr fun n => Real.sqrt_sq ENNReal.toReal_nonneg
   -- The L¹ distance is dominated by the L² distance.
-  have hbnd : ∀ n : ℕ, ∫ ω, |levyCompensatedSmallJump hd hν t ω
+  have hbnd : ∀ n : ℕ, ∫ ω, |V ω
         - (compensatedPoissonIntegral hd
-          ((memLp_two_bandFun (hA_meas n) (hA_sub n) (hA_fin n) t).toLp
-            ((Set.Ioc 0 t ×ˢ (Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |x|})).indicator
+          ((memLp_two_bandFun (hA_meas n) (hA_sub n) (hA_fin n) s t).toLp
+            ((Set.Ioc s t ×ˢ (Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |x|})).indicator
               fun p => p.2))) ω| ∂μ
-      ≤ (eLpNorm (levyCompensatedSmallJump hd hν t
+      ≤ (eLpNorm (V
           - compensatedPoissonIntegral hd
-            ((memLp_two_bandFun (hA_meas n) (hA_sub n) (hA_fin n) t).toLp
-              ((Set.Ioc 0 t ×ˢ (Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |x|})).indicator
+            ((memLp_two_bandFun (hA_meas n) (hA_sub n) (hA_fin n) s t).toLp
+              ((Set.Ioc s t ×ˢ (Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |x|})).indicator
                 fun p => p.2))) 2 μ).toReal := by
     intro n
-    set Hn := levyCompensatedSmallJump hd hν t
+    set Hn := V
       - compensatedPoissonIntegral hd
-        ((memLp_two_bandFun (hA_meas n) (hA_sub n) (hA_fin n) t).toLp
-          ((Set.Ioc 0 t ×ˢ (Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |x|})).indicator
+        ((memLp_two_bandFun (hA_meas n) (hA_sub n) (hA_fin n) s t).toLp
+          ((Set.Ioc s t ×ˢ (Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |x|})).indicator
             fun p => p.2)) with hHn
-    calc ∫ ω, |levyCompensatedSmallJump hd hν t ω
+    calc ∫ ω, |V ω
             - (compensatedPoissonIntegral hd
-              ((memLp_two_bandFun (hA_meas n) (hA_sub n) (hA_fin n) t).toLp
-                ((Set.Ioc 0 t ×ˢ (Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |x|})).indicator
+              ((memLp_two_bandFun (hA_meas n) (hA_sub n) (hA_fin n) s t).toLp
+                ((Set.Ioc s t ×ˢ (Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |x|})).indicator
                   fun p => p.2))) ω| ∂μ
         = ∫ ω, ‖Hn ω‖ ∂μ := by
           refine integral_congr_ae ?_
-          filter_upwards [hHn ▸ Lp.coeFn_sub (levyCompensatedSmallJump hd hν t)
+          filter_upwards [hHn ▸ Lp.coeFn_sub V
             (compensatedPoissonIntegral hd
-              ((memLp_two_bandFun (hA_meas n) (hA_sub n) (hA_fin n) t).toLp
-                ((Set.Ioc 0 t ×ˢ (Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |x|})).indicator
+              ((memLp_two_bandFun (hA_meas n) (hA_sub n) (hA_fin n) s t).toLp
+                ((Set.Ioc s t ×ˢ (Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |x|})).indicator
                   fun p => p.2)))] with ω hω
           rw [Real.norm_eq_abs, hω]; rfl
       _ = (eLpNorm Hn 1 μ).toReal := by
@@ -1577,27 +1699,62 @@ theorem charFun_map_levyCompensatedSmallJump [IsProbabilityMeasure μ]
       _ ≤ (eLpNorm Hn 2 μ).toReal :=
           ENNReal.toReal_mono (Lp.eLpNorm_ne_top Hn)
             (eLpNorm_le_eLpNorm_of_exponent_le (by norm_num) (Lp.aestronglyMeasurable Hn))
-  -- The characteristic function of the truncated integral converges to that of the small-jump one.
-  have hint0 : Tendsto (fun n : ℕ => ∫ ω, |levyCompensatedSmallJump hd hν t ω
+  -- The characteristic function of the truncated integral converges to that of the band one.
+  have hint0 : Tendsto (fun n : ℕ => ∫ ω, |V ω
         - (compensatedPoissonIntegral hd
-          ((memLp_two_bandFun (hA_meas n) (hA_sub n) (hA_fin n) t).toLp
-            ((Set.Ioc 0 t ×ˢ (Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |x|})).indicator
+          ((memLp_two_bandFun (hA_meas n) (hA_sub n) (hA_fin n) s t).toLp
+            ((Set.Ioc s t ×ˢ (Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |x|})).indicator
               fun p => p.2))) ω| ∂μ) atTop (𝓝 0) :=
     squeeze_zero (fun n => integral_nonneg fun ω => abs_nonneg _) hbnd htend_r
   have hLHS : Tendsto (fun n : ℕ => charFun (μ.map (fun ω => (compensatedPoissonIntegral hd
-        ((memLp_two_bandFun (hA_meas n) (hA_sub n) (hA_fin n) t).toLp
-          ((Set.Ioc 0 t ×ˢ (Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |x|})).indicator
+        ((memLp_two_bandFun (hA_meas n) (hA_sub n) (hA_fin n) s t).toLp
+          ((Set.Ioc s t ×ˢ (Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |x|})).indicator
             fun p => p.2))) ω)) ξ) atTop
-      (𝓝 (charFun (μ.map (fun ω => levyCompensatedSmallJump hd hν t ω)) ξ)) := by
+      (𝓝 (charFun (μ.map (fun ω => V ω)) ξ)) := by
     rw [tendsto_iff_norm_sub_tendsto_zero]
     refine squeeze_zero (fun n => norm_nonneg _) (fun n => ?_) (by simpa using hint0.const_mul |ξ|)
     rw [norm_sub_rev]
     exact norm_charFun_map_sub_le
-      (Lp.aestronglyMeasurable (levyCompensatedSmallJump hd hν t)).aemeasurable
+      (Lp.aestronglyMeasurable V).aemeasurable
       (Lp.aestronglyMeasurable _).aemeasurable
-      (((Lp.memLp (levyCompensatedSmallJump hd hν t)).integrable (by norm_num)).sub
+      (((Lp.memLp V).integrable (by norm_num)).sub
         ((Lp.memLp _).integrable (by norm_num))) ξ
   exact tendsto_nhds_unique (hLHS.congr fun n => hcharTrunc n) hRHS
+
+/-- **The law of the compensated small-jump integral:** its characteristic function is
+`exp (t · ∫_{(-1,1)} (e^{ixξ} − 1 − ixξ) dν)` — the small-jump factor of the
+Lévy–Khintchine exponent. -/
+theorem charFun_map_levyCompensatedSmallJump [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν)
+    {t : ℝ} (ht : 0 ≤ t) (ξ : ℝ) :
+    charFun (μ.map (fun ω => levyCompensatedSmallJump hd hν t ω)) ξ
+      = Complex.exp ((t : ℂ) * ∫ x in Set.Ioo (-1) 1,
+          (Complex.exp (x * ξ * Complex.I) - 1 - x * ξ * Complex.I) ∂ν) := by
+  have h := charFun_map_smallJumpBandIntegral hd hν (s := 0) ht ξ
+  rw [sub_zero] at h
+  exact h
+
+/-- The compensated small-jump increment over `(s, t]` has the small-jump law at rate `(t − s)`. -/
+theorem charFun_map_levyCompensatedSmallJump_sub [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν)
+    {s t : ℝ} (h0 : 0 ≤ s) (hst : s ≤ t) (ξ : ℝ) :
+    charFun (μ.map (fun ω => levyCompensatedSmallJump hd hν t ω
+        - levyCompensatedSmallJump hd hν s ω)) ξ
+      = Complex.exp (((t - s : ℝ) : ℂ) * ∫ x in Set.Ioo (-1) 1,
+          (Complex.exp (x * ξ * Complex.I) - 1 - x * ξ * Complex.I) ∂ν) := by
+  have hmap : (fun ω => levyCompensatedSmallJump hd hν t ω - levyCompensatedSmallJump hd hν s ω)
+      =ᵐ[μ] fun ω => (compensatedPoissonIntegral hd ((memLp_two_smallJumpBandFun hν s t).toLp
+        ((Set.Ioc s t ×ˢ Set.Ioo (-1:ℝ) 1).indicator fun p => p.2))) ω := by
+    have hsub : levyCompensatedSmallJump hd hν t - levyCompensatedSmallJump hd hν s
+        = compensatedPoissonIntegral hd ((memLp_two_smallJumpBandFun hν s t).toLp
+            ((Set.Ioc s t ×ˢ Set.Ioo (-1:ℝ) 1).indicator fun p => p.2)) :=
+      levyCompensatedSmallJump_sub hd hν h0 hst
+    filter_upwards [Lp.coeFn_sub (levyCompensatedSmallJump hd hν t)
+      (levyCompensatedSmallJump hd hν s)] with ω hω
+    rw [Pi.sub_apply] at hω
+    rw [← hω, hsub]
+  rw [Measure.map_congr hmap]
+  exact charFun_map_smallJumpBandIntegral hd hν hst ξ
 
 end LevyIntensity
 
