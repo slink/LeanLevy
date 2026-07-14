@@ -36,7 +36,8 @@ independent Poisson laws under convolution, and the degenerate zero-rate case.
 
 All three proofs follow the same pattern: strip off the first few zero terms via
 `hasSum_nat_add_iff'`, simplify the shifted summand using `Nat.factorial_succ`, and
-reduce to `poissonPMFRealSum` (the normalization identity `∑ poissonPMFReal r n = 1`).
+reduce to `hasSum_poissonMeasure_real` (the normalization identity
+`∑ (poissonMeasure r).real {n} = 1`), obtained via mathlib's `poissonMeasure`/`.real {n}` atoms.
 
 The characteristic function connects to the project's `Characteristic.lean` infrastructure
 and is needed for future Lévy process / compound Poisson work.
@@ -80,7 +81,7 @@ theorem poissonExpectation_hasSum (r : ℝ≥0) :
 /-! ## Variance: Var[X] = r -/
 
 /-- Algebraic identity for the factorial moment shift:
-`(n+2)(n+1) * poissonPMFReal r (n+2) = r² * poissonPMFReal r n`. -/
+`(n+2)(n+1) * (poissonMeasure r).real {n+2} = r² * (poissonMeasure r).real {n}`. -/
 private lemma factorial_moment_shift (r : ℝ≥0) (n : ℕ) :
     (↑(n + 2) : ℝ) * ↑(n + 1) * (poissonMeasure r).real {n + 2} =
     (r : ℝ) ^ 2 * (poissonMeasure r).real {n} := by
@@ -223,13 +224,8 @@ theorem poissonMeasure_zero : poissonMeasure 0 = Measure.dirac 0 := by
 /-- The characteristic function of the Poisson measure pushed forward to `ℝ` equals
 `exp(r(e^{iξ} − 1))`.
 
-**Proof:**
-1. Unfold `charFun` via `charFun_apply_real`.
-2. Pull through `Measure.map` via `integral_map`.
-3. Unfold `poissonMeasure` as `(poissonPMF r).toMeasure`.
-4. Apply `PMF.integral_eq_tsum`.
-5. Rewrite `smul` to multiplication.
-6. Match with `poissonCharFun` and apply `poissonCharFun_eq`. -/
+**Proof:** immediate from mathlib's `charFun_map_cast_poissonMeasure`, the closed form for the
+characteristic function of the ℝ-pushforward of `poissonMeasure`. -/
 theorem charFun_poissonMeasure_eq (r : ℝ≥0) (ξ : ℝ) :
     charFun ((poissonMeasure r).map (Nat.cast : ℕ → ℝ)) ξ =
     cexp (↑(r : ℝ) * (cexp (↑ξ * I) - 1)) := by

@@ -1272,7 +1272,8 @@ private theorem kolmogorovExtension_coord_zero_ae (rate : ℝ≥0) :
   rw [← Measure.map_apply (measurable_pi_apply 0) (MeasurableSet.compl (measurableSet_singleton 0))]
   rw [kolmogorovExtension_map_coord rate 0, mul_zero]
   -- poissonMeasure 0 {0}ᶜ = 0 because poissonMeasure 0 = Dirac 0
-  -- poissonMeasure 0 = (poissonPMF 0).toMeasure, and poissonPMF 0 0 = 1 (by definition with 0^0/0! = 1)
+  -- poissonMeasure 0 = Measure.sum (fun n ↦ ENNReal.ofReal (exp(-0) * 0^n / n!) • dirac n),
+  -- so poissonMeasure 0 {0} = ENNReal.ofReal (exp(-0) * 0^0 / 0!) = 1 (by definition with 0^0/0! = 1)
   -- poissonMeasure 0 {0}ᶜ = 1 - poissonMeasure 0 {0} = 1 - 1 = 0
   rw [measure_compl (measurableSet_singleton 0) (measure_ne_top _ _),
     measure_univ, show poissonMeasure 0 {0} = 1 from ?_, tsub_self]
