@@ -109,7 +109,7 @@ The codebase is sorry-free. `#print axioms` on the main results — the Lévy–
 
 ## Building
 
-Requires Lean 4 (v4.29.0-rc3) and mathlib.
+Requires Lean 4 (v4.32.0) and mathlib.
 
 ```
 lake build
