@@ -867,6 +867,305 @@ theorem charFun_map_levyLargeJumpSum [IsProbabilityMeasure μ]
   have hval := tendsto_nhds_unique hdct hprodlim
   rw [charFun_apply_real, integral_map hmeas_sum.aemeasurable (by fun_prop), hval, hfinal]
 
+/-! ### The characteristic function of compensated band sums
+
+For a mark set `A ⊆ (-1, 1)` with finite `ν`-mass, the compensated Poisson sum of the band test
+function `1_{(0,t] × A}(u, x) · x` has characteristic function
+`exp (t · ∫_A (e^{ixξ} − 1 − ixξ) dν)`. The proof is the sibling of `charFun_map_levyLargeJumpSum`
+with the per-piece compensator riding along: the compensated partial sums factor into per-piece
+factors carrying the extra `−iξ ∫ f` drift, and dominated convergence together with the
+piece-partition sum of the band integral pass to the limit. -/
+
+/-- The band test function `1_{(0,t] × A}(u, x) · x` is measurable. -/
+private lemma measurable_bandFun {A : Set ℝ} (hA : MeasurableSet A) (t : ℝ) :
+    Measurable ((Set.Ioc 0 t ×ˢ A).indicator fun p : ℝ × ℝ => p.2) :=
+  measurable_snd.indicator (measurableSet_Ioc.prod hA)
+
+/-- The band test function is integrable against `volume.prod ν` when `A ⊆ (-1, 1)` has finite mass:
+its support has finite `volume.prod ν`-mass and `|x| ≤ 1` there. -/
+private lemma integrable_bandFun {A : Set ℝ} (hA : MeasurableSet A)
+    (hAsub : A ⊆ Set.Ioo (-1) 1) (hAfin : ν A < ⊤) (t : ℝ) :
+    Integrable ((Set.Ioc 0 t ×ˢ A).indicator fun p : ℝ × ℝ => p.2)
+      ((volume : Measure ℝ).prod ν) := by
+  have hbandmeas : MeasurableSet (Set.Ioc 0 t ×ˢ A) := measurableSet_Ioc.prod hA
+  have hbandfin : (volume.prod ν) (Set.Ioc 0 t ×ˢ A) < ⊤ :=
+    volume_prod_Ioc_prod_lt_top (m := ν) (s := 0) (t := t) hAfin
+  rw [integrable_indicator_iff hbandmeas]
+  refine IntegrableOn.of_bound hbandfin measurable_snd.aestronglyMeasurable 1 ?_
+  refine (ae_restrict_mem hbandmeas).mono fun p hp => ?_
+  obtain ⟨h1, h2⟩ := hAsub hp.2
+  rw [Real.norm_eq_abs]
+  exact abs_le.mpr ⟨le_of_lt h1, le_of_lt h2⟩
+
+/-- The band test function lies in `L²(volume.prod ν)` when `A ⊆ (-1, 1)` has finite mass: its
+square is bounded by `1` on the finite-mass support. -/
+private lemma memLp_two_bandFun {A : Set ℝ} (hA : MeasurableSet A)
+    (hAsub : A ⊆ Set.Ioo (-1) 1) (hAfin : ν A < ⊤) (t : ℝ) :
+    MemLp ((Set.Ioc 0 t ×ˢ A).indicator fun p : ℝ × ℝ => p.2) 2
+      ((volume : Measure ℝ).prod ν) := by
+  have hbandmeas : MeasurableSet (Set.Ioc 0 t ×ˢ A) := measurableSet_Ioc.prod hA
+  have hbandfin : (volume.prod ν) (Set.Ioc 0 t ×ˢ A) < ⊤ :=
+    volume_prod_Ioc_prod_lt_top (m := ν) (s := 0) (t := t) hAfin
+  refine ⟨(measurable_snd.indicator hbandmeas).aestronglyMeasurable, ?_⟩
+  rw [eLpNorm_eq_lintegral_rpow_enorm_toReal (by norm_num) (by norm_num),
+    show ((2 : ℝ≥0∞).toReal) = (2 : ℝ) from by norm_num]
+  refine ENNReal.rpow_lt_top_of_nonneg (by norm_num) ?_
+  have hle : (fun p : ℝ × ℝ =>
+        ‖(Set.Ioc 0 t ×ˢ A).indicator (fun q : ℝ × ℝ => q.2) p‖ₑ ^ (2 : ℝ))
+      ≤ (Set.Ioc 0 t ×ˢ A).indicator fun _ : ℝ × ℝ => (1 : ℝ≥0∞) := by
+    intro p
+    dsimp only
+    by_cases hp : p ∈ Set.Ioc 0 t ×ˢ A
+    · rw [Set.indicator_of_mem hp, Set.indicator_of_mem hp]
+      obtain ⟨h1, h2⟩ := hAsub hp.2
+      have habs : |p.2| ≤ 1 := abs_le.mpr ⟨le_of_lt h1, le_of_lt h2⟩
+      calc ‖p.2‖ₑ ^ (2 : ℝ) ≤ (1 : ℝ≥0∞) ^ (2 : ℝ) := by
+            refine ENNReal.rpow_le_rpow ?_ (by norm_num)
+            rw [Real.enorm_eq_ofReal_abs]
+            exact ENNReal.ofReal_le_one.mpr habs
+        _ = 1 := ENNReal.one_rpow _
+    · rw [Set.indicator_of_notMem hp, enorm_zero, ENNReal.zero_rpow_of_pos (by norm_num)]
+      exact bot_le
+  refine ne_of_lt (lt_of_le_of_lt (lintegral_mono hle) ?_)
+  rw [lintegral_indicator hbandmeas, setLIntegral_const, one_mul]
+  exact hbandfin
+
+/-- **The partial-product identity for compensated band sums.** The mean of
+`exp (i ξ · (partial compensated sum over pieces `0, …, n`))` factors into the per-piece
+compensated factors, each carrying the drift `−iξ ∫ f`. Obtained from the uncompensated
+`charFun_partial_largeJumpSum` by pulling out the constant `exp (−iξ ∑ ∫ f)`. -/
+private lemma charFun_partial_compensatedBandSum [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X (volume.prod ν) μ) {f : ℝ × ℝ → ℝ} (hf : Measurable f)
+    (hf1 : Integrable f (volume.prod ν)) (ξ : ℝ) (n : ℕ) :
+    ∫ ω, Complex.exp (↑ξ * ↑(∑ k ∈ Finset.range (n + 1),
+        compensatedPieceSum K X f (volume.prod ν) k ω) * Complex.I) ∂μ
+      = ∏ k ∈ Finset.range (n + 1),
+          Complex.exp (∫ x in prmPiece (volume.prod ν) k,
+            (Complex.exp (↑ξ * ↑(f x) * Complex.I) - 1 - ↑ξ * ↑(f x) * Complex.I)
+              ∂(volume.prod ν)) := by
+  have hmeasE1 : Measurable fun x : ℝ × ℝ => Complex.exp (↑ξ * ↑(f x) * Complex.I) - 1 :=
+    (Complex.measurable_exp.comp
+      (((Complex.measurable_ofReal.comp hf).const_mul (↑ξ)).mul_const Complex.I)).sub
+      measurable_const
+  have hboundE1 : ∀ x : ℝ × ℝ, ‖Complex.exp (↑ξ * ↑(f x) * Complex.I) - 1‖ ≤ 2 := fun x => by
+    calc ‖Complex.exp (↑ξ * ↑(f x) * Complex.I) - 1‖
+        ≤ ‖Complex.exp (↑ξ * ↑(f x) * Complex.I)‖ + ‖(1 : ℂ)‖ := norm_sub_le _ _
+      _ = 2 := by
+        rw [show (↑ξ * ↑(f x) * Complex.I : ℂ) = ↑(ξ * f x) * Complex.I from by push_cast; ring,
+          Complex.norm_exp_ofReal_mul_I, norm_one]; norm_num
+  have hE1int : ∀ k, IntegrableOn (fun x : ℝ × ℝ => Complex.exp (↑ξ * ↑(f x) * Complex.I) - 1)
+      (prmPiece (volume.prod ν) k) (volume.prod ν) := fun k =>
+    IntegrableOn.of_bound measure_prmPiece_lt_top hmeasE1.aestronglyMeasurable 2
+      (Filter.Eventually.of_forall hboundE1)
+  have hLint : ∀ k, IntegrableOn (fun x : ℝ × ℝ => (↑ξ * ↑(f x) * Complex.I : ℂ))
+      (prmPiece (volume.prod ν) k) (volume.prod ν) := by
+    intro k
+    have h0 : IntegrableOn (fun x : ℝ × ℝ => (↑(f x) : ℂ))
+        (prmPiece (volume.prod ν) k) (volume.prod ν) := hf1.integrableOn.ofReal
+    exact (h0.const_mul (↑ξ : ℂ)).mul_const Complex.I
+  have halg :
+      Complex.exp (-(↑ξ * ↑(∑ k ∈ Finset.range (n + 1),
+          ∫ x in prmPiece (volume.prod ν) k, f x ∂(volume.prod ν)) * Complex.I))
+        * ∏ k ∈ Finset.range (n + 1),
+            Complex.exp (∫ x in prmPiece (volume.prod ν) k,
+              (Complex.exp (↑ξ * ↑(f x) * Complex.I) - 1) ∂(volume.prod ν))
+      = ∏ k ∈ Finset.range (n + 1),
+          Complex.exp (∫ x in prmPiece (volume.prod ν) k,
+            (Complex.exp (↑ξ * ↑(f x) * Complex.I) - 1 - ↑ξ * ↑(f x) * Complex.I)
+              ∂(volume.prod ν)) := by
+    have hper : ∀ k ∈ Finset.range (n + 1),
+        ∫ x in prmPiece (volume.prod ν) k,
+            (Complex.exp (↑ξ * ↑(f x) * Complex.I) - 1 - ↑ξ * ↑(f x) * Complex.I)
+              ∂(volume.prod ν)
+          = (∫ x in prmPiece (volume.prod ν) k,
+              (Complex.exp (↑ξ * ↑(f x) * Complex.I) - 1) ∂(volume.prod ν))
+            - ↑ξ * ↑(∫ x in prmPiece (volume.prod ν) k, f x ∂(volume.prod ν)) * Complex.I := by
+      intro k _
+      rw [integral_sub (hE1int k) (hLint k)]
+      congr 1
+      rw [integral_mul_const, integral_const_mul, integral_complex_ofReal]
+    simp only [← Complex.exp_sum]
+    rw [← Complex.exp_add]
+    congr 1
+    rw [Finset.sum_congr rfl hper, Finset.sum_sub_distrib]
+    have hCeq : (∑ k ∈ Finset.range (n + 1),
+          ↑ξ * ↑(∫ x in prmPiece (volume.prod ν) k, f x ∂(volume.prod ν)) * Complex.I)
+        = ↑ξ * ↑(∑ k ∈ Finset.range (n + 1),
+            ∫ x in prmPiece (volume.prod ν) k, f x ∂(volume.prod ν)) * Complex.I := by
+      rw [Complex.ofReal_sum, Finset.mul_sum, Finset.sum_mul]
+    rw [hCeq]
+    ring
+  have hexp : ∀ ω, Complex.exp (↑ξ * ↑(∑ k ∈ Finset.range (n + 1),
+        compensatedPieceSum K X f (volume.prod ν) k ω) * Complex.I)
+      = Complex.exp (-(↑ξ * ↑(∑ k ∈ Finset.range (n + 1),
+          ∫ x in prmPiece (volume.prod ν) k, f x ∂(volume.prod ν)) * Complex.I))
+        * Complex.exp (↑ξ * ↑(∑ k ∈ Finset.range (n + 1),
+            pieceSum K X f k ω) * Complex.I) := by
+    intro ω
+    rw [← Complex.exp_add]
+    congr 1
+    rw [show (∑ k ∈ Finset.range (n + 1), compensatedPieceSum K X f (volume.prod ν) k ω)
+          = (∑ k ∈ Finset.range (n + 1), pieceSum K X f k ω)
+            - ∑ k ∈ Finset.range (n + 1),
+                ∫ x in prmPiece (volume.prod ν) k, f x ∂(volume.prod ν) from by
+        rw [← Finset.sum_sub_distrib]; rfl]
+    push_cast
+    ring
+  rw [integral_congr_ae (Filter.Eventually.of_forall hexp), integral_const_mul,
+    charFun_partial_largeJumpSum hd hf ξ n]
+  exact halg
+
+/-- **Characteristic function of a compensated band sum.** For a mark set `A` inside the unit
+interval with finite `ν`-mass, the compensated Poisson sum of the band test function
+`1_{(0,t] × A}(u, x) · x` has characteristic function `exp (t · ∫_A (e^{ixξ} − 1 − ixξ) dν)`. -/
+theorem charFun_map_compensatedBandSum [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ)
+    {A : Set ℝ} (hA : MeasurableSet A) (hAsub : A ⊆ Set.Ioo (-1) 1) (hAfin : ν A < ⊤)
+    {t : ℝ} (ht : 0 ≤ t) (ξ : ℝ) :
+    charFun (μ.map (compensatedPoissonSum K X
+        ((Set.Ioc 0 t ×ˢ A).indicator fun p => p.2) ((volume : Measure ℝ).prod ν))) ξ
+      = Complex.exp ((t : ℂ) * ∫ x in A,
+          (Complex.exp (x * ξ * Complex.I) - 1 - x * ξ * Complex.I) ∂ν) := by
+  have hbandmeas : MeasurableSet (Set.Ioc 0 t ×ˢ A) := measurableSet_Ioc.prod hA
+  set f : ℝ × ℝ → ℝ := (Set.Ioc 0 t ×ˢ A).indicator fun p : ℝ × ℝ => p.2 with hf_def
+  have hbandFnmeas : Measurable f := measurable_bandFun hA t
+  have hbandfin : (volume.prod ν) (Set.Ioc 0 t ×ˢ A) < ⊤ :=
+    volume_prod_Ioc_prod_lt_top (m := ν) (s := 0) (t := t) hAfin
+  have hf1 : Integrable f (volume.prod ν) := integrable_bandFun hA hAsub hAfin t
+  have hf2 : MemLp f 2 (volume.prod ν) := memLp_two_bandFun hA hAsub hAfin t
+  have hgmeas : Measurable fun r : ℝ => Complex.exp (↑ξ * ↑r * Complex.I) :=
+    Complex.measurable_exp.comp ((Complex.measurable_ofReal.const_mul (↑ξ)).mul_const Complex.I)
+  have hgcont : Continuous fun r : ℝ => Complex.exp (↑ξ * ↑r * Complex.I) := by fun_prop
+  -- The band integrand `e^{iξf} − 1 − iξf` in indicator form.
+  have hg'eq : (fun x : ℝ × ℝ =>
+        Complex.exp (↑ξ * ↑(f x) * Complex.I) - 1 - ↑ξ * ↑(f x) * Complex.I)
+      = (Set.Ioc 0 t ×ˢ A).indicator
+          fun q : ℝ × ℝ => Complex.exp (↑ξ * ↑q.2 * Complex.I) - 1 - ↑ξ * ↑q.2 * Complex.I := by
+    funext x
+    by_cases hx : x ∈ Set.Ioc 0 t ×ˢ A
+    · rw [hf_def]; simp only [Set.indicator_of_mem hx]
+    · rw [hf_def]; simp [Set.indicator_of_notMem hx]
+  have hbound2 : ∀ x : ℝ × ℝ, ‖Complex.exp (↑ξ * ↑x.2 * Complex.I) - 1‖ ≤ 2 := fun x => by
+    calc ‖Complex.exp (↑ξ * ↑x.2 * Complex.I) - 1‖
+        ≤ ‖Complex.exp (↑ξ * ↑x.2 * Complex.I)‖ + ‖(1 : ℂ)‖ := norm_sub_le _ _
+      _ = 2 := by
+        rw [show (↑ξ * ↑x.2 * Complex.I : ℂ) = ↑(ξ * x.2) * Complex.I from by push_cast; ring,
+          Complex.norm_exp_ofReal_mul_I, norm_one]; norm_num
+  have hintegrand_meas : Measurable
+      fun q : ℝ × ℝ => Complex.exp (↑ξ * ↑q.2 * Complex.I) - 1 - ↑ξ * ↑q.2 * Complex.I := by
+    have h1 : Measurable fun q : ℝ × ℝ => (↑ξ * ↑q.2 * Complex.I : ℂ) :=
+      ((Complex.measurable_ofReal.comp measurable_snd).const_mul (↑ξ)).mul_const Complex.I
+    exact ((Complex.measurable_exp.comp h1).sub measurable_const).sub h1
+  have hband_intOn : IntegrableOn
+      (fun q : ℝ × ℝ => Complex.exp (↑ξ * ↑q.2 * Complex.I) - 1 - ↑ξ * ↑q.2 * Complex.I)
+      (Set.Ioc 0 t ×ˢ A) (volume.prod ν) := by
+    refine IntegrableOn.of_bound hbandfin hintegrand_meas.aestronglyMeasurable (2 + |ξ|) ?_
+    refine (ae_restrict_mem hbandmeas).mono fun q hq => ?_
+    obtain ⟨h1, h2⟩ := hAsub hq.2
+    have habs : |q.2| ≤ 1 := abs_le.mpr ⟨le_of_lt h1, le_of_lt h2⟩
+    have hlin : ‖(↑ξ * ↑q.2 * Complex.I : ℂ)‖ ≤ |ξ| := by
+      rw [show (↑ξ * ↑q.2 * Complex.I : ℂ) = ↑(ξ * q.2) * Complex.I from by push_cast; ring,
+        norm_mul, Complex.norm_I, mul_one, Complex.norm_real, Real.norm_eq_abs, abs_mul]
+      calc |ξ| * |q.2| ≤ |ξ| * 1 := mul_le_mul_of_nonneg_left habs (abs_nonneg _)
+        _ = |ξ| := mul_one _
+    calc ‖Complex.exp (↑ξ * ↑q.2 * Complex.I) - 1 - ↑ξ * ↑q.2 * Complex.I‖
+        ≤ ‖Complex.exp (↑ξ * ↑q.2 * Complex.I) - 1‖ + ‖(↑ξ * ↑q.2 * Complex.I : ℂ)‖ :=
+          norm_sub_le _ _
+      _ ≤ 2 + |ξ| := add_le_add (hbound2 q) hlin
+  have hg_int : Integrable (fun x : ℝ × ℝ =>
+      Complex.exp (↑ξ * ↑(f x) * Complex.I) - 1 - ↑ξ * ↑(f x) * Complex.I) (volume.prod ν) := by
+    rw [hg'eq]; exact (integrable_indicator_iff hbandmeas).mpr hband_intOn
+  -- The piece-partition sum of the per-piece exponents.
+  have hGHasSum : HasSum
+      (fun k => ∫ x in prmPiece (volume.prod ν) k,
+        (Complex.exp (↑ξ * ↑(f x) * Complex.I) - 1 - ↑ξ * ↑(f x) * Complex.I) ∂(volume.prod ν))
+      (∫ x, (Complex.exp (↑ξ * ↑(f x) * Complex.I) - 1 - ↑ξ * ↑(f x) * Complex.I)
+        ∂(volume.prod ν)) := by
+    have h := hasSum_integral_iUnion (μ := volume.prod ν)
+      (f := fun x : ℝ × ℝ =>
+        Complex.exp (↑ξ * ↑(f x) * Complex.I) - 1 - ↑ξ * ↑(f x) * Complex.I)
+      (fun k => measurableSet_prmPiece (m := volume.prod ν))
+      (pairwise_disjoint_prmPiece (m := volume.prod ν))
+      (by rw [iUnion_prmPiece]; exact hg_int.integrableOn)
+    rwa [iUnion_prmPiece, setIntegral_univ] at h
+  -- The band integral equals the compensated-Poisson exponent.
+  have hfinal : (∫ x, (Complex.exp (↑ξ * ↑(f x) * Complex.I) - 1 - ↑ξ * ↑(f x) * Complex.I)
+        ∂(volume.prod ν))
+      = (t : ℂ) * ∫ x in A, (Complex.exp (↑x * ↑ξ * Complex.I) - 1 - ↑x * ↑ξ * Complex.I) ∂ν := by
+    rw [hg'eq, integral_indicator hbandmeas, setIntegral_prod _ hband_intOn]
+    dsimp only
+    rw [setIntegral_const, measureReal_def, Real.volume_Ioc, sub_zero,
+      ENNReal.toReal_ofReal ht, Complex.real_smul]
+    refine congrArg (fun z => (↑t : ℂ) * z) ?_
+    refine integral_congr_ae (Filter.Eventually.of_forall fun y => ?_)
+    dsimp only
+    simp only [mul_comm (↑ξ : ℂ) (↑y : ℂ)]
+  -- Dominated convergence: partial compensated sums converge a.e. to the compensated Poisson sum.
+  have hmeas_sum : AEStronglyMeasurable (compensatedPoissonSum K X f (volume.prod ν)) μ :=
+    (memLp_two_compensatedPoissonSum hd hbandFnmeas hf1 hf2).aestronglyMeasurable
+  have hFmeas : ∀ n, Measurable fun ω =>
+      Complex.exp (↑ξ * ↑(∑ k ∈ Finset.range (n + 1),
+        compensatedPieceSum K X f (volume.prod ν) k ω) * Complex.I) := fun n =>
+    hgmeas.comp (Finset.measurable_sum _ fun k _ =>
+      measurable_compensatedPieceSum hd hbandFnmeas)
+  have hbound : ∀ n, ∀ᵐ ω ∂μ, ‖Complex.exp (↑ξ * ↑(∑ k ∈ Finset.range (n + 1),
+        compensatedPieceSum K X f (volume.prod ν) k ω) * Complex.I)‖
+        ≤ (fun _ : Ω => (1 : ℝ)) ω := fun n => by
+    filter_upwards with ω
+    rw [show (↑ξ * ↑(∑ k ∈ Finset.range (n + 1),
+          compensatedPieceSum K X f (volume.prod ν) k ω) * Complex.I : ℂ)
+        = ↑(ξ * ∑ k ∈ Finset.range (n + 1),
+          compensatedPieceSum K X f (volume.prod ν) k ω) * Complex.I from by push_cast; ring,
+      Complex.norm_exp_ofReal_mul_I]
+  have hlim : ∀ᵐ ω ∂μ, Tendsto (fun n =>
+      Complex.exp (↑ξ * ↑(∑ k ∈ Finset.range (n + 1),
+        compensatedPieceSum K X f (volume.prod ν) k ω) * Complex.I)) atTop
+      (𝓝 (Complex.exp (↑ξ * ↑(compensatedPoissonSum K X f (volume.prod ν) ω) * Complex.I))) := by
+    filter_upwards [ae_finite_support_pieceSum hd hbandmeas hbandfin (g := f)
+      (fun p hp => by rw [hf_def]; exact Set.indicator_of_notMem hp _)] with ω hωfin
+    have hsummablePiece : Summable (fun k => pieceSum K X f k ω) :=
+      summable_of_ne_finset_zero (s := hωfin.toFinset) fun k hk => by
+        by_contra hne
+        exact hk (hωfin.mem_toFinset.mpr hne)
+    have hsummableC : Summable (fun k =>
+        ∫ x in prmPiece (volume.prod ν) k, f x ∂(volume.prod ν)) := by
+      have h := hasSum_integral_iUnion (μ := volume.prod ν) (f := f)
+        (fun k => measurableSet_prmPiece (m := volume.prod ν))
+        (pairwise_disjoint_prmPiece (m := volume.prod ν))
+        (by rw [iUnion_prmPiece]; exact hf1.integrableOn)
+      exact h.summable
+    have hsummableComp : Summable (fun k => compensatedPieceSum K X f (volume.prod ν) k ω) :=
+      (hsummablePiece.hasSum.sub hsummableC.hasSum).summable
+    have htends : Tendsto (fun n => ∑ k ∈ Finset.range (n + 1),
+          compensatedPieceSum K X f (volume.prod ν) k ω)
+        atTop (𝓝 (compensatedPoissonSum K X f (volume.prod ν) ω)) :=
+      hsummableComp.hasSum.tendsto_sum_nat.comp (tendsto_add_atTop_nat 1)
+    exact (hgcont.tendsto _).comp htends
+  have hdct := tendsto_integral_of_dominated_convergence (μ := μ) (fun _ => (1 : ℝ))
+    (fun n => (hFmeas n).aestronglyMeasurable) (integrable_const 1) hbound hlim
+  simp_rw [charFun_partial_compensatedBandSum hd hbandFnmeas hf1 ξ] at hdct
+  -- The product side converges to the compensated-Poisson exponential.
+  have hprodexp : ∀ n, ∏ k ∈ Finset.range (n + 1),
+        Complex.exp (∫ x in prmPiece (volume.prod ν) k,
+          (Complex.exp (↑ξ * ↑(f x) * Complex.I) - 1 - ↑ξ * ↑(f x) * Complex.I) ∂(volume.prod ν))
+      = Complex.exp (∑ k ∈ Finset.range (n + 1),
+          ∫ x in prmPiece (volume.prod ν) k,
+            (Complex.exp (↑ξ * ↑(f x) * Complex.I) - 1 - ↑ξ * ↑(f x) * Complex.I)
+              ∂(volume.prod ν)) :=
+    fun n => (Complex.exp_sum _ _).symm
+  simp_rw [hprodexp] at hdct
+  have hprodlim : Tendsto (fun n => Complex.exp (∑ k ∈ Finset.range (n + 1),
+        ∫ x in prmPiece (volume.prod ν) k,
+          (Complex.exp (↑ξ * ↑(f x) * Complex.I) - 1 - ↑ξ * ↑(f x) * Complex.I)
+            ∂(volume.prod ν))) atTop
+      (𝓝 (Complex.exp (∫ x,
+        (Complex.exp (↑ξ * ↑(f x) * Complex.I) - 1 - ↑ξ * ↑(f x) * Complex.I)
+          ∂(volume.prod ν)))) :=
+    (Complex.continuous_exp.tendsto _).comp
+      (hGHasSum.tendsto_sum_nat.comp (tendsto_add_atTop_nat 1))
+  have hval := tendsto_nhds_unique hdct hprodlim
+  rw [charFun_apply_real, integral_map hmeas_sum.aemeasurable (by fun_prop), hval, hfinal]
+
 end LevyIntensity
 
 end ProbabilityTheory
