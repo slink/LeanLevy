@@ -166,7 +166,7 @@ theorem integral_sq_finsetSum_compensatedPieceSum [IsProbabilityMeasure μ]
   have hAEmeas : AEMeasurable (fun ω => ∑ k ∈ s, compensatedPieceSum K X f m k ω) μ :=
     (Finset.measurable_sum s fun k _ => measurable_compensatedPieceSum hd hf).aemeasurable
   have hSint0 : ∫ ω, (∑ k ∈ s, compensatedPieceSum K X f m k ω) ∂μ = 0 := by
-    rw [integral_finset_sum s fun k _ => integrable_compensatedPieceSum hd hf hf1 hf2]
+    rw [integral_finsetSum s fun k _ => integrable_compensatedPieceSum hd hf hf1 hf2]
     simp [hcenter]
   calc ∫ ω, (∑ k ∈ s, compensatedPieceSum K X f m k ω) ^ 2 ∂μ
       = variance (fun ω => ∑ k ∈ s, compensatedPieceSum K X f m k ω) μ :=
@@ -309,7 +309,7 @@ theorem ae_summable_compensatedPieceSum [IsProbabilityMeasure μ] (hd : IsPoisso
   have hfin : ∫⁻ ω, ∑' k, ‖compensatedPieceSum K X f m k ω‖ₑ ∂μ ≠ ⊤ := by
     rw [lintegral_tsum hmeas]
     exact tsum_lintegral_enorm_compensatedPieceSum_ne_top hd hf hf1 hf2
-  have hae := ae_lt_top' (AEMeasurable.ennreal_tsum hmeas) hfin
+  have hae := ae_lt_top' (AEMeasurable.tsum hmeas) hfin
   filter_upwards [hae] with ω hω
   have hsc : Summable (fun k => ‖compensatedPieceSum K X f m k ω‖₊) := by
     rw [← ENNReal.tsum_coe_ne_top_iff_summable]
@@ -354,7 +354,7 @@ private theorem memLp_two_and_integral_sq_le [IsProbabilityMeasure μ]
   have hTnmeas : ∀ n, Measurable (Tn n) :=
     fun n => Finset.measurable_sum _ fun k _ => measurable_compensatedPieceSum hd hf
   have hTnint : ∀ n, Integrable (fun ω => (Tn n ω) ^ 2) μ :=
-    fun n => (memLp_finset_sum _ fun k _ => memLp_two_compensatedPieceSum hd hf hf1 hf2).integrable_sq
+    fun n => (memLp_finsetSum _ fun k _ => memLp_two_compensatedPieceSum hd hf hf1 hf2).integrable_sq
   have hTnle : ∀ n, ∫ ω, (Tn n ω) ^ 2 ∂μ ≤ ∫ x, f x ^ 2 ∂m := by
     intro n
     rw [integral_sq_finsetSum_compensatedPieceSum hd hf hf1 hf2 (Finset.range n)]
@@ -389,7 +389,7 @@ theorem integral_sq_compensatedPoissonSum [IsProbabilityMeasure μ]
   have hv_hasSum : HasSum v (∫ x, f x ^ 2 ∂m) := hasSum_setIntegral_prmPiece hf2.integrable_sq
   set Tn : ℕ → Ω → ℝ := fun n ω => ∑ k ∈ Finset.range n, compensatedPieceSum K X f m k ω with hTn
   have hTnmemlp : ∀ n, MemLp (Tn n) 2 μ :=
-    fun n => memLp_finset_sum _ fun k _ => memLp_two_compensatedPieceSum hd hf hf1 hf2
+    fun n => memLp_finsetSum _ fun k _ => memLp_two_compensatedPieceSum hd hf hf1 hf2
   have hTnint : ∀ n, Integrable (fun ω => (Tn n ω) ^ 2) μ := fun n => (hTnmemlp n).integrable_sq
   have hTnsq : ∀ n, ∫ ω, (Tn n ω) ^ 2 ∂μ = ∑ k ∈ Finset.range n, v k :=
     fun n => integral_sq_finsetSum_compensatedPieceSum hd hf hf1 hf2 (Finset.range n)
@@ -431,8 +431,8 @@ theorem integral_sq_compensatedPoissonSum [IsProbabilityMeasure μ]
       have hbnd := sum_le_hasSum (Finset.range (N + n)) (fun i _ => hv_nonneg i) hv_hasSum
       simp only [hSv]; linarith
     have hgint : ∀ N, Integrable (fun ω => (gseq N ω) ^ 2) μ := fun N =>
-      ((memLp_finset_sum _ fun k _ => memLp_two_compensatedPieceSum hd hf hf1 hf2).sub
-        (memLp_finset_sum _ fun k _ => memLp_two_compensatedPieceSum hd hf hf1 hf2)).integrable_sq
+      ((memLp_finsetSum _ fun k _ => memLp_two_compensatedPieceSum hd hf hf1 hf2).sub
+        (memLp_finsetSum _ fun k _ => memLp_two_compensatedPieceSum hd hf hf1 hf2)).integrable_sq
     have hgtend : ∀ᵐ ω ∂μ, Tendsto (fun N => gseq N ω) atTop (𝓝 (T ω - Tn n ω)) := by
       filter_upwards [htend] with ω hω
       exact (hω.comp (tendsto_add_atTop_nat n)).sub_const _
@@ -598,13 +598,17 @@ private theorem dist_compensatedPoissonToLp [IsProbabilityMeasure μ]
       = compensatedPoissonSum K X (fun x => f x - g x) m ω := by
     filter_upwards [compensatedPoissonSum_sub hd hf hf1 hf2 hg hg1 hg2] with ω hω
     simpa [Pi.sub_apply] using hω.symm
+  -- The `.sub` combinators yield the `f - g` (`Pi.sub`) shape, but the sum lemmas above
+  -- carry the `fun x => f x - g x` shape; pin the fun-form so the rewrites line up.
+  have hfg : Measurable (fun x => f x - g x) := hf.sub hg
+  have hfg1 : Integrable (fun x => f x - g x) m := hf1.sub hg1
+  have hfg2 : MemLp (fun x => f x - g x) 2 m := hf2.sub hg2
   rw [dist_eq_norm]
   unfold compensatedPoissonToLp
   rw [← MemLp.toLp_sub, Lp.norm_toLp, eLpNorm_congr_ae hsub,
-    eLpNorm_two_toReal_eq_sqrt (memLp_two_compensatedPoissonSum hd (hf.sub hg)
-      (hf1.sub hg1) (hf2.sub hg2)),
-    integral_sq_compensatedPoissonSum hd (hf.sub hg) (hf1.sub hg1) (hf2.sub hg2)]
-  exact (eLpNorm_two_toReal_eq_sqrt (hf2.sub hg2)).symm
+    eLpNorm_two_toReal_eq_sqrt (memLp_two_compensatedPoissonSum hd hfg hfg1 hfg2),
+    integral_sq_compensatedPoissonSum hd hfg hfg1 hfg2]
+  exact (eLpNorm_two_toReal_eq_sqrt hfg2).symm
 
 /-! ### Simple-function approximation and the density extension -/
 
@@ -644,9 +648,9 @@ private theorem approxSimple_eLpNorm_tendsto (f : Lp ℝ 2 m) :
   have hub : Tendsto (fun n : ℕ => ENNReal.ofReal (1 / (n + 1))) atTop (𝓝 0) := by
     have hr : Tendsto (fun n : ℕ => (1 : ℝ) / (n + 1)) atTop (𝓝 0) :=
       tendsto_one_div_add_atTop_nhds_zero_nat
-    simpa using (ENNReal.continuous_ofReal.tendsto 0).comp hr
+    simpa [Function.comp_def] using (ENNReal.continuous_ofReal.tendsto 0).comp hr
   refine tendsto_of_tendsto_of_tendsto_of_le_of_le' tendsto_const_nhds hub
-    (Eventually.of_forall fun n => zero_le _) (Eventually.of_forall fun n => ?_)
+    (Eventually.of_forall fun n => zero_le) (Eventually.of_forall fun n => ?_)
   exact (approxSimple_eLpNorm_lt f n).le
 
 omit [SigmaFinite m] [Nonempty E] in
@@ -665,7 +669,7 @@ private theorem tendsto_toLp_approxSimple (f : Lp ℝ 2 m) :
       MemLp.coeFn_toLp (approxSimple_memLp f n)] with x h1 h2
     rw [h1]; simp only [Pi.sub_apply]; rw [h2]
   simp_rw [heq]
-  simpa using (ENNReal.tendsto_toReal (by simp)).comp (approxSimple_eLpNorm_tendsto f)
+  simpa [Function.comp_def] using (ENNReal.tendsto_toReal (by simp)).comp (approxSimple_eLpNorm_tendsto f)
 
 /-- The compensated images of the approximation form a Cauchy sequence in `L²(μ)`. -/
 private theorem cauchySeq_compApproxSeq [IsProbabilityMeasure μ]
@@ -720,9 +724,9 @@ private theorem tendsto_compensatedPoissonToLp_of_eLpNorm_sub_tendsto [IsProbabi
       (tendsto_const_nhds (x := compensatedPoissonIntegral hd f))
     rwa [dist_self] at h
   have t1 : Tendsto (fun n => (eLpNorm (⇑f - gm n) 2 m).toReal) atTop (𝓝 0) := by
-    simpa using (ENNReal.tendsto_toReal (by simp)).comp htend
+    simpa [Function.comp_def] using (ENNReal.tendsto_toReal (by simp)).comp htend
   have t2 : Tendsto (fun n => (eLpNorm (⇑f - ⇑(approxSimple f n)) 2 m).toReal) atTop (𝓝 0) := by
-    simpa using (ENNReal.tendsto_toReal (by simp)).comp (approxSimple_eLpNorm_tendsto f)
+    simpa [Function.comp_def] using (ENNReal.tendsto_toReal (by simp)).comp (approxSimple_eLpNorm_tendsto f)
   have hd1 : Tendsto (fun n => dist (compensatedPoissonToLp hd (hg n) (hg1 n) (hg2 n))
       (compensatedPoissonToLp hd (approxSimple_measurable f n) (approxSimple_integrable f n)
         (approxSimple_memLp f n))) atTop (𝓝 0) := by
@@ -890,7 +894,7 @@ theorem compensatedPoissonIntegral_add [IsProbabilityMeasure μ]
   have htend : Tendsto (fun n => eLpNorm (⇑(f + g)
       - (⇑(approxSimple f n) + ⇑(approxSimple g n))) 2 m) atTop (𝓝 0) := by
     refine tendsto_of_tendsto_of_tendsto_of_le_of_le' tendsto_const_nhds hsum0
-      (Eventually.of_forall fun n => zero_le _) (Eventually.of_forall fun n => ?_)
+      (Eventually.of_forall fun n => zero_le) (Eventually.of_forall fun n => ?_)
     have hae : (⇑(f + g) - (⇑(approxSimple f n) + ⇑(approxSimple g n)))
         =ᵐ[m] (⇑f - ⇑(approxSimple f n)) + (⇑g - ⇑(approxSimple g n)) := by
       filter_upwards [Lp.coeFn_add f g] with x hx

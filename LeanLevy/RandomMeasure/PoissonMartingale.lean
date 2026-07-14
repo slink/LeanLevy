@@ -116,8 +116,7 @@ theorem martingale_centeredPoissonTimeCount [IsProbabilityMeasure μ]
       (prmFiltration K X m hd.measurable_count hd.measurable_point) μ := by
   refine ⟨fun u => ?_, fun s t hst => ?_⟩
   · -- adaptedness at time `u`
-    simpa only [prmFiltration_apply] using
-      stronglyMeasurable_centeredTimeCount (K := K) (X := X) (u := u) hA hfin
+    exact stronglyMeasurable_centeredTimeCount (K := K) (X := X) (u := u) hA hfin
   -- the conditional-expectation identity for `s ≤ t`
   simp only [prmFiltration_apply]
   set fs := fun ω => (poissonTimeCount K X A (s : ℝ) ω).toReal - (s : ℝ) * (m A).toReal with hfs
@@ -170,7 +169,7 @@ theorem martingale_centeredPoissonTimeCount [IsProbabilityMeasure μ]
   have hcb0 : μ[cb | prmEvalSigma K X (volume.prod m) (Set.Iic (s : ℝ) ×ˢ Set.univ)] =ᵐ[μ] 0 := by
     have hkey := condExp_indep_eq hle_band hle_s hcbsm hindep
     simp only [hmean] at hkey
-    simpa using hkey
+    exact hkey
   -- assemble: `f t = f s + increment`, and both pieces resolve
   refine (condExp_congr_ae hincr).trans ?_
   refine (condExp_add (integrable_centeredTimeCount hd hA hfin) hcb_int _).trans ?_
@@ -271,14 +270,14 @@ omit [Nonempty E] [SigmaFinite m] in
 private lemma integrable_finsetSumIndicatorConst {ι : Type*} (p : Finset ι) (c : ι → ℝ)
     (D : ι → Set E) (hDm : ∀ i ∈ p, MeasurableSet (D i)) (hDfin : ∀ i ∈ p, m (D i) < ⊤) :
     Integrable (fun x => ∑ i ∈ p, (D i).indicator (fun _ => c i) x) m :=
-  integrable_finset_sum p fun i hi => integrable_indicatorConst (hDm i hi) (hDfin i hi) (c i)
+  integrable_finsetSum p fun i hi => integrable_indicatorConst (hDm i hi) (hDfin i hi) (c i)
 
 omit [Nonempty E] [SigmaFinite m] in
 /-- A finite sum of finite-mass indicators lies in `L²`. -/
 private lemma memLp_two_finsetSumIndicatorConst {ι : Type*} (p : Finset ι) (c : ι → ℝ)
     (D : ι → Set E) (hDm : ∀ i ∈ p, MeasurableSet (D i)) (hDfin : ∀ i ∈ p, m (D i) < ⊤) :
     MemLp (fun x => ∑ i ∈ p, (D i).indicator (fun _ => c i) x) 2 m :=
-  memLp_finset_sum p fun i hi => memLp_two_indicatorConst (hDm i hi) (hDfin i hi) (c i)
+  memLp_finsetSum p fun i hi => memLp_two_indicatorConst (hDm i hi) (hDfin i hi) (c i)
 
 /-- The compensated sum of a finite combination of finite-mass indicators is the corresponding
 finite combination of centered evaluations. -/
@@ -542,8 +541,7 @@ theorem martingale_levyCompensatedSmallJump [IsProbabilityMeasure μ]
       (prmFiltration K X ν hd.measurable_count hd.measurable_point) μ := by
   refine ⟨fun u => ?_, fun s t hst => ?_⟩
   · -- adaptedness at time `u`
-    simpa only [prmFiltration_apply] using
-      stronglyMeasurable_levyCompensatedSmallJumpVersion hd hν u
+    exact stronglyMeasurable_levyCompensatedSmallJumpVersion hd hν u
   -- the conditional-expectation identity for `s ≤ t`
   simp only [prmFiltration_apply]
   -- the strongly-measurable band representative
@@ -586,7 +584,7 @@ theorem martingale_levyCompensatedSmallJump [IsProbabilityMeasure μ]
   have hcb0 : μ[cb | prmEvalSigma K X (volume.prod ν) (Set.Iic (s : ℝ) ×ˢ Set.univ)] =ᵐ[μ] 0 := by
     have hkey := condExp_indep_eq hle_band hle_s hcb_sm hindep
     simp only [hmean] at hkey
-    simpa using hkey
+    exact hkey
   -- assemble: `Version t = Version s + increment`, and both pieces resolve
   refine (condExp_congr_ae hincr).trans ?_
   refine (condExp_add (integrable_levyCompensatedSmallJumpVersion hd hν s)
