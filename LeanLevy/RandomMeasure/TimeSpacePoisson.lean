@@ -1249,6 +1249,56 @@ private lemma setLIntegral_band_snd_sq {B : Set ℝ} (_hB : MeasurableSet B) (s 
         = ∫⁻ x in B, ENNReal.ofReal (x ^ 2) ∂ν := fun _ => rfl
   rw [lintegral_congr hinner, setLIntegral_const, Real.volume_Ioc, mul_comm]
 
+/-- The squared `L²` seminorm of a band indicator over a measurable mark set `C`. -/
+private lemma eLpNorm_sq_bandFun {C : Set ℝ} (hC : MeasurableSet C) (t : ℝ) :
+    (eLpNorm ((Set.Ioc 0 t ×ˢ C).indicator fun p : ℝ × ℝ => p.2) 2 (volume.prod ν)) ^ 2
+      = ENNReal.ofReal t * ∫⁻ x in C, ENNReal.ofReal (x ^ 2) ∂ν := by
+  rw [eLpNorm_two_sq, lintegral_enorm_rpow_band hC, setLIntegral_band_snd_sq hC, sub_zero]
+
+/-- The `L²(μ)` distance between the compensated small-jump integral and its truncation to a mark set
+`B ⊆ (-1, 1)` of finite mass equals the `L²(volume.prod ν)` seminorm of the band indicator over the
+complementary slice `(-1, 1) \ B`. -/
+private lemma eLpNorm_levyCompensatedSmallJump_sub_bandFun [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν)
+    (t : ℝ) {B : Set ℝ} (hB : MeasurableSet B) (hBsub : B ⊆ Set.Ioo (-1) 1) (hBfin : ν B < ⊤) :
+    eLpNorm (levyCompensatedSmallJump hd hν t
+        - compensatedPoissonIntegral hd ((memLp_two_bandFun hB hBsub hBfin t).toLp
+            ((Set.Ioc 0 t ×ˢ B).indicator fun p => p.2))) 2 μ
+      = eLpNorm ((Set.Ioc 0 t ×ˢ (Set.Ioo (-1:ℝ) 1 \ B)).indicator fun p : ℝ × ℝ => p.2) 2
+          (volume.prod ν) := by
+  have hunion_prod : Set.Ioc 0 t ×ˢ Set.Ioo (-1:ℝ) 1
+      = (Set.Ioc 0 t ×ˢ B) ∪ (Set.Ioc 0 t ×ˢ (Set.Ioo (-1:ℝ) 1 \ B)) := by
+    rw [← Set.prod_union, Set.union_sdiff_cancel hBsub]
+  have hdisj_prod : Disjoint (Set.Ioc 0 t ×ˢ B) (Set.Ioc 0 t ×ˢ (Set.Ioo (-1:ℝ) 1 \ B)) :=
+    Set.Disjoint.set_prod_right disjoint_sdiff_self_right _ _
+  have hsplit_fun : ((Set.Ioc 0 t ×ˢ Set.Ioo (-1:ℝ) 1).indicator fun p : ℝ × ℝ => p.2)
+        - ((Set.Ioc 0 t ×ˢ B).indicator fun p : ℝ × ℝ => p.2)
+      = (Set.Ioc 0 t ×ˢ (Set.Ioo (-1:ℝ) 1 \ B)).indicator fun p : ℝ × ℝ => p.2 := by
+    rw [hunion_prod, Set.indicator_union_of_disjoint hdisj_prod]
+    ext p
+    simp only [Pi.sub_apply]
+    ring
+  have hsub : levyCompensatedSmallJump hd hν t
+        - compensatedPoissonIntegral hd ((memLp_two_bandFun hB hBsub hBfin t).toLp
+            ((Set.Ioc 0 t ×ˢ B).indicator fun p => p.2))
+      = compensatedPoissonIntegral hd ((memLp_two_smallJumpFun hν t).toLp
+            ((Set.Ioc 0 t ×ˢ Set.Ioo (-1:ℝ) 1).indicator fun p => p.2)
+          - (memLp_two_bandFun hB hBsub hBfin t).toLp
+            ((Set.Ioc 0 t ×ˢ B).indicator fun p => p.2)) := by
+    rw [compensatedPoissonIntegral_sub]; rfl
+  rw [hsub, eLpNorm_compensatedPoissonIntegral]
+  refine eLpNorm_congr_ae ?_
+  filter_upwards [Lp.coeFn_sub ((memLp_two_smallJumpFun hν t).toLp
+      ((Set.Ioc 0 t ×ˢ Set.Ioo (-1:ℝ) 1).indicator fun p => p.2))
+      ((memLp_two_bandFun hB hBsub hBfin t).toLp
+      ((Set.Ioc 0 t ×ˢ B).indicator fun p => p.2)),
+    (memLp_two_smallJumpFun hν t).coeFn_toLp,
+    (memLp_two_bandFun hB hBsub hBfin t).coeFn_toLp] with p h0 h2 h3
+  rw [h0]
+  simp only [Pi.sub_apply]
+  rw [h2, h3]
+  exact congrFun hsplit_fun p
+
 end LevyIntensity
 
 end ProbabilityTheory
