@@ -338,45 +338,65 @@ private lemma measurable_lintegralPieceSum (hd : IsPoissonPointFamily K X (volum
       Finset.measurable_sum (Finset.range j) fun n _ => hg.comp (hd.measurable_point k n)
   exact h.comp (measurable_id.prodMk (hd.measurable_count k))
 
+/-- A.e., only finitely many pieces carry a realized point in a finite-mass region. -/
+private lemma ae_finite_pieces_mem [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ)
+    {R : Set (ℝ × ℝ)} (hR : MeasurableSet R)
+    (hRfin : ((volume : Measure ℝ).prod ν) R < ⊤) :
+    ∀ᵐ ω ∂μ, {k | ∃ n ∈ Finset.range (K k ω), X k n ω ∈ R}.Finite := by
+  have hg1 : Measurable (R.indicator (fun _ : ℝ × ℝ => (1 : ℝ≥0∞))) :=
+    measurable_const.indicator hR
+  filter_upwards [ae_poissonRandomMeasure_apply_lt_top hd hR hRfin] with ω hω
+  have hcount : ∑' k, ∑ n ∈ Finset.range (K k ω),
+        R.indicator (fun _ : ℝ × ℝ => (1 : ℝ≥0∞)) (X k n ω)
+      = poissonRandomMeasure K X ω R := by
+    rw [← lintegral_poissonRandomMeasure hg1 ω, lintegral_indicator hR, setLIntegral_one]
+  have hCfin : {k | (1 : ℝ≥0∞) ≤ ∑ n ∈ Finset.range (K k ω),
+        R.indicator (fun _ : ℝ × ℝ => (1 : ℝ≥0∞)) (X k n ω)}.Finite :=
+    ENNReal.finite_const_le_of_tsum_ne_top (by rw [hcount]; exact hω.ne) one_ne_zero
+  refine hCfin.subset fun k hk => ?_
+  simp only [Set.mem_setOf_eq] at hk ⊢
+  obtain ⟨n, hn, hmem⟩ := hk
+  calc (1 : ℝ≥0∞)
+      = R.indicator (fun _ : ℝ × ℝ => (1 : ℝ≥0∞)) (X k n ω) := by rw [Set.indicator_of_mem hmem]
+    _ ≤ _ := Finset.single_le_sum
+        (f := fun n => R.indicator (fun _ : ℝ × ℝ => (1 : ℝ≥0∞)) (X k n ω))
+        (fun _ _ => zero_le) hn
+
+/-- A.e., the piece sums of a function vanishing off a finite-mass region have finite support. -/
+private lemma ae_finite_support_pieceSum [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ)
+    {R : Set (ℝ × ℝ)} (hR : MeasurableSet R)
+    (hRfin : ((volume : Measure ℝ).prod ν) R < ⊤)
+    {g : ℝ × ℝ → ℝ} (hg : ∀ p ∉ R, g p = 0) :
+    ∀ᵐ ω ∂μ, {k | pieceSum K X g k ω ≠ 0}.Finite := by
+  filter_upwards [ae_finite_pieces_mem hd hR hRfin] with ω hω
+  refine hω.subset fun k hk => ?_
+  simp only [Set.mem_setOf_eq] at hk ⊢
+  have hk' : (∑ n ∈ Finset.range (K k ω), g (X k n ω)) ≠ 0 := hk
+  obtain ⟨n, hn, hterm⟩ := Finset.exists_ne_zero_of_sum_ne_zero hk'
+  refine ⟨n, hn, ?_⟩
+  by_contra hnm
+  exact hterm (hg _ hnm)
+
 /-- Almost surely, the jump size is Lebesgue-integrable against the random measure over the band: the
 band count is a.s. finite, so only finitely many pieces contribute a finite sum. -/
 private lemma ae_lintegral_enorm_largeBand_lt_top [IsProbabilityMeasure μ]
     (hd : IsPoissonPointFamily K X (volume.prod ν) μ) (hν : IsLevyMeasure ν) {t : ℝ} :
     ∀ᵐ ω ∂μ, ∫⁻ p, ‖(Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator (fun q : ℝ × ℝ => q.2) p‖ₑ
         ∂(poissonRandomMeasure K X ω) < ⊤ := by
-  have hbandmeas : MeasurableSet (Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}) := measurableSet_largeBand t
   have hbandfin : (volume.prod ν) (Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}) < ⊤ :=
     volume_prod_Ioc_prod_lt_top (m := ν) (s := 0) (t := t)
       (hν.measure_setOf_abs_ge_lt_top one_pos)
-  have hg1 : Measurable ((Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator
-      (fun _ : ℝ × ℝ => (1 : ℝ≥0∞))) := measurable_const.indicator hbandmeas
-  filter_upwards [ae_poissonRandomMeasure_apply_lt_top hd hbandmeas hbandfin] with ω hω
-  rw [lintegral_poissonRandomMeasure (measurable_largeBandFun t).enorm ω]
-  have hcount : ∑' k, ∑ n ∈ Finset.range (K k ω),
-        (Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator (fun _ : ℝ × ℝ => (1 : ℝ≥0∞)) (X k n ω)
-      = poissonRandomMeasure K X ω (Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}) := by
-    rw [← lintegral_poissonRandomMeasure hg1 ω, lintegral_indicator hbandmeas, setLIntegral_one]
-  have hCfin : {k | (1 : ℝ≥0∞) ≤ ∑ n ∈ Finset.range (K k ω),
-        (Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator
-          (fun _ : ℝ × ℝ => (1 : ℝ≥0∞)) (X k n ω)}.Finite :=
-    ENNReal.finite_const_le_of_tsum_ne_top (by rw [hcount]; exact hω.ne) one_ne_zero
-  rw [tsum_eq_sum (s := hCfin.toFinset) ?_]
+  filter_upwards [ae_finite_pieces_mem hd (measurableSet_largeBand t) hbandfin] with ω hω
+  rw [lintegral_poissonRandomMeasure (measurable_largeBandFun t).enorm ω,
+    tsum_eq_sum (s := hω.toFinset) ?_]
   · exact ENNReal.sum_lt_top.mpr fun k _ => ENNReal.sum_lt_top.mpr fun n _ => enorm_lt_top
   · intro k hk
-    by_contra hne
-    refine hk (hCfin.mem_toFinset.mpr ?_)
-    obtain ⟨n, hn, hterm⟩ := Finset.exists_ne_zero_of_sum_ne_zero hne
-    have hmem : X k n ω ∈ Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|} := by
-      by_contra hnm
-      exact hterm (by rw [Set.indicator_of_notMem hnm, enorm_zero])
-    show (1 : ℝ≥0∞) ≤ ∑ n ∈ Finset.range (K k ω),
-      (Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator (fun _ : ℝ × ℝ => (1 : ℝ≥0∞)) (X k n ω)
-    calc (1 : ℝ≥0∞)
-        = (Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator
-            (fun _ : ℝ × ℝ => (1 : ℝ≥0∞)) (X k n ω) := by rw [Set.indicator_of_mem hmem]
-      _ ≤ _ := Finset.single_le_sum
-          (f := fun n => (Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator
-            (fun _ : ℝ × ℝ => (1 : ℝ≥0∞)) (X k n ω)) (fun _ _ => zero_le) hn
+    refine Finset.sum_eq_zero fun n hn => ?_
+    have hnm : X k n ω ∉ Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|} := fun hmem =>
+      hk (hω.mem_toFinset.mpr ⟨n, hn, hmem⟩)
+    rw [Set.indicator_of_notMem hnm, enorm_zero]
 
 /-- The **large-jump sum**: the sum of the jump sizes of the realized marks in
 `(0, t] × {x | 1 ≤ |x|}`, as a series of piece sums. Almost surely this is a finite sum. -/
@@ -705,35 +725,11 @@ private lemma ae_finite_support_pieceSum_largeBand [IsProbabilityMeasure μ]
     (hd : IsPoissonPointFamily K X (volume.prod ν) μ) (hν : IsLevyMeasure ν) {t : ℝ} :
     ∀ᵐ ω ∂μ, {k | pieceSum K X
         ((Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator fun p => p.2) k ω ≠ 0}.Finite := by
-  have hbandmeas : MeasurableSet (Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}) := measurableSet_largeBand t
   have hbandfin : (volume.prod ν) (Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}) < ⊤ :=
     volume_prod_Ioc_prod_lt_top (m := ν) (s := 0) (t := t)
       (hν.measure_setOf_abs_ge_lt_top one_pos)
-  have hg1 : Measurable ((Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator
-      (fun _ : ℝ × ℝ => (1 : ℝ≥0∞))) := measurable_const.indicator hbandmeas
-  filter_upwards [ae_poissonRandomMeasure_apply_lt_top hd hbandmeas hbandfin] with ω hω
-  have hcount : ∑' k, ∑ n ∈ Finset.range (K k ω),
-        (Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator (fun _ : ℝ × ℝ => (1 : ℝ≥0∞)) (X k n ω)
-      = poissonRandomMeasure K X ω (Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}) := by
-    rw [← lintegral_poissonRandomMeasure hg1 ω, lintegral_indicator hbandmeas, setLIntegral_one]
-  have hCfin : {k | (1 : ℝ≥0∞) ≤ ∑ n ∈ Finset.range (K k ω),
-        (Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator
-          (fun _ : ℝ × ℝ => (1 : ℝ≥0∞)) (X k n ω)}.Finite :=
-    ENNReal.finite_const_le_of_tsum_ne_top (by rw [hcount]; exact hω.ne) one_ne_zero
-  refine hCfin.subset fun k hk => ?_
-  simp only [Set.mem_setOf_eq] at hk ⊢
-  have hk' : (∑ n ∈ Finset.range (K k ω),
-      (Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator (fun p : ℝ × ℝ => p.2) (X k n ω)) ≠ 0 := hk
-  obtain ⟨n, hn, hterm⟩ := Finset.exists_ne_zero_of_sum_ne_zero hk'
-  have hmem : X k n ω ∈ Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|} := by
-    by_contra hnm
-    exact hterm (by rw [Set.indicator_of_notMem hnm])
-  calc (1 : ℝ≥0∞)
-      = (Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator
-          (fun _ : ℝ × ℝ => (1 : ℝ≥0∞)) (X k n ω) := by rw [Set.indicator_of_mem hmem]
-    _ ≤ _ := Finset.single_le_sum
-        (f := fun n => (Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator
-          (fun _ : ℝ × ℝ => (1 : ℝ≥0∞)) (X k n ω)) (fun _ _ => zero_le) hn
+  exact ae_finite_support_pieceSum hd (measurableSet_largeBand t) hbandfin
+    fun p hp => Set.indicator_of_notMem hp _
 
 /-- **The large-jump sum is compound Poisson:** its characteristic function is
 `exp (t · ∫_{|x|≥1} (e^{iξx} − 1) dν)`. -/
