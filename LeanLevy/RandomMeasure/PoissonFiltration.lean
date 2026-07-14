@@ -4,6 +4,7 @@ Released under MIT license as described in the file LICENSE.
 Authors: LeanLevy Contributors
 -/
 import Mathlib.MeasureTheory.PiSystem
+import LeanLevy.Probability.IndependenceGrouping
 import LeanLevy.RandomMeasure.PoissonRandomMeasure
 
 /-!
@@ -43,6 +44,12 @@ preimages.
   evaluation sets, mutually disjoint across the families, give independent evaluation processes.
 * `ProbabilityTheory.indep_prmEvalSigma` — **the Poisson random measure is independently scattered at
   the sigma-algebra level:** the evaluation sigma-algebras of two disjoint regions are independent.
+* `ProbabilityTheory.iIndepFun_poissonRandomMeasure_families` — finitely many finite families of
+  finite-mass evaluation sets, mutually disjoint across the families, give mutually independent
+  evaluation processes.
+* `ProbabilityTheory.iIndep_prmEvalSigma` — **the Poisson random measure is mutually independently
+  scattered:** the evaluation sigma-algebras of finitely many pairwise-disjoint regions are mutually
+  independent.
 -/
 
 open MeasureTheory
@@ -403,6 +410,116 @@ theorem indep_prmEvalSigma [IsProbabilityMeasure μ] (hd : IsPoissonPointFamily 
     rw [← hFR, ← hGS]
     exact hfam.measure_inter_preimage_eq_mul _ _
       (MeasurableSet.univ_pi hURm) (MeasurableSet.univ_pi hUSm)
+
+/-- Mutual cross-family independence: finitely many finite families of finite-mass evaluation
+sets, with every set of family `i` disjoint from every set of family `j` for `i ≠ j` (no
+disjointness required within a family), give mutually independent evaluation processes. -/
+theorem iIndepFun_poissonRandomMeasure_families [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X m μ) {ι : Type} [Fintype ι] {ιB : ι → Type}
+    [∀ i, Fintype (ιB i)] {B : ∀ i, ιB i → Set E}
+    (hBm : ∀ i b, MeasurableSet (B i b)) (hBfin : ∀ i b, m (B i b) < ⊤)
+    (hBdisj : ∀ i j, i ≠ j → ∀ b b', Disjoint (B i b) (B j b')) :
+    iIndepFun (fun i ω (b : ιB i) => poissonRandomMeasure K X ω (B i b)) μ := by
+  classical
+  -- Refine every family simultaneously into the atoms indexed by `Σ i, Finset (ιB i)`.
+  set A : (Σ i, Finset (ιB i)) → Set E := fun σ => evalAtom (B σ.1) σ.2 with hA
+  have hAm : ∀ σ, MeasurableSet (A σ) := fun σ => measurableSet_evalAtom (hBm σ.1) σ.2
+  have hAfin : ∀ σ, m (A σ) < ⊤ := fun σ => measure_evalAtom_lt_top (hBfin σ.1) σ.2
+  -- Atoms of the same family are disjoint by index set; atoms of different families are disjoint
+  -- because the families are set-wise disjoint.
+  have hAdisj : Pairwise (Function.onFun Disjoint A) := by
+    rintro ⟨i, J⟩ ⟨i', J'⟩ hne
+    show Disjoint (evalAtom (B i) J) (evalAtom (B i') J')
+    by_cases hii : i = i'
+    · subst hii
+      exact pairwise_disjoint_evalAtom (fun hJ => hne (by rw [hJ]))
+    · have hU : Disjoint (⋃ b, B i b) (⋃ b', B i' b') :=
+        Set.disjoint_iUnion_left.mpr fun b =>
+          Set.disjoint_iUnion_right.mpr fun b' => hBdisj i i' hii b b'
+      exact hU.mono evalAtom_subset_iUnion evalAtom_subset_iUnion
+  have hiIndep := iIndepFun_poissonRandomMeasure_apply hd hAm hAfin hAdisj
+  have hmeas : ∀ σ, Measurable (fun ω => poissonRandomMeasure K X ω (A σ)) :=
+    fun σ => measurable_poissonRandomMeasure_apply hd.measurable_count hd.measurable_point (hAm σ)
+  -- The fibers `{σ | σ.1 = i}` are pairwise disjoint, so grouping the counts along them preserves
+  -- mutual independence.
+  have hSdisj : Pairwise (Function.onFun Disjoint
+      (fun i => {σ : Σ i, Finset (ιB i) | σ.1 = i})) := by
+    intro i i' hii
+    show Disjoint {σ : Σ i, Finset (ιB i) | σ.1 = i} {σ | σ.1 = i'}
+    rw [Set.disjoint_left]
+    rintro σ hσ hσ'
+    simp only [Set.mem_setOf_eq] at hσ hσ'
+    exact hii (hσ.symm.trans hσ')
+  have hblocks := hiIndep.setRestrict_of_pairwiseDisjoint hmeas hSdisj
+  -- Reassemble each family from its atoms: `N ω (B i b) = ∑_{J ∋ b} N ω (evalAtom (B i) J)`.
+  set G : ∀ i, (↥{σ : Σ i, Finset (ιB i) | σ.1 = i} → ℝ≥0∞) → (ιB i → ℝ≥0∞) :=
+    fun i g b => ∑ J ∈ Finset.univ.filter (fun J => b ∈ J), g ⟨⟨i, J⟩, rfl⟩ with hG
+  have hGmeas : ∀ i, Measurable (G i) := fun i => by
+    rw [hG]
+    exact measurable_pi_lambda _ fun b =>
+      Finset.measurable_sum _ fun J _ => measurable_pi_apply _
+  have hcomp := hblocks.comp G hGmeas
+  have heq : (fun i ω (b : ιB i) => poissonRandomMeasure K X ω (B i b))
+      = fun i => G i ∘ (fun ω => ({σ : Σ i, Finset (ιB i) | σ.1 = i}).restrict
+          fun σ => poissonRandomMeasure K X ω (A σ)) := by
+    funext i ω b
+    rw [poissonRandomMeasure_apply_biUnion_evalAtom (hBm i) ω b]
+    simp only [Function.comp_apply, hG, Set.restrict_apply, hA]
+  rw [heq]
+  exact hcomp
+
+/-- **The Poisson random measure is mutually independently scattered:** the evaluation
+σ-algebras of finitely many pairwise-disjoint regions are mutually independent. -/
+theorem iIndep_prmEvalSigma [IsProbabilityMeasure μ] (hd : IsPoissonPointFamily K X m μ)
+    {ι : Type} [Fintype ι] {R : ι → Set E} (hR : Pairwise (Function.onFun Disjoint R)) :
+    iIndep (fun i => prmEvalSigma K X m (R i)) μ := by
+  classical
+  refine iIndepSets.iIndep
+    (fun i => prmEvalSigma_le hd.measurable_count hd.measurable_point (R i))
+    (fun i => prmEvalPiSystem K X m (R i))
+    (fun _ => isPiSystem_prmEvalPiSystem)
+    (fun i => prmEvalSigma_eq_generateFrom (R i)) ?_
+  rw [iIndepSets_iff]
+  intro u f hf
+  -- Unpack each π-system element `f i` as a finite intersection of evaluation preimages inside `R i`.
+  have hmem : ∀ i : ↥u, f i.1 ∈ prmEvalPiSystem K X m (R i.1) := fun i => hf i.1 i.2
+  choose t _hts g hg hfeq using hmem
+  -- Each intersected preimage is the preimage of a measurable set under a count evaluation.
+  have hUspec : ∀ (i : ↥u) (C : ↥(t i)), ∃ U, MeasurableSet U ∧
+      (fun ω => poissonRandomMeasure K X ω (C.1.1 : Set E)) ⁻¹' U = g i C.1 :=
+    fun i C => MeasurableSpace.measurableSet_comap.mp (hg i C.1 C.2)
+  choose U hUm hUeq using hUspec
+  -- The families `C ↦ C.1.1` over `i : ↥u` are cross-disjoint since the regions `R` are.
+  have hfam := iIndepFun_poissonRandomMeasure_families hd
+    (ιB := fun i : ↥u => ↥(t i)) (B := fun (i : ↥u) (C : ↥(t i)) => (C.1.1 : Set E))
+    (fun i C => C.1.2.1) (fun i C => C.1.2.2.2)
+    (fun i j hij C C' => (hR (Subtype.coe_ne_coe.mpr hij)).mono C.1.2.2.1 C'.1.2.2.1)
+  -- Each `f i` is the joint preimage of the product boxes `Set.univ.pi (U i)`.
+  have hpre : ∀ i : ↥u, (fun ω (C : ↥(t i)) => poissonRandomMeasure K X ω C.1.1) ⁻¹'
+      (Set.univ.pi (U i)) = f i.1 := by
+    intro i
+    rw [hfeq i]
+    ext ω
+    simp only [Set.mem_preimage, Set.mem_pi, Set.mem_univ, true_implies, Set.mem_iInter]
+    constructor
+    · intro h B hB
+      have hmem : ω ∈ (fun ω => poissonRandomMeasure K X ω (⟨B, hB⟩ : ↥(t i)).1.1) ⁻¹'
+          (U i ⟨B, hB⟩) := h ⟨B, hB⟩
+      rw [hUeq i ⟨B, hB⟩] at hmem
+      exact hmem
+    · intro h C
+      have hmem : ω ∈ (fun ω => poissonRandomMeasure K X ω C.1.1) ⁻¹' (U i C) := by
+        rw [hUeq i C]; exact h C.1 C.2
+      exact hmem
+  -- The mutual product identity over `↥u`, reindexed back to `u`.
+  have hkey := hfam.measure_inter_preimage_eq_mul (Finset.univ : Finset ↥u)
+    (sets := fun i => Set.univ.pi (U i)) (fun i _ => MeasurableSet.univ_pi (hUm i))
+  simp only [hpre] at hkey
+  have hI : (⋂ i ∈ (Finset.univ : Finset ↥u), f i.1) = ⋂ i ∈ u, f i := by
+    rw [← Finset.set_biInter_coe, Finset.coe_univ, Set.biInter_univ]
+    exact Set.iInter_subtype (· ∈ u) fun i => f i.1
+  rw [Finset.prod_coe_sort u fun j => μ (f j), hI] at hkey
+  exact hkey
 
 end Independence
 
