@@ -26,6 +26,9 @@ characteristic function `exp (t · ψ(ξ))` where `ψ` is the Lévy–Khintchine
 * `ProbabilityTheory.charFun_map_levyJumpSum_eq_exponent` — **the assembled jump law**: for
   `0 ≤ t`, the fixed-time marginal law of `b · t + (large-jump sum) + (compensated small jumps)`
   has characteristic function `exp (t · (b, 0, ν).exponent ξ)`.
+* `ProbabilityTheory.isInfinitelyDivisible_map_levyJumpSum` — for `0 ≤ t`, that same fixed-time
+  marginal law is **infinitely divisible**: it is the Lévy–Khintchine law of the `t`-scaled triple
+  `(t · b, 0, ENNReal.ofReal t • ν)`.
 
 The scope is a **single fixed time `t`** (the marginal law), not the full process.
 -/
@@ -86,3 +89,41 @@ theorem charFun_map_levyJumpSum_eq_exponent [IsProbabilityMeasure μ]
   congr 1
   push_cast
   ring
+
+/-- Scaling the time `t` through the Lévy–Khintchine exponent of the pure-jump triple `(b, 0, ν)`
+is the exponent of the `t`-scaled triple `(t · b, 0, ENNReal.ofReal t • ν)`: the drift and the Lévy
+measure both scale linearly in `t`, while the zero Gaussian variance is preserved. -/
+private lemma ofReal_smul_exponent_mk {ν : Measure ℝ} (hν : IsLevyMeasure ν) (b : ℝ)
+    {t : ℝ} (ht : 0 ≤ t) (ξ : ℝ) :
+    (t : ℂ) * (LevyKhintchineTriple.mk b 0 ν hν).exponent ξ
+      = (LevyKhintchineTriple.mk (t * b) 0 (ENNReal.ofReal t • ν)
+          (hν.smul ENNReal.ofReal_ne_top)).exponent ξ := by
+  rw [LevyKhintchineTriple.exponent_def, LevyKhintchineTriple.exponent_def,
+    integral_smul_measure, ENNReal.toReal_ofReal ht, Complex.real_smul]
+  push_cast
+  ring
+
+/-- **The jump-law marginal is infinitely divisible.** For `0 ≤ t`, the fixed-time marginal law of
+`b · t + (large-jump sum) + (compensated small jumps)` is an infinitely divisible law on `ℝ`: its
+characteristic function is `exp` of the Lévy–Khintchine exponent of the `t`-scaled pure-jump triple
+`(t · b, 0, ENNReal.ofReal t • ν)`, so the converse Lévy–Khintchine theorem applies. -/
+theorem isInfinitelyDivisible_map_levyJumpSum [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν)
+    (b : ℝ) {t : ℝ} (ht : 0 ≤ t) :
+    IsInfinitelyDivisible (μ.map (fun ω => b * t + levyLargeJumpSum K X t ω
+        + levyCompensatedSmallJump hd hν t ω)) := by
+  have hL : Measurable (levyLargeJumpSum K X t) :=
+    measurable_levyLargeJumpSum hd.measurable_count hd.measurable_point
+  have hS : AEMeasurable (fun ω => levyCompensatedSmallJump hd hν t ω) μ :=
+    (Lp.aestronglyMeasurable _).aemeasurable
+  have hmeas : AEMeasurable (fun ω => b * t + levyLargeJumpSum K X t ω
+      + levyCompensatedSmallJump hd hν t ω) μ :=
+    (aemeasurable_const.add hL.aemeasurable).add hS
+  haveI : IsProbabilityMeasure (μ.map (fun ω => b * t + levyLargeJumpSum K X t ω
+      + levyCompensatedSmallJump hd hν t ω)) := Measure.isProbabilityMeasure_map hmeas
+  refine isInfinitelyDivisible_iff_exists_levyKhintchineTriple.mpr
+    ⟨LevyKhintchineTriple.mk (t * b) 0 (ENNReal.ofReal t • ν) (hν.smul ENNReal.ofReal_ne_top),
+      fun ξ => ?_⟩
+  rw [charFun_map_levyJumpSum_eq_exponent hd hν b ht ξ, ofReal_smul_exponent_mk hν b ht ξ]
+
+end ProbabilityTheory

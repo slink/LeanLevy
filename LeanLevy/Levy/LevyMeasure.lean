@@ -32,6 +32,8 @@ characteristic exponent is well-defined.
 * `ProbabilityTheory.IsLevyMeasure.measure_setOf_abs_ge_lt_top` — `ν {x | ε ≤ |x|} < ⊤` for `ε > 0`.
 * `ProbabilityTheory.IsLevyMeasure.measure_compl_Ioo_lt_top` — `ν (Ioo (-1) 1)ᶜ < ⊤`.
 * `ProbabilityTheory.IsLevyMeasure.sigmaFinite` — every Lévy measure is σ-finite.
+* `ProbabilityTheory.IsLevyMeasure.smul` — a finite scalar multiple of a Lévy measure is a Lévy
+  measure.
 * `ProbabilityTheory.isLevyMeasure_zero` — the zero measure is a Levy measure.
 -/
 
@@ -138,6 +140,13 @@ theorem of_isFiniteMeasure {ν : Measure ℝ} [IsFiniteMeasure ν]
         exact ENNReal.ofReal_le_ofReal (min_le_left _ _))
     _ = ν Set.univ := lintegral_one
     _ < ⊤ := (‹IsFiniteMeasure ν›).measure_univ_lt_top
+
+/-- A finite scalar multiple of a Lévy measure is a Lévy measure. -/
+theorem smul (hν : IsLevyMeasure ν) {c : ℝ≥0∞} (hc : c ≠ ⊤) : IsLevyMeasure (c • ν) := by
+  refine ⟨?_, ?_⟩
+  · rw [Measure.smul_apply, hν.zero_singleton, smul_zero]
+  · rw [lintegral_smul_measure]
+    exact ENNReal.mul_lt_top hc.lt_top hν.lintegral_min_one_sq_lt_top
 
 end IsLevyMeasure
 
