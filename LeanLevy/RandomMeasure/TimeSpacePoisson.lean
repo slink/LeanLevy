@@ -9,6 +9,7 @@ import Mathlib.MeasureTheory.Integral.Prod
 import LeanLevy.RandomMeasure.PoissonRandomMeasure
 import LeanLevy.RandomMeasure.PoissonCompensated
 import LeanLevy.Levy.LevyMeasure
+import LeanLevy.Levy.CompensatedIntegral
 
 /-!
 # Time-indexed Poisson random measures
@@ -1298,6 +1299,157 @@ private lemma eLpNorm_levyCompensatedSmallJump_sub_bandFun [IsProbabilityMeasure
   simp only [Pi.sub_apply]
   rw [h2, h3]
   exact congrFun hsplit_fun p
+
+omit [SigmaFinite ν] in
+/-- As `n → ∞`, the shrinking-ball tail of `∫ x² dν` over `(-1, 1)` vanishes. -/
+private lemma tendsto_lintegral_slice_sq (hν : IsLevyMeasure ν) :
+    Tendsto (fun n : ℕ => ∫⁻ x in Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | |x| < ((n:ℝ) + 1)⁻¹},
+        ENNReal.ofReal (x ^ 2) ∂ν) atTop (𝓝 0) := by
+  have hslice_meas : ∀ n : ℕ,
+      MeasurableSet (Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | |x| < ((n:ℝ) + 1)⁻¹}) :=
+    fun n => measurableSet_Ioo.inter (measurableSet_lt continuous_abs.measurable measurable_const)
+  have hsqmeas : Measurable (fun x : ℝ => ENNReal.ofReal (x ^ 2)) :=
+    ENNReal.measurable_ofReal.comp (measurable_id'.pow_const 2)
+  have hlim : ∀ x : ℝ, Tendsto (fun n : ℕ =>
+      (Set.Ioo (-1:ℝ) 1 ∩ {y : ℝ | |y| < ((n:ℝ) + 1)⁻¹}).indicator
+        (fun y => ENNReal.ofReal (y ^ 2)) x) atTop (𝓝 0) := by
+    intro x
+    by_cases hx0 : x = 0
+    · have hz : (fun n : ℕ => (Set.Ioo (-1:ℝ) 1 ∩ {y : ℝ | |y| < ((n:ℝ) + 1)⁻¹}).indicator
+          (fun y => ENNReal.ofReal (y ^ 2)) x) = fun _ => 0 := by
+        funext n; simp [Set.indicator_apply, hx0]
+      rw [hz]; exact tendsto_const_nhds
+    · have habs : (0:ℝ) < |x| := abs_pos.mpr hx0
+      obtain ⟨N, hN⟩ := exists_nat_gt (|x|⁻¹)
+      have hev : ∀ᶠ (n : ℕ) in atTop, (Set.Ioo (-1:ℝ) 1 ∩ {y : ℝ | |y| < ((n:ℝ) + 1)⁻¹}).indicator
+          (fun y => ENNReal.ofReal (y ^ 2)) x = 0 := by
+        rw [Filter.eventually_atTop]
+        refine ⟨N, fun n hn => Set.indicator_of_notMem (fun hmem => ?_) _⟩
+        have hxinv : |x|⁻¹ < (n:ℝ) + 1 := by
+          have hNn : (N:ℝ) ≤ (n:ℝ) := by exact_mod_cast hn
+          linarith [hN]
+        have h1 : (1:ℝ) < |x| * ((n:ℝ) + 1) := by
+          have h2 := mul_lt_mul_of_pos_left hxinv habs
+          rwa [mul_inv_cancel₀ (ne_of_gt habs)] at h2
+        have hc_lt : ((n:ℝ) + 1)⁻¹ < |x| := by
+          rw [inv_eq_one_div, div_lt_iff₀ (Nat.cast_add_one_pos n)]; linarith [h1]
+        exact absurd hmem.2 (not_lt.mpr hc_lt.le)
+      exact (tendsto_congr' hev).mpr tendsto_const_nhds
+  have hdct := tendsto_lintegral_of_dominated_convergence (μ := ν)
+    (F := fun n x => (Set.Ioo (-1:ℝ) 1 ∩ {y : ℝ | |y| < ((n:ℝ) + 1)⁻¹}).indicator
+      (fun y => ENNReal.ofReal (y ^ 2)) x)
+    (f := fun _ => 0)
+    (bound := (Set.Ioo (-1:ℝ) 1).indicator fun y => ENNReal.ofReal (y ^ 2))
+    (fun n => hsqmeas.indicator (hslice_meas n))
+    (fun n => Filter.Eventually.of_forall fun x =>
+      Set.indicator_le_indicator_apply_of_subset Set.inter_subset_left zero_le)
+    (by rw [lintegral_indicator measurableSet_Ioo]; exact (lintegral_Ioo_sq_lt_top hν).ne)
+    (Filter.Eventually.of_forall hlim)
+  have hrw : (fun n : ℕ => ∫⁻ x,
+        (Set.Ioo (-1:ℝ) 1 ∩ {y : ℝ | |y| < ((n:ℝ) + 1)⁻¹}).indicator
+          (fun y => ENNReal.ofReal (y ^ 2)) x ∂ν)
+      = fun n : ℕ => ∫⁻ x in Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | |x| < ((n:ℝ) + 1)⁻¹},
+          ENNReal.ofReal (x ^ 2) ∂ν := by
+    funext n; rw [lintegral_indicator (hslice_meas n)]
+  rw [hrw] at hdct
+  simpa using hdct
+
+omit [SigmaFinite ν] in
+/-- As `n → ∞`, the integral of the compensated small-jump integrand over the annulus
+`(-1, 1) ∩ {1/(n+1) ≤ |x|}` converges to its integral over all of `(-1, 1)`. -/
+private lemma tendsto_setIntegral_annulus (hν : IsLevyMeasure ν) (ξ : ℝ) :
+    Tendsto (fun n : ℕ => ∫ x in Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |x|},
+        (Complex.exp (↑x * ↑ξ * Complex.I) - 1 - ↑x * ↑ξ * Complex.I) ∂ν) atTop
+      (𝓝 (∫ x in Set.Ioo (-1:ℝ) 1,
+        (Complex.exp (↑x * ↑ξ * Complex.I) - 1 - ↑x * ↑ξ * Complex.I) ∂ν)) := by
+  have hA_meas : ∀ n : ℕ,
+      MeasurableSet (Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |x|}) :=
+    fun n => measurableSet_Ioo.inter (measurableSet_le measurable_const continuous_abs.measurable)
+  have hgmeas : Measurable fun x : ℝ =>
+      Complex.exp (↑x * ↑ξ * Complex.I) - 1 - ↑x * ↑ξ * Complex.I := by
+    have h1 : Measurable fun x : ℝ => (↑x * ↑ξ * Complex.I : ℂ) :=
+      ((Complex.measurable_ofReal.mul measurable_const).mul measurable_const)
+    exact ((Complex.measurable_exp.comp h1).sub measurable_const).sub h1
+  -- On `(-1,1)` the integrand equals the compensated Lévy integrand.
+  have hg_eq : ∀ x ∈ Set.Ioo (-1:ℝ) 1,
+      Complex.exp (↑x * ↑ξ * Complex.I) - 1 - ↑x * ↑ξ * Complex.I = levyCompensatedIntegrand ξ x := by
+    intro x hx
+    have hlt : |x| < 1 := abs_lt.mpr hx
+    simp [levyCompensatedIntegrand, hlt]
+  have hbound_int : Integrable (fun x : ℝ => (2 + 3 * ξ ^ 2) * min 1 (x ^ 2)) ν := by
+    refine ⟨((measurable_const.min (measurable_id'.pow_const 2)).const_mul _).aestronglyMeasurable,
+      ?_⟩
+    rw [hasFiniteIntegral_iff_enorm]
+    have hC : (0:ℝ) ≤ 2 + 3 * ξ ^ 2 := by positivity
+    have henorm : ∀ x : ℝ, ‖(2 + 3 * ξ ^ 2) * min 1 (x ^ 2)‖ₑ
+        = ENNReal.ofReal (2 + 3 * ξ ^ 2) * ENNReal.ofReal (min 1 (x ^ 2)) := fun x => by
+      rw [Real.enorm_eq_ofReal (mul_nonneg hC (le_min zero_le_one (sq_nonneg x))),
+        ENNReal.ofReal_mul hC]
+    simp_rw [henorm]
+    rw [lintegral_const_mul' _ _ ENNReal.ofReal_ne_top]
+    exact ENNReal.mul_lt_top ENNReal.ofReal_lt_top hν.lintegral_min_one_sq_lt_top
+  have hlim : ∀ x : ℝ, Tendsto (fun n : ℕ =>
+      (Set.Ioo (-1:ℝ) 1 ∩ {y : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |y|}).indicator
+        (fun y => Complex.exp (↑y * ↑ξ * Complex.I) - 1 - ↑y * ↑ξ * Complex.I) x) atTop
+      (𝓝 ((Set.Ioo (-1:ℝ) 1).indicator
+        (fun y => Complex.exp (↑y * ↑ξ * Complex.I) - 1 - ↑y * ↑ξ * Complex.I) x)) := by
+    intro x
+    by_cases hxo : x ∈ Set.Ioo (-1:ℝ) 1
+    · rw [Set.indicator_of_mem hxo]
+      by_cases hx0 : x = 0
+      · have hz : (fun n : ℕ => (Set.Ioo (-1:ℝ) 1 ∩ {y : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |y|}).indicator
+            (fun y => Complex.exp (↑y * ↑ξ * Complex.I) - 1 - ↑y * ↑ξ * Complex.I) x)
+            = fun _ => Complex.exp (↑x * ↑ξ * Complex.I) - 1 - ↑x * ↑ξ * Complex.I := by
+          funext n; rw [hx0]; simp [Set.indicator_apply]
+        rw [hz]; exact tendsto_const_nhds
+      · have habs : (0:ℝ) < |x| := abs_pos.mpr hx0
+        obtain ⟨N, hN⟩ := exists_nat_gt (|x|⁻¹)
+        have hev : ∀ᶠ (n : ℕ) in atTop, (Set.Ioo (-1:ℝ) 1 ∩ {y : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |y|}).indicator
+            (fun y => Complex.exp (↑y * ↑ξ * Complex.I) - 1 - ↑y * ↑ξ * Complex.I) x
+            = Complex.exp (↑x * ↑ξ * Complex.I) - 1 - ↑x * ↑ξ * Complex.I := by
+          rw [Filter.eventually_atTop]
+          refine ⟨N, fun n hn => ?_⟩
+          have hxinv : |x|⁻¹ < (n:ℝ) + 1 := by
+            have hNn : (N:ℝ) ≤ (n:ℝ) := by exact_mod_cast hn
+            linarith [hN]
+          have h1 : (1:ℝ) < |x| * ((n:ℝ) + 1) := by
+            have h2 := mul_lt_mul_of_pos_left hxinv habs
+            rwa [mul_inv_cancel₀ (ne_of_gt habs)] at h2
+          have hmem : x ∈ Set.Ioo (-1:ℝ) 1 ∩ {y : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |y|} := by
+            refine ⟨hxo, ?_⟩
+            show ((n:ℝ) + 1)⁻¹ ≤ |x|
+            rw [inv_eq_one_div, div_le_iff₀ (Nat.cast_add_one_pos n)]; linarith [h1]
+          exact Set.indicator_of_mem hmem _
+        exact (tendsto_congr' hev).mpr tendsto_const_nhds
+    · rw [Set.indicator_of_notMem hxo]
+      have hz : (fun n : ℕ => (Set.Ioo (-1:ℝ) 1 ∩ {y : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |y|}).indicator
+          (fun y => Complex.exp (↑y * ↑ξ * Complex.I) - 1 - ↑y * ↑ξ * Complex.I) x)
+          = fun _ => 0 := by
+        funext n; exact Set.indicator_of_notMem (fun hmem => hxo hmem.1) _
+      rw [hz]; exact tendsto_const_nhds
+  have hdct := tendsto_integral_of_dominated_convergence (μ := ν)
+    (F := fun n x => (Set.Ioo (-1:ℝ) 1 ∩ {y : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |y|}).indicator
+      (fun y => Complex.exp (↑y * ↑ξ * Complex.I) - 1 - ↑y * ↑ξ * Complex.I) x)
+    (f := (Set.Ioo (-1:ℝ) 1).indicator
+      fun y => Complex.exp (↑y * ↑ξ * Complex.I) - 1 - ↑y * ↑ξ * Complex.I)
+    (bound := fun x => (2 + 3 * ξ ^ 2) * min 1 (x ^ 2))
+    (fun n => (hgmeas.indicator (hA_meas n)).aestronglyMeasurable) hbound_int
+    (fun n => Filter.Eventually.of_forall fun x => ?_) (Filter.Eventually.of_forall hlim)
+  · rw [integral_indicator measurableSet_Ioo] at hdct
+    have hrw : (fun n : ℕ => ∫ x,
+          (Set.Ioo (-1:ℝ) 1 ∩ {y : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |y|}).indicator
+            (fun y => Complex.exp (↑y * ↑ξ * Complex.I) - 1 - ↑y * ↑ξ * Complex.I) x ∂ν)
+        = fun n : ℕ => ∫ x in Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |x|},
+            (Complex.exp (↑x * ↑ξ * Complex.I) - 1 - ↑x * ↑ξ * Complex.I) ∂ν := by
+      funext n; rw [integral_indicator (hA_meas n)]
+    rw [hrw] at hdct
+    exact hdct
+  · -- pointwise bound
+    by_cases hxa : x ∈ Set.Ioo (-1:ℝ) 1 ∩ {y : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |y|}
+    · rw [Set.indicator_of_mem hxa, hg_eq x hxa.1]
+      exact norm_levyCompensatedIntegrand_le ξ x
+    · rw [Set.indicator_of_notMem hxa, norm_zero]
+      exact mul_nonneg (by positivity) (le_min zero_le_one (sq_nonneg x))
 
 end LevyIntensity
 
