@@ -5,6 +5,7 @@ import LeanLevy.Fourier.MeasureFourier
 import LeanLevy.Fourier.PositiveDefinite
 import LeanLevy.Fourier.Bochner
 import LeanLevy.Probability.Characteristic
+import LeanLevy.Probability.IndependenceGrouping
 import LeanLevy.Probability.Poisson
 import LeanLevy.Processes.StochasticProcess
 import LeanLevy.Processes.Cadlag
