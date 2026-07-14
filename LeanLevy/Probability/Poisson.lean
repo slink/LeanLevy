@@ -21,6 +21,8 @@ independent Poisson laws under convolution, and the degenerate zero-rate case.
 
 * `ProbabilityTheory.poissonExpectation_hasSum` — E[X] = r
 * `ProbabilityTheory.poissonVariance` — Var[X] = r
+* `ProbabilityTheory.integrable_id_poissonMeasure` — the identity `n ↦ n` is integrable against
+  `poissonMeasure r`
 * `ProbabilityTheory.integral_id_poissonMeasure`, `ProbabilityTheory.integral_factorialMoment_poissonMeasure`
   — the mean and second factorial moment as Bochner integrals against `poissonMeasure r`
 * `ProbabilityTheory.poissonCharFun_eq` — φ(ξ) = exp(r(e^{iξ} − 1))
@@ -145,14 +147,21 @@ private lemma integrable_poissonMeasure_of_summable {r : ℝ≥0} {f : ℕ → �
     (fun n ↦ mul_nonneg (norm_nonneg _) poissonPMFReal_nonneg) hf]
   exact ENNReal.ofReal_lt_top
 
+/-- **Integrability of the identity against a Poisson law:** `n ↦ n` is integrable against
+`poissonMeasure r`, its first absolute moment being the mean `r` supplied by
+`poissonExpectation_hasSum`. -/
+theorem integrable_id_poissonMeasure (r : ℝ≥0) :
+    Integrable (fun n : ℕ ↦ (n : ℝ)) (poissonMeasure r) :=
+  integrable_poissonMeasure_of_summable <|
+    (poissonExpectation_hasSum r).summable.congr fun n ↦ by
+      rw [Real.norm_of_nonneg (Nat.cast_nonneg n)]
+
 /-- **Mean of the Poisson distribution (integral form):**
 `∫ n, n ∂(poissonMeasure r) = r`. -/
 theorem integral_id_poissonMeasure (r : ℝ≥0) :
     ∫ n, (n : ℝ) ∂(poissonMeasure r) = r := by
   have hint : Integrable (fun n : ℕ ↦ (n : ℝ)) (poissonMeasure r) :=
-    integrable_poissonMeasure_of_summable <|
-      (poissonExpectation_hasSum r).summable.congr fun n ↦ by
-        rw [Real.norm_of_nonneg (Nat.cast_nonneg n)]
+    integrable_id_poissonMeasure r
   rw [show poissonMeasure r = (poissonPMF r).toMeasure from rfl,
     PMF.integral_eq_tsum _ _ hint]
   simp only [poissonPMF_toReal, smul_eq_mul]

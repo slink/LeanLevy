@@ -56,16 +56,11 @@ namespace ProbabilityTheory
 
 variable {E : Type} [MeasurableSpace E] {m : Measure E} [SigmaFinite m] {A : Set E}
 
-/-- Each space-time band has finite `volume.prod m`-mass whenever the mark set has finite mass. -/
-private lemma measure_prod_Ioc_lt_top (hfin : m A < ⊤) (a b : ℝ) :
-    (volume.prod m) (Set.Ioc a b ×ˢ A) < ⊤ := by
-  rw [Measure.prod_prod, Real.volume_Ioc]
-  exact ENNReal.mul_lt_top ENNReal.ofReal_lt_top hfin
-
-/-- The real mass of a space-time band factorizes as time-length times mark mass. -/
+/-- The real mass of a space-time band factorizes as time-length times mark mass, read off the
+shared `volume_prod_Ioc_prod`. -/
 private lemma measure_prod_Ioc_toReal {a b : ℝ} (hab : a ≤ b) :
     ((volume.prod m) (Set.Ioc a b ×ˢ A)).toReal = (b - a) * (m A).toReal := by
-  rw [Measure.prod_prod, Real.volume_Ioc, ENNReal.toReal_mul, ENNReal.toReal_ofReal (by linarith)]
+  rw [volume_prod_Ioc_prod, ENNReal.toReal_mul, ENNReal.toReal_ofReal (by linarith)]
 
 variable {Ω : Type} [MeasurableSpace Ω] [Nonempty E] {K : ℕ → Ω → ℕ} {X : ℕ → ℕ → Ω → ℝ × E}
   {μ : Measure Ω} {hK : ∀ k, Measurable (K k)} {hX : ∀ k n, Measurable (X k n)}
@@ -94,7 +89,7 @@ private lemma stronglyMeasurable_centeredTimeCount {u : ℝ≥0} (hA : Measurabl
       (fun ω => (poissonTimeCount K X A (u : ℝ) ω).toReal - (u : ℝ) * (m A).toReal) :=
   (((measurable_prmEvalSigma_apply (measurableSet_Ioc.prod hA)
     (Set.prod_mono Set.Ioc_subset_Iic_self (Set.subset_univ A))
-    (measure_prod_Ioc_lt_top hfin 0 (u : ℝ))).ennreal_toReal).stronglyMeasurable).sub
+    (volume_prod_Ioc_prod_lt_top (s := 0) (t := (u : ℝ)) hfin)).ennreal_toReal).stronglyMeasurable).sub
     stronglyMeasurable_const
 
 /-- The centered running count is integrable at each time. -/
@@ -102,7 +97,7 @@ private lemma integrable_centeredTimeCount [IsProbabilityMeasure μ] {u : ℝ≥
     (hd : IsPoissonPointFamily K X (volume.prod m) μ) (hA : MeasurableSet A) (hfin : m A < ⊤) :
     Integrable (fun ω => (poissonTimeCount K X A (u : ℝ) ω).toReal - (u : ℝ) * (m A).toReal) μ :=
   (integrable_toReal_poissonRandomMeasure_apply hd (measurableSet_Ioc.prod hA)
-    (measure_prod_Ioc_lt_top hfin 0 (u : ℝ))).sub (integrable_const _)
+    (volume_prod_Ioc_prod_lt_top (s := 0) (t := (u : ℝ)) hfin)).sub (integrable_const _)
 
 /-- **The centered count process is a martingale.** For the natural filtration `prmFiltration`, the
 centered running count `(poissonTimeCount K X A t).toReal - t · (m A).toReal` is a martingale: the
@@ -126,9 +121,9 @@ theorem martingale_centeredPoissonTimeCount [IsProbabilityMeasure μ]
   have hincr : (fun ω => (poissonTimeCount K X A (t : ℝ) ω).toReal - (t : ℝ) * (m A).toReal)
       =ᵐ[μ] fs + cb := by
     filter_upwards [ae_poissonRandomMeasure_apply_lt_top hd (measurableSet_Ioc.prod hA)
-        (measure_prod_Ioc_lt_top hfin 0 (s : ℝ)),
+        (volume_prod_Ioc_prod_lt_top (s := 0) (t := (s : ℝ)) hfin),
       ae_poissonRandomMeasure_apply_lt_top hd (measurableSet_Ioc.prod hA)
-        (measure_prod_Ioc_lt_top hfin (s : ℝ) (t : ℝ))] with ω hωs hωband
+        (volume_prod_Ioc_prod_lt_top (s := (s : ℝ)) (t := (t : ℝ)) hfin)] with ω hωs hωband
     simp only [hfs, hcb, Pi.add_apply]
     rw [poissonTimeCount_add hA (NNReal.coe_nonneg s) (by exact_mod_cast hst) ω]
     simp only [poissonTimeCount]
@@ -146,7 +141,7 @@ theorem martingale_centeredPoissonTimeCount [IsProbabilityMeasure μ]
     rw [hcb]
     exact (((measurable_prmEvalSigma_apply (measurableSet_Ioc.prod hA)
       (Set.prod_mono (subset_refl _) (Set.subset_univ A))
-      (measure_prod_Ioc_lt_top hfin (s : ℝ) (t : ℝ))).ennreal_toReal).stronglyMeasurable).sub
+      (volume_prod_Ioc_prod_lt_top (s := (s : ℝ)) (t := (t : ℝ)) hfin)).ennreal_toReal).stronglyMeasurable).sub
       stronglyMeasurable_const
   have hindep : Indep (prmEvalSigma K X (volume.prod m) (Set.Ioc (s : ℝ) (t : ℝ) ×ˢ Set.univ))
       (prmEvalSigma K X (volume.prod m) (Set.Iic (s : ℝ) ×ˢ Set.univ)) μ :=
@@ -155,14 +150,14 @@ theorem martingale_centeredPoissonTimeCount [IsProbabilityMeasure μ]
   have hcb_int : Integrable cb μ := by
     rw [hcb]
     exact (integrable_toReal_poissonRandomMeasure_apply hd (measurableSet_Ioc.prod hA)
-      (measure_prod_Ioc_lt_top hfin (s : ℝ) (t : ℝ))).sub (integrable_const _)
+      (volume_prod_Ioc_prod_lt_top (s := (s : ℝ)) (t := (t : ℝ)) hfin)).sub (integrable_const _)
   -- the band increment has mean zero
   have hmean : (∫ ω, cb ω ∂μ) = 0 := by
     rw [hcb, integral_sub (integrable_toReal_poissonRandomMeasure_apply hd
-        (measurableSet_Ioc.prod hA) (measure_prod_Ioc_lt_top hfin (s : ℝ) (t : ℝ)))
+        (measurableSet_Ioc.prod hA) (volume_prod_Ioc_prod_lt_top (s := (s : ℝ)) (t := (t : ℝ)) hfin))
         (integrable_const _),
       integral_toReal_poissonRandomMeasure_apply hd (measurableSet_Ioc.prod hA)
-        (measure_prod_Ioc_lt_top hfin (s : ℝ) (t : ℝ)),
+        (volume_prod_Ioc_prod_lt_top (s := (s : ℝ)) (t := (t : ℝ)) hfin),
       integral_const, measure_prod_Ioc_toReal (show (s : ℝ) ≤ (t : ℝ) by exact_mod_cast hst)]
     simp
   -- the conditional expectation of the increment collapses to its (zero) mean
@@ -193,15 +188,6 @@ section EvalSigmaSupport
 
 variable {E Ω : Type} [MeasurableSpace E] [MeasurableSpace Ω] [Nonempty E] {K : ℕ → Ω → ℕ}
   {X : ℕ → ℕ → Ω → E} {m : Measure E} [SigmaFinite m] {μ : Measure Ω}
-
-omit [Nonempty E] in
-/-- The pieces of the intensity partition intersected with a measurable set exhaust its mass. -/
-private lemma tsum_measure_prmPiece_inter {D : Set E} (hD : MeasurableSet D) :
-    ∑' k, m (prmPiece m k ∩ D) = m D := by
-  rw [← measure_iUnion (fun i j hij =>
-        (pairwise_disjoint_prmPiece hij).mono Set.inter_subset_left Set.inter_subset_left)
-      (fun k => measurableSet_prmPiece.inter hD),
-    ← Set.iUnion_inter, iUnion_prmPiece, Set.univ_inter]
 
 omit [Nonempty E] [SigmaFinite m] in
 /-- A finite-mass indicator is measurable. -/

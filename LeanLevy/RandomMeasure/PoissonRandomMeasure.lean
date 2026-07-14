@@ -39,6 +39,8 @@ evaluations.
   sets are independent (the two-set API).
 * `ProbabilityTheory.iIndepFun_poissonRandomMeasure_apply` — **mutual independence**: the counts in a
   finite pairwise-disjoint family of finite-mass sets are mutually independent.
+* `ProbabilityTheory.tsum_measure_prmPiece_inter` — the per-piece intensities of a measurable set sum
+  to its total mass, `∑ₖ m (piece k ∩ A) = m A`.
 
 The evaluation laws are read off the thinning and within-piece factorization of
 `PoissonPointFamily` by superposing the independent pieces: the count in `A` is the sum of the
@@ -114,7 +116,7 @@ identifies the count in `A` as Poisson with mean `m A`. -/
 omit [Nonempty E] in
 /-- The rates of the per-piece thinned counts sum to the total mass: `∑ₖ m (piece k ∩ A) = m A`,
 since the pieces intersected with `A` partition `A`. -/
-private lemma tsum_measure_prmPiece_inter (hA : MeasurableSet A) :
+theorem tsum_measure_prmPiece_inter (hA : MeasurableSet A) :
     ∑' k, m (prmPiece m k ∩ A) = m A := by
   rw [← measure_iUnion (fun i j hij =>
         (pairwise_disjoint_prmPiece hij).mono Set.inter_subset_left Set.inter_subset_left)
@@ -446,25 +448,6 @@ theorem map_poissonRandomMeasure_apply [IsProbabilityMeasure μ] (hd : IsPoisson
   funext n
   rw [Function.comp_apply, ENNReal.ofReal_natCast]
 
-/-- The identity `ℕ → ℝ` is integrable against a Poisson law: its first absolute moment is the
-mean `r`, supplied by `poissonExpectation_hasSum`. -/
-private lemma integrable_natCast_poissonMeasure (r : ℝ≥0) :
-    Integrable (fun n : ℕ => (n : ℝ)) (poissonMeasure r) := by
-  refine ⟨Measurable.of_discrete.aestronglyMeasurable, ?_⟩
-  rw [hasFiniteIntegral_iff_enorm, lintegral_countable']
-  have hsummable : Summable fun n : ℕ => ‖(n : ℝ)‖ * poissonPMFReal r n :=
-    (poissonExpectation_hasSum r).summable.congr fun n => by
-      rw [Real.norm_of_nonneg (Nat.cast_nonneg n)]
-  have hterm : ∀ n : ℕ, ‖(n : ℝ)‖ₑ * poissonMeasure r {n}
-      = ENNReal.ofReal (‖(n : ℝ)‖ * poissonPMFReal r n) := fun n => by
-    rw [show (poissonMeasure r) {n} = ENNReal.ofReal (poissonPMFReal r n) from
-        PMF.toMeasure_apply_singleton _ _ (measurableSet_singleton n),
-      ← ofReal_norm_eq_enorm, ← ENNReal.ofReal_mul (norm_nonneg _)]
-  simp_rw [hterm]
-  rw [← ENNReal.ofReal_tsum_of_nonneg
-    (fun n => mul_nonneg (norm_nonneg _) poissonPMFReal_nonneg) hsummable]
-  exact ENNReal.ofReal_lt_top
-
 /-- The `ℝ`-valued count in a finite-mass set is integrable. -/
 theorem integrable_toReal_poissonRandomMeasure_apply [IsProbabilityMeasure μ]
     (hd : IsPoissonPointFamily K X m μ) (hA : MeasurableSet A) (hfin : m A < ⊤) :
@@ -475,7 +458,7 @@ theorem integrable_toReal_poissonRandomMeasure_apply [IsProbabilityMeasure μ]
       (μ.map fun ω => (poissonRandomMeasure K X ω A).toReal) := by
     rw [map_toReal_poissonRandomMeasure_apply hd hA hfin,
       integrable_map_measure aestronglyMeasurable_id measurable_from_top.aemeasurable]
-    exact integrable_natCast_poissonMeasure _
+    exact integrable_id_poissonMeasure _
   exact (integrable_map_measure aestronglyMeasurable_id hN_meas.aemeasurable).mp h1
 
 /-- The `ℝ`-valued count in a finite-mass set has mean `(m A).toReal`. -/

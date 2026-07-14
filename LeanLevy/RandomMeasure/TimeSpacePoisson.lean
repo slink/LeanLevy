@@ -63,13 +63,13 @@ variable {Ω E : Type} [MeasurableSpace E] [MeasurableSpace Ω] [Nonempty E] {K 
 omit [Nonempty E] in
 /-- The `volume.prod m`-mass of a space-time band factorizes: `(volume.prod m) ((s, t] ×ˢ A)` is the
 time length `t - s` times the mark mass `m A`. -/
-private lemma volume_prod_Ioc_prod (s t : ℝ) (A : Set E) :
+theorem volume_prod_Ioc_prod (s t : ℝ) (A : Set E) :
     (volume.prod m) (Set.Ioc s t ×ˢ A) = ENNReal.ofReal (t - s) * m A := by
   rw [Measure.prod_prod, Real.volume_Ioc]
 
 omit [Nonempty E] in
 /-- Each space-time band has finite `volume.prod m`-mass whenever the mark set has finite mass. -/
-private lemma volume_prod_Ioc_prod_lt_top (hfin : m A < ⊤) :
+theorem volume_prod_Ioc_prod_lt_top (hfin : m A < ⊤) :
     (volume.prod m) (Set.Ioc s t ×ˢ A) < ⊤ := by
   rw [volume_prod_Ioc_prod]
   exact ENNReal.mul_lt_top ENNReal.ofReal_lt_top hfin
