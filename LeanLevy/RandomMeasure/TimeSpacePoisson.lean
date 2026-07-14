@@ -62,6 +62,12 @@ window `(s, t]`; the running count `poissonTimeCount K X A t` is its value on th
   Lebesgue integrals of the positive and negative jump parts.
 * `ProbabilityTheory.charFun_map_levyLargeJumpSum` — **the large-jump sum is compound Poisson**: its
   characteristic function is `exp (t · ∫_{|x|≥1} (e^{iξx} − 1) dν)`.
+* `ProbabilityTheory.charFun_map_compensatedBandSum` — the compensated Poisson sum of the band test
+  function on a mark set `A ⊆ (-1, 1)` of finite `ν`-mass has characteristic function
+  `exp (t · ∫_A (e^{ixξ} − 1 − ixξ) dν)`.
+* `ProbabilityTheory.charFun_map_levyCompensatedSmallJump` — **the law of the compensated small-jump
+  integral**: its characteristic function is `exp (t · ∫_{(-1,1)} (e^{ixξ} − 1 − ixξ) dν)`, the
+  small-jump factor of the Lévy–Khintchine exponent.
 
 Every statement is read off the abstract superposition and disjoint-family independence laws of
 `poissonRandomMeasure` on `ℝ × E`; the band mass factorizes as `volume (Ioc s t) * m A` through
@@ -1450,6 +1456,148 @@ private lemma tendsto_setIntegral_annulus (hν : IsLevyMeasure ν) (ξ : ℝ) :
       exact norm_levyCompensatedIntegrand_le ξ x
     · rw [Set.indicator_of_notMem hxa, norm_zero]
       exact mul_nonneg (by positivity) (le_min zero_le_one (sq_nonneg x))
+
+/-- **The law of the compensated small-jump integral:** its characteristic function is
+`exp (t · ∫_{(-1,1)} (e^{ixξ} − 1 − ixξ) dν)` — the small-jump factor of the
+Lévy–Khintchine exponent. -/
+theorem charFun_map_levyCompensatedSmallJump [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν)
+    {t : ℝ} (ht : 0 ≤ t) (ξ : ℝ) :
+    charFun (μ.map (fun ω => levyCompensatedSmallJump hd hν t ω)) ξ
+      = Complex.exp ((t : ℂ) * ∫ x in Set.Ioo (-1) 1,
+          (Complex.exp (x * ξ * Complex.I) - 1 - x * ξ * Complex.I) ∂ν) := by
+  have hA_meas : ∀ n : ℕ,
+      MeasurableSet (Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |x|}) :=
+    fun n => measurableSet_Ioo.inter (measurableSet_le measurable_const continuous_abs.measurable)
+  have hA_sub : ∀ n : ℕ,
+      Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |x|} ⊆ Set.Ioo (-1) 1 :=
+    fun n => Set.inter_subset_left
+  have hA_fin : ∀ n : ℕ, ν (Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |x|}) < ⊤ := fun n =>
+    (measure_mono Set.inter_subset_right).trans_lt
+      (hν.measure_setOf_abs_ge_lt_top (by positivity))
+  have hslice_eq : ∀ n : ℕ,
+      Set.Ioo (-1:ℝ) 1 \ (Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |x|})
+        = Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | |x| < ((n:ℝ) + 1)⁻¹} := by
+    intro n
+    ext x
+    simp only [Set.mem_sdiff, Set.mem_inter_iff, Set.mem_setOf_eq, not_and, not_le]
+    exact ⟨fun ⟨hxo, h⟩ => ⟨hxo, h hxo⟩, fun ⟨hxo, h⟩ => ⟨hxo, fun _ => h⟩⟩
+  -- The truncated compensated integral agrees a.e. with the compensated band sum.
+  have hTrunc_ae : ∀ n : ℕ, (fun ω => (compensatedPoissonIntegral hd
+        ((memLp_two_bandFun (hA_meas n) (hA_sub n) (hA_fin n) t).toLp
+          ((Set.Ioc 0 t ×ˢ (Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |x|})).indicator
+            fun p => p.2))) ω)
+      =ᵐ[μ] compensatedPoissonSum K X
+        ((Set.Ioc 0 t ×ˢ (Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |x|})).indicator fun p => p.2)
+        ((volume : Measure ℝ).prod ν) := fun n =>
+    compensatedPoissonIntegral_eq_sum hd (measurable_bandFun (hA_meas n) t)
+      (integrable_bandFun (hA_meas n) (hA_sub n) (hA_fin n) t)
+      (memLp_two_bandFun (hA_meas n) (hA_sub n) (hA_fin n) t)
+  -- The charFun of the truncated integral is the annulus exponential.
+  have hcharTrunc : ∀ n : ℕ, charFun (μ.map (fun ω => (compensatedPoissonIntegral hd
+        ((memLp_two_bandFun (hA_meas n) (hA_sub n) (hA_fin n) t).toLp
+          ((Set.Ioc 0 t ×ˢ (Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |x|})).indicator
+            fun p => p.2))) ω)) ξ
+      = Complex.exp ((t : ℂ) * ∫ x in Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |x|},
+          (Complex.exp (↑x * ↑ξ * Complex.I) - 1 - ↑x * ↑ξ * Complex.I) ∂ν) := by
+    intro n
+    rw [Measure.map_congr (hTrunc_ae n),
+      charFun_map_compensatedBandSum hd (hA_meas n) (hA_sub n) (hA_fin n) ht ξ]
+  -- The annulus exponentials converge to the small-jump exponential.
+  have hRHS : Tendsto (fun n : ℕ => Complex.exp ((t : ℂ) *
+        ∫ x in Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |x|},
+          (Complex.exp (↑x * ↑ξ * Complex.I) - 1 - ↑x * ↑ξ * Complex.I) ∂ν)) atTop
+      (𝓝 (Complex.exp ((t : ℂ) * ∫ x in Set.Ioo (-1:ℝ) 1,
+        (Complex.exp (↑x * ↑ξ * Complex.I) - 1 - ↑x * ↑ξ * Complex.I) ∂ν))) :=
+    (Complex.continuous_exp.tendsto _).comp ((tendsto_setIntegral_annulus hν ξ).const_mul (t : ℂ))
+  -- The `L²(μ)` distance to the small-jump integral vanishes.
+  have htend_r : Tendsto (fun n : ℕ => (eLpNorm (levyCompensatedSmallJump hd hν t
+        - compensatedPoissonIntegral hd
+          ((memLp_two_bandFun (hA_meas n) (hA_sub n) (hA_fin n) t).toLp
+            ((Set.Ioc 0 t ×ˢ (Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |x|})).indicator
+              fun p => p.2))) 2 μ).toReal) atTop (𝓝 0) := by
+    have hsq : ∀ n : ℕ, ((eLpNorm (levyCompensatedSmallJump hd hν t
+          - compensatedPoissonIntegral hd
+            ((memLp_two_bandFun (hA_meas n) (hA_sub n) (hA_fin n) t).toLp
+              ((Set.Ioc 0 t ×ˢ (Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |x|})).indicator
+                fun p => p.2))) 2 μ).toReal) ^ 2
+        = t * (∫⁻ x in Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | |x| < ((n:ℝ) + 1)⁻¹},
+            ENNReal.ofReal (x ^ 2) ∂ν).toReal := by
+      intro n
+      rw [← ENNReal.toReal_pow,
+        eLpNorm_levyCompensatedSmallJump_sub_bandFun hd hν t (hA_meas n) (hA_sub n) (hA_fin n),
+        eLpNorm_sq_bandFun (measurableSet_Ioo.diff (hA_meas n)) t, hslice_eq n,
+        ENNReal.toReal_mul, ENNReal.toReal_ofReal ht]
+    have hJ : Tendsto (fun n : ℕ => (∫⁻ x in Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | |x| < ((n:ℝ) + 1)⁻¹},
+          ENNReal.ofReal (x ^ 2) ∂ν).toReal) atTop (𝓝 0) := by
+      simpa [Function.comp_def] using
+        (ENNReal.tendsto_toReal (by simp)).comp (tendsto_lintegral_slice_sq hν)
+    have hr2 : Tendsto (fun n : ℕ => ((eLpNorm (levyCompensatedSmallJump hd hν t
+          - compensatedPoissonIntegral hd
+            ((memLp_two_bandFun (hA_meas n) (hA_sub n) (hA_fin n) t).toLp
+              ((Set.Ioc 0 t ×ˢ (Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |x|})).indicator
+                fun p => p.2))) 2 μ).toReal) ^ 2) atTop (𝓝 0) := by
+      simp_rw [hsq]; simpa using hJ.const_mul t
+    have hsqrt := (Real.continuous_sqrt.tendsto 0).comp hr2
+    rw [Real.sqrt_zero] at hsqrt
+    exact hsqrt.congr fun n => Real.sqrt_sq ENNReal.toReal_nonneg
+  -- The L¹ distance is dominated by the L² distance.
+  have hbnd : ∀ n : ℕ, ∫ ω, |levyCompensatedSmallJump hd hν t ω
+        - (compensatedPoissonIntegral hd
+          ((memLp_two_bandFun (hA_meas n) (hA_sub n) (hA_fin n) t).toLp
+            ((Set.Ioc 0 t ×ˢ (Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |x|})).indicator
+              fun p => p.2))) ω| ∂μ
+      ≤ (eLpNorm (levyCompensatedSmallJump hd hν t
+          - compensatedPoissonIntegral hd
+            ((memLp_two_bandFun (hA_meas n) (hA_sub n) (hA_fin n) t).toLp
+              ((Set.Ioc 0 t ×ˢ (Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |x|})).indicator
+                fun p => p.2))) 2 μ).toReal := by
+    intro n
+    set Hn := levyCompensatedSmallJump hd hν t
+      - compensatedPoissonIntegral hd
+        ((memLp_two_bandFun (hA_meas n) (hA_sub n) (hA_fin n) t).toLp
+          ((Set.Ioc 0 t ×ˢ (Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |x|})).indicator
+            fun p => p.2)) with hHn
+    calc ∫ ω, |levyCompensatedSmallJump hd hν t ω
+            - (compensatedPoissonIntegral hd
+              ((memLp_two_bandFun (hA_meas n) (hA_sub n) (hA_fin n) t).toLp
+                ((Set.Ioc 0 t ×ˢ (Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |x|})).indicator
+                  fun p => p.2))) ω| ∂μ
+        = ∫ ω, ‖Hn ω‖ ∂μ := by
+          refine integral_congr_ae ?_
+          filter_upwards [hHn ▸ Lp.coeFn_sub (levyCompensatedSmallJump hd hν t)
+            (compensatedPoissonIntegral hd
+              ((memLp_two_bandFun (hA_meas n) (hA_sub n) (hA_fin n) t).toLp
+                ((Set.Ioc 0 t ×ˢ (Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |x|})).indicator
+                  fun p => p.2)))] with ω hω
+          rw [Real.norm_eq_abs, hω]; rfl
+      _ = (eLpNorm Hn 1 μ).toReal := by
+          rw [integral_norm_eq_lintegral_enorm (Lp.aestronglyMeasurable Hn),
+            ← eLpNorm_one_eq_lintegral_enorm]
+      _ ≤ (eLpNorm Hn 2 μ).toReal :=
+          ENNReal.toReal_mono (Lp.eLpNorm_ne_top Hn)
+            (eLpNorm_le_eLpNorm_of_exponent_le (by norm_num) (Lp.aestronglyMeasurable Hn))
+  -- The characteristic function of the truncated integral converges to that of the small-jump one.
+  have hint0 : Tendsto (fun n : ℕ => ∫ ω, |levyCompensatedSmallJump hd hν t ω
+        - (compensatedPoissonIntegral hd
+          ((memLp_two_bandFun (hA_meas n) (hA_sub n) (hA_fin n) t).toLp
+            ((Set.Ioc 0 t ×ˢ (Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |x|})).indicator
+              fun p => p.2))) ω| ∂μ) atTop (𝓝 0) :=
+    squeeze_zero (fun n => integral_nonneg fun ω => abs_nonneg _) hbnd htend_r
+  have hLHS : Tendsto (fun n : ℕ => charFun (μ.map (fun ω => (compensatedPoissonIntegral hd
+        ((memLp_two_bandFun (hA_meas n) (hA_sub n) (hA_fin n) t).toLp
+          ((Set.Ioc 0 t ×ˢ (Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | ((n:ℝ) + 1)⁻¹ ≤ |x|})).indicator
+            fun p => p.2))) ω)) ξ) atTop
+      (𝓝 (charFun (μ.map (fun ω => levyCompensatedSmallJump hd hν t ω)) ξ)) := by
+    rw [tendsto_iff_norm_sub_tendsto_zero]
+    refine squeeze_zero (fun n => norm_nonneg _) (fun n => ?_) (by simpa using hint0.const_mul |ξ|)
+    rw [norm_sub_rev]
+    exact norm_charFun_map_sub_le
+      (Lp.aestronglyMeasurable (levyCompensatedSmallJump hd hν t)).aemeasurable
+      (Lp.aestronglyMeasurable _).aemeasurable
+      (((Lp.memLp (levyCompensatedSmallJump hd hν t)).integrable (by norm_num)).sub
+        ((Lp.memLp _).integrable (by norm_num))) ξ
+  exact tendsto_nhds_unique (hLHS.congr fun n => hcharTrunc n) hRHS
 
 end LevyIntensity
 
