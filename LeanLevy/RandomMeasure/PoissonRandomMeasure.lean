@@ -102,7 +102,7 @@ theorem measurable_poissonRandomMeasure_apply (hK : ∀ k, Measurable (K k))
     (hX : ∀ k n, Measurable (X k n)) (hA : MeasurableSet A) :
     Measurable fun ω => poissonRandomMeasure K X ω A := by
   simp_rw [poissonRandomMeasure_apply hA]
-  refine Measurable.ennreal_tsum fun k => ?_
+  refine Measurable.tsum fun k => ?_
   exact measurable_from_top.comp (measurable_thinnedCount (hK k) (hX k) hA)
 
 /-! ### Superposition: the law of the count in a set
@@ -127,16 +127,16 @@ theorem tsum_measure_prmPiece_inter (hA : MeasurableSet A) :
 private lemma lintegral_id_poissonMeasure (r : ℝ≥0) :
     ∫⁻ n, (n : ℝ≥0∞) ∂(poissonMeasure r) = (r : ℝ≥0∞) := by
   rw [lintegral_countable' (fun n : ℕ => (n : ℝ≥0∞))]
-  have hsingle : ∀ n : ℕ, poissonMeasure r {n} = ENNReal.ofReal (poissonPMFReal r n) := by
+  have hsingle : ∀ n : ℕ, poissonMeasure r {n} = ENNReal.ofReal ((poissonMeasure r).real {n}) := by
     intro n
-    rw [poissonMeasure, PMF.toMeasure_apply_singleton _ _ (measurableSet_singleton n)]; rfl
+    rw [measureReal_def, ENNReal.ofReal_toReal (measure_ne_top _ _)]
   have hterm : ∀ n : ℕ, (n : ℝ≥0∞) * poissonMeasure r {n}
-      = ENNReal.ofReal ((n : ℝ) * poissonPMFReal r n) := by
+      = ENNReal.ofReal ((n : ℝ) * (poissonMeasure r).real {n}) := by
     intro n
     rw [hsingle, ENNReal.ofReal_mul (Nat.cast_nonneg n), ENNReal.ofReal_natCast]
   simp_rw [hterm]
   rw [← ENNReal.ofReal_tsum_of_nonneg
-      (fun n => mul_nonneg (Nat.cast_nonneg n) poissonPMFReal_nonneg)
+      (fun n => mul_nonneg (Nat.cast_nonneg n) measureReal_nonneg)
       (poissonExpectation_hasSum r).summable, (poissonExpectation_hasSum r).tsum_eq,
     ENNReal.ofReal_coe_nnreal]
 
@@ -907,7 +907,7 @@ private lemma charFunDual_poissonRandomMeasureVec {ι : Type} [Fintype ι] [Deci
       Complex.exp (↑(∑ k ∈ Finset.range (n + 1), (m (prmPiece m k ∩ A i)).toReal)
         * (Complex.exp (↑(L (Pi.single i 1)) * I) - 1))) atTop
       (𝓝 (∏ i, Complex.exp (↑(m (A i)).toReal * (Complex.exp (↑(L (Pi.single i 1)) * I) - 1)))) := by
-    refine tendsto_finset_prod _ fun i _ => ?_
+    refine tendsto_finsetProd _ fun i _ => ?_
     exact ((Continuous.tendsto (by fun_prop : Continuous fun r : ℝ =>
         Complex.exp (↑r * (Complex.exp (↑(L (Pi.single i 1)) * I) - 1))) _)).comp
       (tendsto_rate_prmPartialCount (hA i) (hfin i))

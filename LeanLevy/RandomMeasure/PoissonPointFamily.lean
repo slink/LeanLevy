@@ -8,10 +8,10 @@ import Mathlib.MeasureTheory.Integral.Bochner.Set
 import Mathlib.MeasureTheory.Measure.Typeclasses.SFinite
 import Mathlib.Order.Disjointed
 import Mathlib.Probability.HasLawExists
-import Mathlib.Probability.Distributions.Poisson
+import Mathlib.Probability.Distributions.Poisson.Basic
 import Mathlib.Probability.Independence.Basic
 import Mathlib.Probability.Independence.Integration
-import Mathlib.Probability.Independence.Process
+import Mathlib.Probability.Independence.Process.Basic
 import Mathlib.Probability.Independence.CharacteristicFunction
 import Mathlib.MeasureTheory.Measure.CharacteristicFunction.Basic
 import Mathlib.MeasureTheory.Function.Floor
@@ -478,7 +478,7 @@ private theorem integral_marksSum_eq [IsProbabilityMeasure μ] (hd : IsPoissonPo
     intro n
     rw [← (hd.law_point k n).map_eq,
       integral_map (hd.measurable_point k n).aemeasurable hg.aestronglyMeasurable]
-  rw [integral_finset_sum _ (fun n _ => hterm n)]
+  rw [integral_finsetSum _ (fun n _ => hterm n)]
   simp_rw [heach]
   rw [Finset.sum_const, Finset.card_range, nsmul_eq_mul]
 
@@ -518,14 +518,11 @@ private theorem setIntegral_count_rangeSum [IsProbabilityMeasure μ]
 
 /-- The probability of the piece-count event `{K k = j}` is the Poisson pmf at `j`. -/
 private theorem measureReal_count_eq (hd : IsPoissonPointFamily K X m μ) (j : ℕ) :
-    μ.real {ω | K k ω = j} = poissonPMFReal (m (prmPiece m k)).toNNReal j := by
+    μ.real {ω | K k ω = j} = (poissonMeasure (m (prmPiece m k)).toNNReal).real {j} := by
   have h1 : μ {ω | K k ω = j} = poissonMeasure (m (prmPiece m k)).toNNReal {j} := by
     rw [show {ω | K k ω = j} = K k ⁻¹' {j} from rfl,
       ← Measure.map_apply (hd.measurable_count k) (measurableSet_singleton j), (hd.law_count k).map_eq]
-  rw [measureReal_def, h1, show poissonMeasure (m (prmPiece m k)).toNNReal {j}
-      = ENNReal.ofReal (poissonPMFReal (m (prmPiece m k)).toNNReal j) from by
-        rw [poissonMeasure, PMF.toMeasure_apply_singleton _ _ (measurableSet_singleton j)]; rfl,
-    ENNReal.toReal_ofReal poissonPMFReal_nonneg]
+  rw [measureReal_def, h1, ← measureReal_def]
 
 /-- **Campbell's formula for a piece sum.** The mean of the piece sum is the `m`-integral of the test
 function over the piece:
@@ -555,7 +552,7 @@ theorem integral_pieceSum [IsProbabilityMeasure μ] (hd : IsPoissonPointFamily K
   have hGint : ∀ (g : E → ℝ), Measurable g → Integrable g (m.restrict (prmPiece m k)) → ∀ j,
       Integrable (fun ω => ∑ n ∈ Finset.range j, g (X k n ω)) μ := by
     intro g hg hgi j
-    refine integrable_finset_sum _ fun n _ => ?_
+    refine integrable_finsetSum _ fun n _ => ?_
     have hI : Integrable g (μ.map (X k n)) := by
       rw [(hd.law_point k n).map_eq]; exact integrable_prmPieceLaw hg hgi
     exact hI.comp_measurable (hd.measurable_point k n)
@@ -563,7 +560,7 @@ theorem integral_pieceSum [IsProbabilityMeasure μ] (hd : IsPoissonPointFamily K
     ((hGint f hf hfi j).integrableOn).congr_fun (heqcell j).symm (hs_meas j)
   -- Bound the per-cell norm integrals by the `|f|`-Campbell terms, which are summable.
   have hbound : ∀ j, ∫ x in s j, ‖pieceSum K X f k x‖ ∂μ
-      ≤ poissonPMFReal rate j * ((j : ℝ) * ∫ x, |f x| ∂(prmPieceLaw m k)) := by
+      ≤ (poissonMeasure rate).real {j} * ((j : ℝ) * ∫ x, |f x| ∂(prmPieceLaw m k)) := by
     intro j
     have hmono : ∫ x in s j, ‖pieceSum K X f k x‖ ∂μ
         ≤ ∫ x in s j, ∑ n ∈ Finset.range j, |f (X k n x)| ∂μ := by
@@ -574,11 +571,11 @@ theorem integral_pieceSum [IsProbabilityMeasure μ] (hd : IsPoissonPointFamily K
       exact Finset.abs_sum_le_sum_abs _ _
     calc ∫ x in s j, ‖pieceSum K X f k x‖ ∂μ
         ≤ ∫ x in s j, ∑ n ∈ Finset.range j, |f (X k n x)| ∂μ := hmono
-      _ = poissonPMFReal rate j * ((j : ℝ) * ∫ x, |f x| ∂(prmPieceLaw m k)) := by
+      _ = (poissonMeasure rate).real {j} * ((j : ℝ) * ∫ x, |f x| ∂(prmPieceLaw m k)) := by
           rw [setIntegral_count_rangeSum hd habs hfi.abs j, measureReal_count_eq hd j]
   have hsummable : Summable fun j => ∫ x in s j, ‖pieceSum K X f k x‖ ∂μ := by
     refine Summable.of_nonneg_of_le (fun j => integral_nonneg fun _ => norm_nonneg _) hbound ?_
-    have hexp : Summable fun (j : ℕ) => (∫ x, |f x| ∂(prmPieceLaw m k)) * ((j : ℝ) * poissonPMFReal rate j) :=
+    have hexp : Summable fun (j : ℕ) => (∫ x, |f x| ∂(prmPieceLaw m k)) * ((j : ℝ) * (poissonMeasure rate).real {j}) :=
       ((poissonExpectation_hasSum rate).summable).mul_left _
     refine hexp.congr fun j => ?_
     ring
@@ -590,13 +587,13 @@ theorem integral_pieceSum [IsProbabilityMeasure μ] (hd : IsPoissonPointFamily K
   rw [hunion, setIntegral_univ] at hval
   rw [hval]
   have hcellf : ∀ j, ∫ x in s j, pieceSum K X f k x ∂μ
-      = poissonPMFReal rate j * ((j : ℝ) * ∫ x, f x ∂(prmPieceLaw m k)) := by
+      = (poissonMeasure rate).real {j} * ((j : ℝ) * ∫ x, f x ∂(prmPieceLaw m k)) := by
     intro j
     rw [setIntegral_congr_fun (hs_meas j) (heqcell j),
       setIntegral_count_rangeSum hd hf hfi j, measureReal_count_eq hd j]
   simp_rw [hcellf]
-  have hfun : (fun j => poissonPMFReal rate j * ((j : ℝ) * ∫ x, f x ∂(prmPieceLaw m k)))
-      = fun (j : ℕ) => (∫ x, f x ∂(prmPieceLaw m k)) * ((j : ℝ) * poissonPMFReal rate j) := by
+  have hfun : (fun j => (poissonMeasure rate).real {j} * ((j : ℝ) * ∫ x, f x ∂(prmPieceLaw m k)))
+      = fun (j : ℕ) => (∫ x, f x ∂(prmPieceLaw m k)) * ((j : ℝ) * (poissonMeasure rate).real {j}) := by
     funext j; ring
   have hr : (rate : ℝ) = (m (prmPiece m k)).toReal := rfl
   rw [hfun, ((poissonExpectation_hasSum rate).mul_left (∫ x, f x ∂(prmPieceLaw m k))).tsum_eq, hr,
@@ -659,7 +656,7 @@ private theorem integrable_marksSum_sq [IsProbabilityMeasure μ] (hd : IsPoisson
       = fun ω => ∑ n ∈ Finset.range j, ∑ n' ∈ Finset.range j, f (X k n ω) * f (X k n' ω) := by
     funext ω; rw [pow_two, Finset.sum_mul_sum]
   rw [hexp]
-  exact integrable_finset_sum _ fun n _ => integrable_finset_sum _ fun n' _ => hprod n n'
+  exact integrable_finsetSum _ fun n _ => integrable_finsetSum _ fun n' _ => hprod n n'
 
 /-- **Second moment of a fixed-length mark sum.** The mean square of the sum of the first `j` i.i.d.
 marks is `j * E[f^2] + j (j-1) * E[f]^2`, against the piece law. Expanding the square, diagonal terms
@@ -712,12 +709,12 @@ private theorem integral_marksSum_sq_eq [IsProbabilityMeasure μ]
   have hexp : (fun ω => (∑ n ∈ Finset.range j, f (X k n ω)) ^ 2)
       = fun ω => ∑ n ∈ Finset.range j, ∑ n' ∈ Finset.range j, f (X k n ω) * f (X k n' ω) := by
     funext ω; rw [pow_two, Finset.sum_mul_sum]
-  rw [hexp, integral_finset_sum _ fun n _ =>
-    integrable_finset_sum _ fun n' _ => hprod n n']
+  rw [hexp, integral_finsetSum _ fun n _ =>
+    integrable_finsetSum _ fun n' _ => hprod n n']
   have hinner : ∀ n, ∫ ω, ∑ n' ∈ Finset.range j, f (X k n ω) * f (X k n' ω) ∂μ
       = ∑ n' ∈ Finset.range j, (if n = n' then A else B ^ 2) := by
     intro n
-    rw [integral_finset_sum _ fun n' _ => hprod n n']
+    rw [integral_finsetSum _ fun n' _ => hprod n n']
     exact Finset.sum_congr rfl fun n' _ => hprod_val n n'
   simp_rw [hinner]
   have hin : ∀ n ∈ Finset.range j,
@@ -740,7 +737,7 @@ private theorem setIntegral_sq_pieceSum_eq [IsProbabilityMeasure μ]
     (hfi : Integrable f (m.restrict (prmPiece m k)))
     (hfi2 : Integrable (fun x => f x ^ 2) (m.restrict (prmPiece m k))) (j : ℕ) :
     ∫ x in {ω | K k ω = j}, (pieceSum K X f k x) ^ 2 ∂μ
-      = poissonPMFReal (m (prmPiece m k)).toNNReal j
+      = (poissonMeasure (m (prmPiece m k)).toNNReal).real {j}
         * ((j : ℝ) * (∫ x, f x ^ 2 ∂(prmPieceLaw m k))
           + (j : ℝ) * ((j : ℝ) - 1) * (∫ x, f x ∂(prmPieceLaw m k)) ^ 2) := by
   have hψmeas : Measurable (fun y : ℕ → E => (∑ n ∈ Finset.range j, f (y n)) ^ 2) :=
@@ -754,7 +751,7 @@ private theorem setIntegral_sq_pieceSum_eq [IsProbabilityMeasure μ]
     _ = μ.real {ω | K k ω = j}
           * ∫ x, (fun y : ℕ → E => (∑ n ∈ Finset.range j, f (y n)) ^ 2) (fun n => X k n x) ∂μ :=
         setIntegral_count_marksFun hd j hψmeas
-    _ = poissonPMFReal (m (prmPiece m k)).toNNReal j
+    _ = (poissonMeasure (m (prmPiece m k)).toNNReal).real {j}
           * ((j : ℝ) * (∫ x, f x ^ 2 ∂(prmPieceLaw m k))
             + (j : ℝ) * ((j : ℝ) - 1) * (∫ x, f x ∂(prmPieceLaw m k)) ^ 2) := by
         rw [measureReal_count_eq hd j]
@@ -781,7 +778,7 @@ theorem integrable_sq_pieceSum [IsProbabilityMeasure μ] (hd : IsPoissonPointFam
     ((integrable_marksSum_sq hd hf hfi hfi2 j).integrableOn).congr_fun (heqcell j).symm (hs_meas j)
   have hsummable : Summable fun j => ∫ x in s j, ‖(pieceSum K X f k x) ^ 2‖ ∂μ := by
     have heqnorm : (fun j => ∫ x in s j, ‖(pieceSum K X f k x) ^ 2‖ ∂μ)
-        = fun j => poissonPMFReal rate j
+        = fun j => (poissonMeasure rate).real {j}
           * ((j : ℝ) * (∫ x, f x ^ 2 ∂(prmPieceLaw m k))
             + (j : ℝ) * ((j : ℝ) - 1) * (∫ x, f x ∂(prmPieceLaw m k)) ^ 2) := by
       funext j
@@ -790,10 +787,10 @@ theorem integrable_sq_pieceSum [IsProbabilityMeasure μ] (hd : IsPoissonPointFam
         rw [Real.norm_eq_abs, abs_of_nonneg (sq_nonneg _)]
     rw [heqnorm]
     have h1 : Summable fun (j : ℕ) =>
-        (∫ x, f x ^ 2 ∂(prmPieceLaw m k)) * ((j : ℝ) * poissonPMFReal rate j) :=
+        (∫ x, f x ^ 2 ∂(prmPieceLaw m k)) * ((j : ℝ) * (poissonMeasure rate).real {j}) :=
       ((poissonExpectation_hasSum rate).summable).mul_left _
     have h2 : Summable fun (j : ℕ) => (∫ x, f x ∂(prmPieceLaw m k)) ^ 2
-        * (((j : ℝ) * ((j : ℝ) - 1)) * poissonPMFReal rate j) :=
+        * (((j : ℝ) * ((j : ℝ) - 1)) * (poissonMeasure rate).real {j}) :=
       ((poissonFactorialMoment2_hasSum rate).summable).mul_left _
     exact (h1.add h2).congr fun j => by ring
   have h := integrableOn_iUnion_of_summable_integral_norm hi hsummable
@@ -822,7 +819,7 @@ theorem integral_sq_pieceSum [IsProbabilityMeasure μ] (hd : IsPoissonPointFamil
   rw [hunion, setIntegral_univ] at hval
   rw [hval]
   have hcell : ∀ j, ∫ x in s j, (pieceSum K X f k x) ^ 2 ∂μ
-      = poissonPMFReal rate j
+      = (poissonMeasure rate).real {j}
         * ((j : ℝ) * (∫ x, f x ^ 2 ∂(prmPieceLaw m k))
           + (j : ℝ) * ((j : ℝ) - 1) * (∫ x, f x ∂(prmPieceLaw m k)) ^ 2) :=
     fun j => setIntegral_sq_pieceSum_eq hd hf hfi hfi2 j
@@ -830,13 +827,13 @@ theorem integral_sq_pieceSum [IsProbabilityMeasure μ] (hd : IsPoissonPointFamil
   set A := ∫ x, f x ^ 2 ∂(prmPieceLaw m k) with hA
   set B := ∫ x, f x ∂(prmPieceLaw m k) with hB
   have hHS : HasSum
-      (fun j => poissonPMFReal rate j * ((j : ℝ) * A + (j : ℝ) * ((j : ℝ) - 1) * B ^ 2))
+      (fun j => (poissonMeasure rate).real {j} * ((j : ℝ) * A + (j : ℝ) * ((j : ℝ) - 1) * B ^ 2))
       (A * (rate : ℝ) + B ^ 2 * (rate : ℝ) ^ 2) := by
     have h1 := (poissonExpectation_hasSum rate).mul_left A
     have h2 := (poissonFactorialMoment2_hasSum rate).mul_left (B ^ 2)
-    have hfun : (fun j => poissonPMFReal rate j * ((j : ℝ) * A + (j : ℝ) * ((j : ℝ) - 1) * B ^ 2))
-        = fun (j : ℕ) => A * ((j : ℝ) * poissonPMFReal rate j)
-          + B ^ 2 * (((j : ℝ) * ((j : ℝ) - 1)) * poissonPMFReal rate j) := by
+    have hfun : (fun j => (poissonMeasure rate).real {j} * ((j : ℝ) * A + (j : ℝ) * ((j : ℝ) - 1) * B ^ 2))
+        = fun (j : ℕ) => A * ((j : ℝ) * (poissonMeasure rate).real {j})
+          + B ^ 2 * (((j : ℝ) * ((j : ℝ) - 1)) * (poissonMeasure rate).real {j}) := by
       funext j; ring
     rw [hfun]; exact h1.add h2
   rw [hHS.tsum_eq]
@@ -890,12 +887,12 @@ variable {Ω E : Type} [MeasurableSpace E] [MeasurableSpace Ω] {K : ℕ → Ω 
 /-- **Poisson probability-generating series (complex form).** `∑ⱼ P(N = j) · wʲ = exp(λ(w − 1))` for
 any complex `w`; the analytic identity behind the piece pgf identity. Re-derived here rather than
 imported from the compound-Poisson development. -/
-private lemma tsum_poissonPMFReal_mul_cpow (lam : ℝ≥0) (w : ℂ) :
-    ∑' j : ℕ, (poissonPMFReal lam j : ℂ) * w ^ j = Complex.exp ((lam : ℝ) * (w - 1)) := by
-  have hterm : ∀ j : ℕ, (poissonPMFReal lam j : ℂ) * w ^ j
+private lemma tsum_poissonMeasure_real_mul_cpow (lam : ℝ≥0) (w : ℂ) :
+    ∑' j : ℕ, ((poissonMeasure lam).real {j} : ℂ) * w ^ j = Complex.exp ((lam : ℝ) * (w - 1)) := by
+  have hterm : ∀ j : ℕ, ((poissonMeasure lam).real {j} : ℂ) * w ^ j
       = (Real.exp (-(lam : ℝ)) : ℂ) * (((lam : ℝ) * w) ^ j / (Nat.factorial j : ℂ)) := by
     intro j
-    simp only [poissonPMFReal]
+    simp only [poissonMeasure_real_singleton]
     push_cast
     rw [mul_pow]
     ring
@@ -1042,7 +1039,7 @@ theorem integral_pieceProd_eq_exp [IsProbabilityMeasure μ] (hd : IsPoissonPoint
   rw [hunion, setIntegral_univ] at hval
   rw [hval]
   have hcell : ∀ j, ∫ ω in s j, ∏ n ∈ Finset.range (K k ω), w (X k n ω) ∂μ
-      = (poissonPMFReal (m (prmPiece m k)).toNNReal j : ℂ) * (∫ x, w x ∂(prmPieceLaw m k)) ^ j := by
+      = ((poissonMeasure (m (prmPiece m k)).toNNReal).real {j} : ℂ) * (∫ x, w x ∂(prmPieceLaw m k)) ^ j := by
     intro j
     have hψmeas : Measurable (fun y : ℕ → E => ∏ n ∈ Finset.range j, w (y n)) :=
       Finset.measurable_prod _ fun n _ => hw.comp (measurable_pi_apply n)
@@ -1055,7 +1052,7 @@ theorem integral_pieceProd_eq_exp [IsProbabilityMeasure μ] (hd : IsPoissonPoint
     congr 1
     exact integral_marksProd_eq hd hw j
   simp_rw [hcell]
-  exact tsum_poissonPMFReal_mul_cpow (m (prmPiece m k)).toNNReal (∫ x, w x ∂(prmPieceLaw m k))
+  exact tsum_poissonMeasure_real_mul_cpow (m (prmPiece m k)).toNNReal (∫ x, w x ∂(prmPieceLaw m k))
 
 /-- The mass bridge for thinning: `m (piece k) · pieceLaw k (A) = m (piece k ∩ A)`. -/
 private lemma toReal_mul_real_prmPieceLaw (hA : MeasurableSet A) :
@@ -1333,7 +1330,7 @@ private lemma prod_ite_eq_one_add_sum_indicator {ι : Type} [Fintype ι] {A : ι
       Finset.sum_eq_single i₀ (fun i _ hi => Set.indicator_of_notMem (huniq i hi) _) (by simp),
       Set.indicator_of_mem hi₀]
     ring
-  · push_neg at hx
+  · push Not at hx
     rw [Finset.prod_eq_one (fun i _ => if_neg (hx i)),
       Finset.sum_eq_zero (fun i _ => Set.indicator_of_notMem (hx i) _)]
     ring
@@ -1374,8 +1371,8 @@ lemma integral_prod_pow_thinnedCount {ι : Type} [Fintype ι] [IsProbabilityMeas
         Integrable (fun x => (A i).indicator (fun _ => z i - 1) x) (prmPieceLaw m k) :=
       fun i => (integrable_const (z i - 1)).indicator (hA i)
     have hone : ∫ _ : E, (1 : ℂ) ∂(prmPieceLaw m k) = 1 := by simp
-    rw [hwrw, integral_add (integrable_const 1) (integrable_finset_sum _ fun i _ => hintegrable i),
-      integral_finset_sum _ (fun i _ => hintegrable i), hone]
+    rw [hwrw, integral_add (integrable_const 1) (integrable_finsetSum _ fun i _ => hintegrable i),
+      integral_finsetSum _ (fun i _ => hintegrable i), hone]
     congr 1
     refine Finset.sum_congr rfl fun i _ => ?_
     rw [integral_indicator_const_complex (z i - 1) (hA i)]

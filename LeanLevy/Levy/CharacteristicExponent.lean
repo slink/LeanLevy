@@ -171,7 +171,10 @@ theorem tendsto_ceilApprox_nhdsWithin_Ici (t : ℝ≥0) :
   tendsto_nhdsWithin_iff.mpr
     ⟨tendsto_ceilApprox t, Eventually.of_forall fun m => ceilApprox_ge t m⟩
 
-set_option maxHeartbeats 800000 in
+-- The final `tendsto_nhds_unique` step became markedly slower after the mathlib bump
+-- (heavier `isDefEq` on the `ℝ≥0`/`Nat.ceil` sequence); the proof is unchanged, only the
+-- elaboration budget is raised to accommodate it.
+set_option maxHeartbeats 3200000 in
 /-- If `f` is right-continuous, `g` is continuous, both from `ℝ≥0` to a T₂ space, and
 they agree on all ℕ/ℕ rationals `k/(n+1)`, then `f = g` everywhere. -/
 theorem eq_of_rightCts_of_continuous_of_eqOn_ratNNReal {β : Type*}
@@ -187,13 +190,15 @@ theorem eq_of_rightCts_of_continuous_of_eqOn_ratNNReal {β : Type*}
   have htends_within := tendsto_ceilApprox_nhdsWithin_Ici t
   have htends := tendsto_ceilApprox t
   have hf_lim : Tendsto (f ∘ ceilApprox t) atTop (𝓝 (f t)) :=
-    Filter.Tendsto.comp (hf t) htends_within
+    (hf t).tendsto.comp htends_within
   have hg_lim : Tendsto (g ∘ ceilApprox t) atTop (𝓝 (g t)) :=
-    Filter.Tendsto.comp (hg.continuousAt (x := t)) htends
-  have heq_seq : f ∘ ceilApprox t = g ∘ ceilApprox t := by
-    ext m; exact heq ⌈(t : ℝ) * ↑(m + 1)⌉₊ m
-  rw [heq_seq] at hf_lim
-  exact tendsto_nhds_unique hf_lim hg_lim
+    (hg.continuousAt (x := t)).tendsto.comp htends
+  have heq_seq : ∀ m, (f ∘ ceilApprox t) m = (g ∘ ceilApprox t) m := by
+    intro m
+    simp only [Function.comp_apply, ceilApprox]
+    exact heq ⌈(t : ℝ) * ↑(m + 1)⌉₊ m
+  exact tendsto_nhds_unique (f := g ∘ ceilApprox t) (l := atTop) (a := f t) (b := g t)
+    (hf_lim.congr heq_seq) hg_lim
 
 end DensityExtension
 

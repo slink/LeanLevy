@@ -120,7 +120,7 @@ theorem hasStationaryIncrements (h : IsPoissonProcess N rate μ) :
     have h0 : increment Xℤ 0 s = Xℤ s := by
       ext ω; simp [increment_apply, hXℤ_def, congr_fun h.start_zero ω]
     rw [← h0]
-    exact h.indep_increments.indepFun_increment (zero_le s) le_self_add
+    exact h.indep_increments.indepFun_increment (zero_le) le_self_add
   have hNs_eq : Ns = (Int.cast : ℤ → ℝ) ∘ Xℤ s := by ext ω; simp [Ns, hXℤ_def]
   have hdiffR_eq : diffR = (Int.cast : ℤ → ℝ) ∘ increment Xℤ s (s + k) := by
     ext ω; simp [diffR, Nsk, Ns, increment_apply, hXℤ_def]
@@ -136,23 +136,7 @@ theorem hasStationaryIncrements (h : IsPoissonProcess N rate μ) :
   -- First prove the charFun formula for the Poisson measure pushed to ℝ
   have hcf_poisson : ∀ (r : ℝ≥0) (ξ : ℝ),
       charFun ((poissonMeasure r).map (Nat.cast : ℕ → ℝ)) ξ =
-      cexp (↑(r : ℝ) * (cexp (↑ξ * I) - 1)) := by
-    intro r ξ
-    rw [charFun_apply_real]
-    rw [integral_map (by fun_prop : Measurable (Nat.cast : ℕ → ℝ)).aemeasurable
-      (by fun_prop : Continuous (fun x : ℝ => cexp (↑ξ * ↑x * I))).aestronglyMeasurable]
-    change ∫ n, cexp (↑ξ * ↑(n : ℝ) * I) ∂(poissonPMF r).toMeasure = _
-    have hint : Integrable (fun n : ℕ => cexp (↑ξ * ↑(n : ℝ) * I)) (poissonPMF r).toMeasure := by
-      apply (integrable_const (1 : ℝ)).mono'
-      · exact (by fun_prop : Continuous (fun n : ℕ => cexp (↑ξ * ↑(n : ℝ) * I))).measurable.aestronglyMeasurable
-      · filter_upwards with n
-        rw [show (↑ξ : ℂ) * ↑(n : ℝ) * I = ↑(ξ * ↑n) * I from by push_cast; ring,
-          norm_exp_ofReal_mul_I]
-    rw [PMF.integral_eq_tsum _ _ hint]
-    simp only [poissonPMF_toReal]
-    convert poissonCharFun_eq r ξ using 1
-    unfold poissonCharFun
-    congr 1; ext n; erw [Algebra.smul_def]; exact mul_comm _ _
+      cexp (↑(r : ℝ) * (cexp (↑ξ * I) - 1)) := fun r ξ => charFun_poissonMeasure_eq r ξ
   -- Now prove charFun of N t marginal
   have hcf_Nt : ∀ t : ℝ≥0, ∀ ξ : ℝ,
       charFun (μ.map (fun ω => (N t ω : ℝ))) ξ =
@@ -429,7 +413,7 @@ private theorem poissonProcessFDD_erase (rate : ℝ≥0) (I : Finset ℝ≥0) (t
           simp only [finCongr_apply_mk, ψ, poissonProcessMerge, ← heI_def, ← hk_def]
           rw [dif_pos (show j < k.val from by omega)])
     · -- Case 2: posJ ≥ k ⟹ posI = posJ + 1, merge at k
-      push_neg at hlt
+      push Not at hlt
       have hval : ((I.orderIsoOfFin rfl).symm ⟨s, Finset.erase_subset t I hs⟩).val =
           posJ.val + 1 := by
         rw [hpos]; exact hsa_ge posJ hlt
@@ -483,7 +467,7 @@ private theorem poissonProcessFDD_erase (rate : ℝ≥0) (I : Finset ℝ≥0) (t
           have hne : (⟨j, hj⟩ : Fin _) ≠ kJ := Fin.ne_of_val_ne (Nat.ne_of_lt hjk)
           rw [dif_pos hjk, if_neg hne, add_zero]
           exact congr_arg d (Fin.ext (by rw [hsa_val]; simp [hjk]))
-        · push_neg at hjk
+        · push Not at hjk
           by_cases hjk2 : j = k.val
           · -- j = k: ψ d j = d(k) + d(k+1), succAbove j = j+1
             subst hjk2
@@ -645,7 +629,7 @@ private theorem poissonProcessFDD_erase (rate : ℝ≥0) (I : Finset ℝ≥0) (t
         change lift n ⟨j, _⟩ = _
         change (if _ : _ then _ else _) = _
         rw [dif_pos hjk]
-      · push_neg at hjk
+      · push Not at hjk
         rw [dif_neg (not_lt.mpr hjk)]
         by_cases hjk2 : j = k.val
         · -- j = k: n + (f(k) - n) = f(k)
@@ -674,7 +658,7 @@ private theorem poissonProcessFDD_erase (rate : ℝ≥0) (I : Finset ℝ≥0) (t
         simp only [ψ, poissonProcessMerge, ← heI_def, ← hk_def, dif_pos hi1] at hψi
         show d ⟨i, hi⟩ = (if _ : _ then _ else _)
         rw [dif_pos hi1, ← hψi]
-      · push_neg at hi1
+      · push Not at hi1
         by_cases hi2 : i = k.val
         · -- i = k: d(k) = m = lift(m)(k)
           subst hi2; exact (hlift_at_k m).symm
@@ -787,7 +771,7 @@ private theorem poissonProcessFDD_erase (rate : ℝ≥0) (I : Finset ℝ≥0) (t
               poissonMeasure (rate * poissonProcessGap J j) {f j}
             congr 2; congr 1; exact (hgap_lt j hjk).symm
           · -- j > k: succAbove j = j+1, lift gives f j, gap identity
-            push_neg at hjk
+            push Not at hjk
             have hjk_gt : j.val > k.val := Nat.lt_of_le_of_ne hjk (Ne.symm hne)
             have hk'_le_j : k'.val ≤ j.val := by simp [k']; omega
             have hj1_lt_I : j.val + 1 < I.card := by omega
@@ -1195,7 +1179,6 @@ private theorem kolmogorovExtension_map_diff (rate : ℝ≥0) (s h : ℝ≥0) (h
       poissonMeasure (rate * poissonProcessGap I a) {m} *
       poissonMeasure (rate * poissonProcessGap I b) {n} := by
     intro m
-    change Finset.univ.prod _ = _
     rw [huniv, Finset.prod_pair hab, if_pos rfl, if_neg hab.symm]
   simp_rw [hprod, ENNReal.tsum_mul_right]
   -- ∑' m, poissonMeasure(rate * gap 0) {m} = 1 (total mass of probability measure)
@@ -1264,11 +1247,11 @@ private theorem orderIsoOfFin_symm_succ_of_lt (n : ℕ) (t : Fin (n + 1) → ℝ
   -- By monotonicity: k.castSucc < m < k.succ (as Fin (n+1) values)
   -- But k.castSucc.val = k.val and k.succ.val = k.val + 1, so no m exists
   have hlt1 : k.val < m.val := by
-    by_contra hle; push_neg at hle
+    by_contra hle; push Not at hle
     exact absurd (hmono (Fin.le_iff_val_le_val.mpr (by simp [Fin.val_castSucc]; exact hle)))
       (not_le.mpr h1)
   have hlt2 : m.val < k.val + 1 := by
-    by_contra hle; push_neg at hle
+    by_contra hle; push Not at hle
     exact absurd (hmono (Fin.le_iff_val_le_val.mpr (by simp [Fin.val_succ]; exact hle)))
       (not_le.mpr h2)
   omega
@@ -1293,13 +1276,9 @@ private theorem kolmogorovExtension_coord_zero_ae (rate : ℝ≥0) :
   -- poissonMeasure 0 {0}ᶜ = 1 - poissonMeasure 0 {0} = 1 - 1 = 0
   rw [measure_compl (measurableSet_singleton 0) (measure_ne_top _ _),
     measure_univ, show poissonMeasure 0 {0} = 1 from ?_, tsub_self]
-  -- poissonMeasure 0 {0} = (poissonPMF 0).toMeasure {0} = poissonPMF 0 0 = 1
-  change (poissonPMF 0).toMeasure {0} = 1
-  rw [PMF.toMeasure_apply_singleton _ _ (measurableSet_singleton 0)]
-  -- Goal: (poissonPMF 0) 0 = 1
-  -- poissonPMF 0 0 = ENNReal.ofReal (poissonPMFReal 0 0) = ENNReal.ofReal (exp(-0) * 0^0 / 0!) = 1
-  show ENNReal.ofReal (poissonPMFReal 0 0) = 1
-  simp [poissonPMFReal, Nat.factorial]
+  -- poissonMeasure 0 {0} = ENNReal.ofReal (exp(-0) * 0^0 / 0!) = 1
+  rw [poissonMeasure_singleton]
+  simp
 
 /-- The ℤ-valued increments `ω(t(k+1)) - ω(t(k))` are mutually independent under
 the Kolmogorov extension of the Poisson projective family, for any monotone
@@ -1557,7 +1536,7 @@ private theorem kolmogorovExtension_indep_increments (rate : ℝ≥0) (n : ℕ)
       rw [hempty] at this; exact this]
     rw [measure_empty]
     exact (Finset.prod_eq_zero (Finset.mem_univ k₀) (by rw [hempty, measure_empty])).symm
-  · push_neg at h_const_empty
+  · push Not at h_const_empty
     -- All constant k have z k = 0
     have hconst_univ : ∀ k : Fin n, t k.castSucc = t k.succ → F_k k ⁻¹' {z k} = Set.univ := by
       intro k hk_const
@@ -1732,17 +1711,12 @@ theorem exists_poissonProcess (rate : ℝ≥0) :
       -- Dirac 0 = poissonMeasure 0
       -- Both are probability measures; agree on singletons
       symm; apply Measure.ext_of_singleton; intro n
-      rw [show poissonMeasure 0 = (poissonPMF 0).toMeasure from rfl,
-        PMF.toMeasure_apply_singleton _ _ (measurableSet_singleton n)]
-      rw [Measure.dirac_apply' 0 (measurableSet_singleton n)]
-      -- Goal: poissonPMF 0 n = Set.indicator {0} 1 n
-      -- poissonPMF 0 n = ENNReal.ofReal (poissonPMFReal 0 n) definitionally
-      change ENNReal.ofReal (poissonPMFReal 0 n) = _
+      rw [poissonMeasure_singleton, Measure.dirac_apply' 0 (measurableSet_singleton n)]
       by_cases hn : n = 0
-      · subst hn; simp [poissonPMFReal]
-      · simp only [Set.indicator_apply, Set.mem_singleton_iff, Pi.one_apply]
-        simp [poissonPMFReal, zero_pow (by omega : n ≠ 0)]
-        exact fun h => hn h.symm
+      · subst hn; simp
+      · simp only [Set.indicator_apply, Set.mem_singleton_iff, Pi.one_apply, NNReal.coe_zero]
+        rw [if_neg (fun h => hn h.symm)]
+        simp [zero_pow hn]
     · -- Case h ≠ 0
       by_cases hs : s = 0
       · -- Subcase s = 0: N(0+h) ω - N(0) ω = ω h - 0 = ω h

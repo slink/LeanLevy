@@ -11,7 +11,7 @@ import Mathlib.Probability.Distributions.Gamma
 import Mathlib.Analysis.SpecialFunctions.Integrals.Basic
 import Mathlib.Probability.Independence.CharacteristicFunction
 import Mathlib.Probability.Independence.Integration
-import Mathlib.Probability.Independence.Process
+import Mathlib.Probability.Independence.Process.Basic
 
 /-!
 # The jump-count law of a compound Poisson process is Poisson
@@ -358,14 +358,12 @@ theorem map_jumpCount_arrival [IsProbabilityMeasure μ]
     rw [measure_congr hae, survival_ennreal hd hr k ht]
   refine Measure.ext_of_singleton fun k => ?_
   rw [Measure.map_apply hmeas_jc (measurableSet_singleton k)]
-  have hpoisson : poissonMeasure (r * t) {k} = ENNReal.ofReal (poissonPMFReal (r * t) k) := by
-    rw [poissonMeasure, PMF.toMeasure_apply_singleton _ _ (measurableSet_singleton k)]; rfl
-  rw [hpoisson, show jc ⁻¹' {k} = {ω | jc ω = k} from rfl]
+  rw [poissonMeasure_singleton, show jc ⁻¹' {k} = {ω | jc ω = k} from rfl]
   cases k with
   | zero =>
     rw [show {ω | jc ω = 0} = {ω | jc ω ≤ 0} from by ext ω; simp, hle 0]
     congr 1
-    simp only [survivalPoly, poissonPMFReal, zero_add, Finset.sum_range_one, pow_zero,
+    simp only [survivalPoly, zero_add, Finset.sum_range_one, pow_zero,
       Nat.factorial_zero, Nat.cast_one, div_one, mul_one, NNReal.coe_mul]
   | succ m =>
     have hsub : {ω | jc ω ≤ m} ⊆ {ω | jc ω ≤ m + 1} := fun ω h => le_trans h (Nat.le_succ m)
@@ -374,7 +372,7 @@ theorem map_jumpCount_arrival [IsProbabilityMeasure μ]
       measure_diff hsub (hmeas_le m).nullMeasurableSet (measure_ne_top _ _),
       hle (m + 1), hle m, ← ENNReal.ofReal_sub _ (survivalPoly_nonneg hR.le ht m)]
     congr 1
-    simp only [survivalPoly, poissonPMFReal, Finset.sum_range_succ, NNReal.coe_mul]
+    simp only [survivalPoly, Finset.sum_range_succ, NNReal.coe_mul]
     field_simp
     ring
 
@@ -384,12 +382,12 @@ theorem map_jumpCount_arrival [IsProbabilityMeasure μ]
 `∑ₖ P(N = k) · wᵏ` of a Poisson`(λ)` count sums to `exp(λ · (w − 1))`. This is the analytic
 identity behind the compound-Poisson characteristic function; it is proved exactly like
 `poissonCharFun_eq`, by pulling the normalising constant `e^{−λ}` out of the exponential series. -/
-private lemma tsum_poissonPMFReal_mul_pow (lam : ℝ≥0) (w : ℂ) :
-    ∑' k : ℕ, (poissonPMFReal lam k : ℂ) * w ^ k = Complex.exp ((lam : ℝ) * (w - 1)) := by
-  have hterm : ∀ k : ℕ, (poissonPMFReal lam k : ℂ) * w ^ k
+private lemma tsum_poissonMeasure_real_mul_pow (lam : ℝ≥0) (w : ℂ) :
+    ∑' k : ℕ, ((poissonMeasure lam).real {k} : ℂ) * w ^ k = Complex.exp ((lam : ℝ) * (w - 1)) := by
+  have hterm : ∀ k : ℕ, ((poissonMeasure lam).real {k} : ℂ) * w ^ k
       = (Real.exp (-(lam : ℝ)) : ℂ) * (((lam : ℝ) * w) ^ k / (Nat.factorial k : ℂ)) := by
     intro k
-    simp only [poissonPMFReal]
+    simp only [poissonMeasure_real_singleton]
     push_cast
     rw [mul_pow]
     ring
@@ -514,7 +512,8 @@ theorem charFun_map_compoundPoisson [IsProbabilityMeasure μ]
         (ae_of_all _ fun ω => by simpa using hFbound ω)
     have hpart := hasSum_integral_iUnion hs_meas hs_disj (by rw [hunion]; exact hF_int.integrableOn)
     rw [hunion, setIntegral_univ] at hpart
-    have hterm : ∀ k, (∫ ω in s k, F ω ∂μ) = (poissonPMFReal (r * t) k : ℂ) * w ^ k := by
+    have hterm : ∀ k, (∫ ω in s k, F ω ∂μ)
+        = ((poissonMeasure (r * t)).real {k} : ℂ) * w ^ k := by
       intro k
       -- On `{jc = k}` the jump sum is the sum of the first `k` marks.
       have hFcong : Set.EqOn F
@@ -549,18 +548,15 @@ theorem charFun_map_compoundPoisson [IsProbabilityMeasure μ]
           (g := fun y : ℕ → ℝ => Complex.exp (↑ξ * ↑(∑ n ∈ Finset.range k, y n) * Complex.I))
           hjc_meas.aemeasurable hYbar_ae hf_aesm hg_aesm
       -- Identify the probability of `{jc = k}` with the Poisson pmf.
-      have hμreal : μ.real (s k) = poissonPMFReal (r * t) k := by
+      have hμreal : μ.real (s k) = (poissonMeasure (r * t)).real {k} := by
         have h1 : μ (s k) = poissonMeasure (r * t) {k} := by
           have hmap : μ.map jc = poissonMeasure (r * t) := map_jumpCount_arrival hd hr t
           rw [show s k = jc ⁻¹' {k} from rfl,
             ← Measure.map_apply hjc_meas (measurableSet_singleton k), hmap]
-        rw [measureReal_def, h1, show poissonMeasure (r * t) {k}
-            = ENNReal.ofReal (poissonPMFReal (r * t) k) from by
-              rw [poissonMeasure, PMF.toMeasure_apply_singleton _ _ (measurableSet_singleton k)]; rfl,
-          ENNReal.toReal_ofReal poissonPMFReal_nonneg]
+        rw [measureReal_def, h1, ← measureReal_def]
       -- The indicator factor integrates to the probability of `{jc = k}`.
       have hf_int : (∫ ω, (if jc ω = k then (1 : ℂ) else 0) ∂μ)
-          = (poissonPMFReal (r * t) k : ℂ) := by
+          = ((poissonMeasure (r * t)).real {k} : ℂ) := by
         have heq : (fun ω => if jc ω = k then (1 : ℂ) else 0) = (s k).indicator fun _ => (1 : ℂ) := by
           funext ω
           simp only [Set.indicator_apply, hs, Set.mem_setOf_eq]
@@ -579,11 +575,12 @@ theorem charFun_map_compoundPoisson [IsProbabilityMeasure μ]
       simp only [hGeq]
       rw [hprod, hf_int, hg_int]
     -- Sum the Poisson generating series.
-    have hHS : HasSum (fun k => (poissonPMFReal (r * t) k : ℂ) * w ^ k) (∫ ω, F ω ∂μ) := by
+    have hHS : HasSum (fun k => ((poissonMeasure (r * t)).real {k} : ℂ) * w ^ k)
+        (∫ ω, F ω ∂μ) := by
       have hfun : (fun k => ∫ ω in s k, F ω ∂μ)
-          = fun k => (poissonPMFReal (r * t) k : ℂ) * w ^ k := funext hterm
+          = fun k => ((poissonMeasure (r * t)).real {k} : ℂ) * w ^ k := funext hterm
       rwa [hfun] at hpart
-    rw [← hHS.tsum_eq, tsum_poissonPMFReal_mul_pow]
+    rw [← hHS.tsum_eq, tsum_poissonMeasure_real_mul_pow]
   -- Peel off the drift and assemble.
   have hint_eq : ∀ ω, Complex.exp (↑ξ * ↑(compoundPoisson b τ Y (t : ℝ) ω) * Complex.I)
       = Complex.exp (↑ξ * ↑b * ↑(t : ℝ) * Complex.I)
