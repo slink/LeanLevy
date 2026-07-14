@@ -41,6 +41,8 @@ evaluations.
   finite pairwise-disjoint family of finite-mass sets are mutually independent.
 * `ProbabilityTheory.tsum_measure_prmPiece_inter` — the per-piece intensities of a measurable set sum
   to its total mass, `∑ₖ m (piece k ∩ A) = m A`.
+* `ProbabilityTheory.lintegral_poissonRandomMeasure_apply` — the evaluation on a measurable set `A`
+  has `ℝ≥0∞`-mean equal to the intensity `m A` (both sides may be `⊤`).
 * `ProbabilityTheory.lintegral_poissonRandomMeasure` — the Lebesgue integral of a measurable `g`
   against the random measure is the sum of `g` over the realized points.
 * `ProbabilityTheory.lintegral_lintegral_poissonRandomMeasure` — **Campbell's formula**: the mean of
