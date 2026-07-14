@@ -352,7 +352,7 @@ private theorem tendsto_riemannSum_of_uniformContinuousOn
       rw [← intervalIntegral.sum_integral_adjacent_intervals_Ico
         (a := fun k : ℕ => (k : ℝ) * h) (Nat.zero_le _)
         (fun k hk =>
-          (hφ.mono (Set.Icc_subset_Icc (by push_cast; positivity)
+          (hφ.mono (Set.Icc_subset_Icc (by positivity)
             (by rw [hN_eq]; apply mul_le_mul_of_nonneg_right _ hh_pos.le
                 have : k + 1 ≤ m + 1 := hk.2
                 exact_mod_cast this))).intervalIntegrable_of_Icc
@@ -374,7 +374,7 @@ private theorem tendsto_riemannSum_of_uniformContinuousOn
       intro s _
       exact h_Icc_split (fun t => F s t)
         (hF_cts.comp (continuous_const.prodMk continuous_id)).continuousOn]
-    rw [integral_finset_sum (Finset.univ : Finset (Fin (m + 1))) (fun (j : Fin (m + 1)) _ =>
+    rw [integral_finsetSum (Finset.univ : Finset (Fin (m + 1))) (fun (j : Fin (m + 1)) _ =>
       (continuous_parametric_integral_of_continuous hF_cts
         (isCompact_Icc (a := (j : ℝ) * h) (b := ((j : ℝ) + 1) * h))).continuousOn.integrableOn_Icc)]
   -- Bound the error
@@ -1435,7 +1435,7 @@ private theorem isTight_of_charFun_pointwise_tendsto
           apply compl_subset_compl.mpr
           exact subset_union_of_subset_left (subset_iUnion Kfin ⟨n, hn⟩) _
       _ ≤ ε := hKfin_meas ⟨n, hn⟩
-  · push_neg at hn
+  · push Not at hn
     have hcompl_sub : ((⋃ i : Fin n₀, Kfin i) ∪ Metric.closedBall 0 r)ᶜ ⊆
         (Metric.closedBall (0 : ℝ) r)ᶜ :=
       compl_subset_compl.mpr subset_union_right
@@ -1503,7 +1503,8 @@ private theorem integrable_charFun_gaussianVar (n : ℕ) :
     Integrable (fun ξ => charFun (gaussianReal 0 (gaussianVar n)) ξ) volume := by
   set v := gaussianVar n
   have hv_pos : (0 : ℝ) < (v : ℝ≥0) := by
-    simp only [v, gaussianVar, NNReal.coe_mk]; positivity
+    have hval : ((v : ℝ≥0) : ℝ) = 1 / (↑n + 1) := rfl
+    rw [hval]; positivity
   -- The norm of charFun(N(0,v)) ξ equals exp(-(v/2)·ξ²)
   have hnorm_eq : ∀ ξ : ℝ, ‖charFun (gaussianReal 0 v) ξ‖ = Real.exp (-((v : ℝ) / 2 * ξ ^ 2)) := by
     intro ξ
@@ -1551,7 +1552,7 @@ private theorem tendsto_gaussianCharFun_one (ξ : ℝ) :
     rw [show (0 : ℂ) = ↑(0 : ℝ) from by simp]
     exact (Complex.continuous_ofReal.tendsto 0).comp (by
       show Tendsto (fun n : ℕ => (↑(gaussianVar n) : ℝ)) atTop (𝓝 0)
-      simp only [NNReal.coe_mk, gaussianVar]
+      simp only [gaussianVar]
       exact tendsto_one_div_add_atTop_nhds_zero_nat)
   exact (((hv_tendsto.mul tendsto_const_nhds).div_const _).neg)
 

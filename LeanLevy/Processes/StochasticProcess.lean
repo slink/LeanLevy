@@ -252,7 +252,7 @@ private theorem indep_finset_X_increment [Zero ι]
     -- p < n - 1 because τ p = s < t = τ(n-1)
     have hp_lt_last : p < n - 1 := by
       by_contra h_ge
-      push_neg at h_ge
+      push Not at h_ge
       have : p = n - 1 := by omega
       have : τ ⟨p, hp_lt⟩ = τ ⟨n - 1, Nat.sub_lt hn_pos Nat.one_pos⟩ := by
         congr 1; ext; exact this
@@ -351,7 +351,7 @@ private theorem indep_finset_X_increment [Zero ι]
       -- p < n - 2 (since τ (p+1) ≤ s and τ is strict mono, so p+1 ≤ n-2, hence p < n-2)
       have hp_in_S : p < n - 2 := by
         -- τ (p+1) ≤ s, so p+1 ≤ n-2 (position of s), hence p < n-2
-        by_contra h_ge; push_neg at h_ge
+        by_contra h_ge; push Not at h_ge
         -- If p ≥ n - 2, then p + 1 ≥ n - 1, but p + 1 < n, so p + 1 = n - 1
         have : p + 1 = n - 1 := by omega
         -- Then τ (p+1) = τ (n-1) = t

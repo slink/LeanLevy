@@ -198,7 +198,7 @@ private lemma lintegral_Ioo_sq_lt_top (hν : IsLevyMeasure ν) :
   · rw [Set.indicator_of_mem hx]
     obtain ⟨h1, h2⟩ := hx
     exact ENNReal.ofReal_le_ofReal (le_min (by nlinarith) le_rfl)
-  · rw [Set.indicator_of_notMem hx]; exact zero_le _
+  · rw [Set.indicator_of_notMem hx]; exact zero_le
 
 /-- The small-jump band test function `1_{(s,t] × (-1,1)}(u, x) · x` is square-integrable against
 `volume.prod ν` for any Lévy measure `ν`. -/

@@ -170,7 +170,7 @@ theorem IsLevyProcess.charFun_marginal_nat_pow
       increment_zero_eq' h.start_zero _
     have h_indep : IndepFun (X (↑n : ℝ≥0))
         (increment X (↑n : ℝ≥0) ((↑n : ℝ≥0) + 1)) μ := by
-      have := h.indepFun_increment (s := 0) (t := ↑n) (u := ↑n + 1) (zero_le _) le_self_add
+      have := h.indepFun_increment (s := 0) (t := ↑n) (u := ↑n + 1) (zero_le) le_self_add
       rwa [h_incr_eq] at this
     -- μ.map (X n + incr) = μ.map (X n) ∗ μ.map (incr), via independence
     have hmI : AEMeasurable (increment X (↑n : ℝ≥0) ((↑n : ℝ≥0) + 1)) μ :=
@@ -229,7 +229,7 @@ theorem IsLevyProcess.isInfinitelyDivisible_marginal
     -- Independence: X δ ⊥ increment X δ (δ + k*δ)
     have h_incr_eq : increment X 0 δ = X δ := increment_zero_eq' h.start_zero _
     have h_indep : IndepFun (X δ) (increment X δ (δ + ↑k * δ)) μ := by
-      have := h.indepFun_increment (s := 0) (t := δ) (u := δ + ↑k * δ) (zero_le _) le_self_add
+      have := h.indepFun_increment (s := 0) (t := δ) (u := δ + ↑k * δ) (zero_le) le_self_add
       rwa [h_incr_eq] at this
     -- Convolution via independence
     have hmI : AEMeasurable (increment X δ (δ + ↑k * δ)) μ :=

@@ -287,7 +287,7 @@ private lemma nat_sInf_eq_iff (s : Set ℕ) (k : ℕ) :
   · rintro (⟨hk, hlt⟩ | ⟨hs, hk⟩)
     · refine le_antisymm (Nat.sInf_le hk) ?_
       by_contra hlt'
-      push_neg at hlt'
+      push Not at hlt'
       exact hlt _ hlt' (Nat.sInf_mem ⟨k, hk⟩)
     · rw [hs, hk]; exact Nat.sInf_empty
 

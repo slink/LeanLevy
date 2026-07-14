@@ -216,9 +216,9 @@ theorem closure_pointwise {φs : ℕ → ℝ → ℂ} (hφs : ∀ n, IsPositiveD
   have htend : Tendsto (fun k => ∑ i, ∑ j,
       starRingEnd ℂ (c i) * c j * φs k (x i - x j)) atTop
       (𝓝 (∑ i, ∑ j, starRingEnd ℂ (c i) * c j * φ (x i - x j))) := by
-    apply tendsto_finset_sum
+    apply tendsto_finsetSum
     intro i _
-    apply tendsto_finset_sum
+    apply tendsto_finsetSum
     intro j _
     exact (hlim (x i - x j)).const_mul _
   exact ge_of_tendsto htend (Eventually.of_forall fun k => hφs k n x c)
@@ -306,14 +306,14 @@ theorem of_charFun (μ : ProbabilityMeasure ℝ) :
       ring
     have hF_int : Integrable (fun (a : ℝ) => ∑ i, ∑ j,
         starRingEnd ℂ (c i) * c j * exp (↑(x i - x j) * ↑a * I)) (μ : Measure ℝ) :=
-      integrable_finset_sum _ fun i _ => integrable_finset_sum _ fun j _ => hint i j
+      integrable_finsetSum _ fun i _ => integrable_finsetSum _ fun j _ => hint i j
     have h_pull : ∀ (r : ℂ) (f : ℝ → ℂ),
         r * ∫ a, f a ∂(μ : Measure ℝ) = ∫ a, r * f a ∂(μ : Measure ℝ) :=
       fun r f => (integral_const_mul r f).symm
     simp_rw [h_pull]
-    simp_rw [(integral_finset_sum Finset.univ (fun j _ => hint _ j)).symm]
-    rw [(integral_finset_sum Finset.univ
-      (fun i _ => integrable_finset_sum _ (fun j _ => hint i j))).symm]
+    simp_rw [(integral_finsetSum Finset.univ (fun j _ => hint _ j)).symm]
+    rw [(integral_finsetSum Finset.univ
+      (fun i _ => integrable_finsetSum _ (fun j _ => hint i j))).symm]
     rw [show (∫ (a : ℝ), ∑ i, ∑ j, starRingEnd ℂ (c i) * c j *
         exp (↑(x i - x j) * ↑a * I) ∂(μ : Measure ℝ)).im =
       ∫ (a : ℝ), (∑ i, ∑ j, starRingEnd ℂ (c i) * c j *

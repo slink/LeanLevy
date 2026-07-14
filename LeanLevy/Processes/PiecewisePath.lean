@@ -5,7 +5,7 @@ Authors: LeanLevy Contributors
 -/
 import LeanLevy.Processes.Cadlag
 import Mathlib.Topology.Instances.Real.Lemmas
-import Mathlib.Data.Nat.Lattice
+import Mathlib.Order.Lattice.Nat
 import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 import Mathlib.MeasureTheory.Integral.IntervalIntegral.FundThmCalculus
 import Mathlib.Analysis.Calculus.Deriv.Mul
@@ -63,12 +63,12 @@ theorem lt_jumpCount_iff (hmono : StrictMono T) (htop : Tendsto T atTop atTop) (
   constructor
   · intro h
     by_contra hcon
-    push_neg at hcon
+    push Not at hcon
     have hle : jumpCount T t ≤ n := Nat.sInf_le (show n ∈ {m | t < T m} from hcon)
     omega
   · intro h
     by_contra hcon
-    push_neg at hcon
+    push Not at hcon
     have hmem : t < T (jumpCount T t) := Nat.sInf_mem hne
     have : T (jumpCount T t) ≤ T n := hmono.monotone hcon
     linarith
@@ -82,7 +82,7 @@ theorem jumpCount_mono (hmono : StrictMono T) (htop : Tendsto T atTop atTop) :
     Monotone (jumpCount T) := by
   intro a b hab
   by_contra hcon
-  push_neg at hcon
+  push Not at hcon
   have h1 : T (jumpCount T b) ≤ a := (lt_jumpCount_iff hmono htop _ _).mp hcon
   exact absurd ((lt_jumpCount_iff hmono htop _ _).mpr (h1.trans hab)) (lt_irrefl _)
 
@@ -381,7 +381,7 @@ theorem piecewisePath_ito (hf : ∀ x, HasDerivAt f (f' x) x) (hf' : Continuous 
     have h2 : jumpCount T s ≤ i := by
       have hlt : s < T i := lt_of_lt_of_le hs.2 (he_ub i hik)
       by_contra hc
-      push_neg at hc
+      push Not at hc
       exact absurd ((lt_jumpCount_iff hmono htop i s).mp hc) (not_le.mpr hlt)
     omega
   -- Per-piece integrability and value.
@@ -438,7 +438,6 @@ theorem piecewisePath_ito (hf : ∀ x, HasDerivAt f (f' x) x) (hf' : Continuous 
     (fun i => f (v i + b * e (i + 1))) (fun i => f (v i + b * e i))
     (fun i => f (piecewisePath x₀ b T Y (T i)) - f (piecewisePath x₀ b T Y (T i) - Y i)) k hJ
   rw [← hRL, htel]
-  simp only []
   rw [hRk, hL0]
   ring
 

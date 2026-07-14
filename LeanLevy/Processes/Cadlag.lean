@@ -100,7 +100,7 @@ theorem Monotone.leftLim_exists_nat {f : ℝ≥0 → ℕ} (hf : Monotone f) (t :
     have hmax : ∀ s, s < t → f s ≤ f s₀ := by
       intro s hs
       by_contra h
-      push_neg at h
+      push Not at h
       exact absurd (hs₀_max hs (le_of_lt h)) (not_le.mpr h)
     -- For all s ∈ (s₀, t), f s = f s₀
     have hf_eq : ∀ s, s ∈ Ioo s₀ t → f s = f s₀ := by

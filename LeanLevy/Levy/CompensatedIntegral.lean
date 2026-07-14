@@ -113,7 +113,7 @@ theorem norm_levyCompensatedIntegrand_le (ξ x : ℝ) :
         _ = x ^ 2 * ξ ^ 2 := by ring
         _ ≤ (2 + 3 * ξ ^ 2) * x ^ 2 := by nlinarith [sq_nonneg ξ, sq_nonneg x]
     · -- Sub-case |xξ| > 1: use triangle inequality
-      push_neg at hxξ
+      push Not at hxξ
       have hexp : ‖exp z‖ = 1 := by rw [hz_eq]; exact norm_exp_ofReal_mul_I _
       -- Triangle: ‖exp(z) - 1 - z‖ ≤ ‖exp(z) - 1‖ + ‖z‖ ≤ 2 + |xξ|
       have htri : ‖exp z - 1 - z‖ ≤ 2 + |x * ξ| := by
@@ -130,7 +130,7 @@ theorem norm_levyCompensatedIntegrand_le (ξ x : ℝ) :
         _ = 3 * ξ ^ 2 * x ^ 2 := by ring
         _ ≤ (2 + 3 * ξ ^ 2) * x ^ 2 := by nlinarith [sq_nonneg x]
   · -- Case |x| ≥ 1: indicator is 0
-    push_neg at hx
+    push Not at hx
     have hmin : min (1 : ℝ) (x ^ 2) = 1 :=
       min_eq_left ((one_le_sq_iff_one_le_abs x).mpr hx)
     rw [hmin]
@@ -144,7 +144,7 @@ theorem lintegral_enorm_levyCompensatedIntegrand_lt_top
   have hC : (0 : ℝ) ≤ 2 + 3 * ξ ^ 2 := by positivity
   calc ∫⁻ x, ‖levyCompensatedIntegrand ξ x‖ₑ ∂ν
       = ∫⁻ x, ENNReal.ofReal ‖levyCompensatedIntegrand ξ x‖ ∂ν := by
-        simp only [ofReal_norm_eq_enorm]
+        simp only [ofReal_norm]
     _ ≤ ∫⁻ x, ENNReal.ofReal ((2 + 3 * ξ ^ 2) * min 1 (x ^ 2)) ∂ν := by
         apply lintegral_mono
         intro x

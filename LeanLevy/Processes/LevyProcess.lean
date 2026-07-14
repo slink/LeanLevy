@@ -44,7 +44,7 @@ open scoped NNReal
 namespace ProbabilityTheory
 
 variable {Ω : Type*} {E : Type*}
-variable [MeasurableSpace Ω] [MeasurableSpace E] [TopologicalSpace E] [AddGroup E] [Sub E]
+variable [MeasurableSpace Ω] [MeasurableSpace E] [TopologicalSpace E] [AddGroup E]
 
 /-- A stochastic process `X : ℝ≥0 → Ω → E` is a **Lévy process** with respect to a measure `μ`
 if it starts at zero, has independent and stationary increments, and has càdlàg sample paths
@@ -113,7 +113,7 @@ private theorem lk_charFun_mul
   have hdecomp : X (s + k) = X s + increment X s (s + k) := by
     ext ω; simp [increment_apply]
   have hind : IndepFun (X s) (increment X s (s + k)) μ := by
-    have := h.indepFun_increment (s := 0) (t := s) (u := s + k) (zero_le _) le_self_add
+    have := h.indepFun_increment (s := 0) (t := s) (u := s + k) (zero_le) le_self_add
     rwa [incr_zero_eq h.start_zero] at this
   have hconv := hind.map_add_eq_map_conv_map₀
     (hX s).aemeasurable (measurable_increment (hX s) (hX (s + k))).aemeasurable
@@ -219,7 +219,7 @@ private theorem lk_charFun_ne_zero
     have hrc := lk_charFun_rightCts h hX 0 ξ
     apply hrc.comp
     rw [tendsto_nhdsWithin_iff]
-    exact ⟨htend, Eventually.of_forall fun _ => Set.mem_Ici.mpr (zero_le _)⟩
+    exact ⟨htend, Eventually.of_forall fun _ => Set.mem_Ici.mpr (zero_le)⟩
   rw [lk_charFun_zero h] at hctslim
   have : Tendsto (fun _ : ℕ => (0 : ℂ)) atTop (𝓝 1) := by
     convert hctslim using 1; ext n; exact (key n).symm
@@ -277,7 +277,7 @@ theorem charFun_eq_exp_mul
   -- 𝓝[≥] 0 = 𝓝 0 in ℝ≥0 (all elements are ≥ 0)
   have hIci_eq : 𝓝[≥] (0 : ℝ≥0) = 𝓝 0 := by
     rw [show Set.Ici (0 : ℝ≥0) = Set.univ from
-      Set.eq_univ_of_forall (fun x => zero_le x), nhdsWithin_univ]
+      Set.eq_univ_of_forall (fun _ => Set.mem_Ici.mpr zero_le), nhdsWithin_univ]
   -- φ → 1 as t → 0 in ℝ≥0
   have hφ_tendsto0 : Tendsto φ (𝓝 (0 : ℝ≥0)) (𝓝 1) := by
     rw [← hIci_eq, ← hφ0]; exact lk_charFun_rightCts h hX 0 ξ

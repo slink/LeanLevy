@@ -100,7 +100,7 @@ measure is positive semi-definite: for any frequencies `ξ₁, …, ξₙ` and c
 
 Proof roadmap:
 1. Unfold `characteristicFun` to integrals via `charFun_apply_real`.
-2. Pull the finite sums through the integral (`integral_finset_sum`).
+2. Pull the finite sums through the integral (`integral_finsetSum`).
 3. Show the integrand equals `‖∑ⱼ cⱼ exp(i ξⱼ x)‖²` using conjugate symmetry of `exp`.
 4. Conclude by `integral_nonneg`. -/
 theorem characteristicFun_positiveSemiDefinite
@@ -143,15 +143,15 @@ theorem characteristicFun_positiveSemiDefinite
     fun r f => (integral_const_mul r f).symm
   simp_rw [h_pull]
   -- Merge inner sums: for each j, ∑_k ∫ f_jk = ∫ ∑_k f_jk
-  simp_rw [(integral_finset_sum Finset.univ (fun k _ => hint _ k)).symm]
+  simp_rw [(integral_finsetSum Finset.univ (fun k _ => hint _ k)).symm]
   -- Merge outer sum: ∑_j ∫ g_j = ∫ ∑_j g_j
-  rw [(integral_finset_sum Finset.univ
-    (fun j _ => integrable_finset_sum _ (fun k _ => hint j k))).symm]
+  rw [(integral_finsetSum Finset.univ
+    (fun j _ => integrable_finsetSum _ (fun k _ => hint j k))).symm]
   -- Push .re through the integral and conclude
   set f : ℝ → ℂ := fun a => ∑ j : Fin n, ∑ k : Fin n,
     starRingEnd ℂ (c j) * c k * exp (↑(ξ j - ξ k) * ↑a * I)
   have hI : Integrable f (μ : Measure ℝ) :=
-    integrable_finset_sum _ fun j _ => integrable_finset_sum _ fun k _ => hint j k
+    integrable_finsetSum _ fun j _ => integrable_finsetSum _ fun k _ => hint j k
   calc (0 : ℝ)
       ≤ ∫ a, (f a).re ∂(μ : Measure ℝ) := integral_nonneg fun x => alg x
     _ = (∫ a, f a ∂(μ : Measure ℝ)).re :=

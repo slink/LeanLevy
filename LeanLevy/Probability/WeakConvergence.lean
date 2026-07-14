@@ -407,7 +407,7 @@ theorem isTight_of_charFunTendsto
           exact subset_union_of_subset_left (subset_iUnion Kfin ⟨n, hn⟩) _
       _ ≤ ε := hKfin_meas ⟨n, hn⟩
   · -- Case n ≥ n₀: use the tail bound from charfun convergence
-    push_neg at hn
+    push Not at hn
     -- The complement of our K is contained in (closedBall 0 r)ᶜ
     have hcompl_sub : ((⋃ i : Fin n₀, Kfin i) ∪ closedBall 0 r)ᶜ ⊆ (closedBall 0 r)ᶜ :=
       compl_subset_compl.mpr subset_union_right

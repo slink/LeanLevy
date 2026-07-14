@@ -86,7 +86,7 @@ private theorem content_tendsto_zero (pf : ProjectiveFamily ι α)
   have h_mono : Antitone (fun n ↦ projectiveFamilyContent pf.consistent (B n)) :=
     fun _ _ hmn ↦ projectiveFamilyContent_mono pf.consistent (hB _) (hB _) (hB_anti hmn)
   rw [ENNReal.tendsto_atTop_zero] at h_not_tendsto
-  push_neg at h_not_tendsto
+  push Not at h_not_tendsto
   obtain ⟨ε, hε_pos, h_freq⟩ := h_not_tendsto
   have h_lower : ∀ n, ε ≤ pf.measure (J n) (T n) := by
     intro n; rw [← content_eq]
@@ -109,7 +109,7 @@ private theorem content_tendsto_zero (pf : ProjectiveFamily ι α)
   -- Part B: Inner regularity + compact thinning
   -- Inner regularity: compact K_n ⊆ T_n with small deficit
   choose K hK_sub hK_compact hK_diff using fun n ↦
-    MeasurableSet.exists_isCompact_diff_lt (μ := pf.measure (J n)) (mT n)
+    MeasurableSet.exists_isCompact_sdiff_lt (μ := pf.measure (J n)) (mT n)
       (measure_ne_top (pf.measure (J n)) _)
       (ENNReal.div_pos hε_pos.ne' (ENNReal.pow_ne_top (by norm_num)) |>.ne' :
         ε / 2 ^ (n + 2) ≠ 0)
@@ -136,7 +136,7 @@ private theorem content_tendsto_zero (pf : ProjectiveFamily ι α)
       · right
         have : x ∉ ⋂ k : Fin n, Finset.restrict₂ (hJ_mono k.2.le) ⁻¹' K k := by
           intro hmem; exact h_empty.subset ⟨hxK, hmem⟩
-        rw [Set.mem_iInter] at this; push_neg at this
+        rw [Set.mem_iInter] at this; push Not at this
         obtain ⟨k, hk⟩ := this
         exact Set.mem_iUnion.2 ⟨k, Set.mem_preimage.2 ⟨hT_anti k.2.le hx, hk⟩⟩
       · exact Or.inl ⟨hx, hxK⟩
@@ -201,13 +201,13 @@ private theorem content_tendsto_zero (pf : ProjectiveFamily ι α)
     simp only [L, mem_inter_iff, mem_iInter] at hx ⊢
     refine ⟨?_, fun k ↦ ?_⟩
     · by_cases hnm' : n = m
-      · subst hnm'; convert hx.1
+      · subst hnm'; exact hx.1
       · have : n < m := lt_of_le_of_ne hnm hnm'
         have := hx.2 (⟨n, this⟩ : Fin m)
-        convert this
+        exact this
     · have hkm : (k : ℕ) < m := lt_of_lt_of_le k.2 hnm
       have := hx.2 (⟨k, hkm⟩ : Fin m)
-      convert this
+      exact this
   -- Project everything down to J_0 and use Cantor intersection to get a single point
   let M : ℕ → Set (∀ j : J 0, α j) := fun n ↦
     Finset.restrict₂ (hJ_mono (Nat.zero_le n)) '' L n
