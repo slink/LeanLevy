@@ -710,4 +710,168 @@ theorem measure_countable_sup_levyBandPath_ge [IsProbabilityMeasure μ]
     _ = μ {ω | ∃ n : ℕ, (ε : ℝ) ≤ |levyBandVersion hd hν hA hAsub hAfin ((e n).toNNReal) ω|} := by
         rw [ae_iff.mp htrans, add_zero]
 
+/-! ### The truncation subsequence
+
+The compensated small-jump path is built as the uniform limit of the compensated banded jump paths
+over the growing **annuli** `levyAnnulus n = (-1, 1) ∩ {1/(n+1) ≤ |x|}`, which exhaust the punctured
+band `(-1, 1) \ {0}`. Since `∫_{(-1,1)} x² dν < ∞`, the tail second moment over
+`(-1, 1) \ levyAnnulus n` vanishes as `n → ∞`; extracting a geometrically-fast subsequence
+`levyTruncationSeq` makes the increments between successive annuli summable in `L²`, which (through the
+maximal inequality) drives the almost-sure uniform convergence. -/
+
+/-- The **annulus** `(-1, 1) ∩ {1/(n+1) ≤ |x|}`: the small-jump band with a hole of radius `1/(n+1)`
+excised around the origin. The annuli grow with `n` and exhaust the punctured band `(-1, 1) \ {0}`. -/
+noncomputable def levyAnnulus (n : ℕ) : Set ℝ :=
+  Set.Ioo (-1 : ℝ) 1 ∩ {x : ℝ | ((n : ℝ) + 1)⁻¹ ≤ |x|}
+
+/-- The annulus is contained in the small-jump band `(-1, 1)`. -/
+lemma levyAnnulus_subset (n : ℕ) : levyAnnulus n ⊆ Set.Ioo (-1 : ℝ) 1 :=
+  Set.inter_subset_left
+
+/-- The annulus is measurable. -/
+lemma measurableSet_levyAnnulus (n : ℕ) : MeasurableSet (levyAnnulus n) :=
+  measurableSet_Ioo.inter (measurableSet_le measurable_const continuous_abs.measurable)
+
+/-- The annuli are monotone increasing: a larger index removes a smaller hole. -/
+lemma levyAnnulus_mono : Monotone levyAnnulus := by
+  intro m n hmn
+  refine Set.inter_subset_inter_right _ fun x hx => ?_
+  simp only [Set.mem_setOf_eq] at hx ⊢
+  refine le_trans ?_ hx
+  have h : (m : ℝ) + 1 ≤ (n : ℝ) + 1 := by exact_mod_cast Nat.succ_le_succ hmn
+  gcongr
+
+omit [SigmaFinite ν] in
+/-- The annulus has finite `ν`-mass for any Lévy measure `ν`. -/
+lemma levyAnnulus_finite_mass (hν : IsLevyMeasure ν) (n : ℕ) : ν (levyAnnulus n) < ⊤ :=
+  (measure_mono Set.inter_subset_right).trans_lt
+    (hν.measure_setOf_abs_ge_lt_top (by positivity))
+
+omit [SigmaFinite ν] in
+/-- The band complement `(-1, 1) \ levyAnnulus n` is exactly the shrinking central slice
+`(-1, 1) ∩ {|x| < 1/(n+1)}`. -/
+lemma Ioo_diff_levyAnnulus (n : ℕ) :
+    Set.Ioo (-1 : ℝ) 1 \ levyAnnulus n
+      = Set.Ioo (-1 : ℝ) 1 ∩ {x : ℝ | |x| < ((n : ℝ) + 1)⁻¹} := by
+  ext x
+  simp only [levyAnnulus, Set.mem_sdiff, Set.mem_inter_iff, Set.mem_setOf_eq, not_and, not_le]
+  constructor
+  · rintro ⟨hxIoo, h⟩; exact ⟨hxIoo, h hxIoo⟩
+  · rintro ⟨hxIoo, h⟩; exact ⟨hxIoo, fun _ => h⟩
+
+omit [SigmaFinite ν] in
+/-- As `n → ∞`, the tail second moment `∫ x² dν` over `(-1, 1) \ levyAnnulus n` vanishes. -/
+lemma tendsto_lintegral_Ioo_diff_levyAnnulus (hν : IsLevyMeasure ν) :
+    Tendsto (fun n : ℕ => ∫⁻ x in Set.Ioo (-1 : ℝ) 1 \ levyAnnulus n,
+        ENNReal.ofReal (x ^ 2) ∂ν) atTop (𝓝 0) := by
+  simp only [Ioo_diff_levyAnnulus]
+  have hslice_meas : ∀ n : ℕ,
+      MeasurableSet (Set.Ioo (-1 : ℝ) 1 ∩ {x : ℝ | |x| < ((n : ℝ) + 1)⁻¹}) :=
+    fun n => measurableSet_Ioo.inter (measurableSet_lt continuous_abs.measurable measurable_const)
+  have hsqmeas : Measurable (fun x : ℝ => ENNReal.ofReal (x ^ 2)) :=
+    ENNReal.measurable_ofReal.comp (measurable_id'.pow_const 2)
+  have hlim : ∀ x : ℝ, Tendsto (fun n : ℕ =>
+      (Set.Ioo (-1 : ℝ) 1 ∩ {y : ℝ | |y| < ((n : ℝ) + 1)⁻¹}).indicator
+        (fun y => ENNReal.ofReal (y ^ 2)) x) atTop (𝓝 0) := by
+    intro x
+    by_cases hx0 : x = 0
+    · have hz : (fun n : ℕ => (Set.Ioo (-1 : ℝ) 1 ∩ {y : ℝ | |y| < ((n : ℝ) + 1)⁻¹}).indicator
+          (fun y => ENNReal.ofReal (y ^ 2)) x) = fun _ => 0 := by
+        funext n; simp [Set.indicator_apply, hx0]
+      rw [hz]; exact tendsto_const_nhds
+    · have habs : (0 : ℝ) < |x| := abs_pos.mpr hx0
+      obtain ⟨N, hN⟩ := exists_nat_gt (|x|⁻¹)
+      have hev : ∀ᶠ (n : ℕ) in atTop, (Set.Ioo (-1 : ℝ) 1 ∩ {y : ℝ | |y| < ((n : ℝ) + 1)⁻¹}).indicator
+          (fun y => ENNReal.ofReal (y ^ 2)) x = 0 := by
+        rw [Filter.eventually_atTop]
+        refine ⟨N, fun n hn => Set.indicator_of_notMem (fun hmem => ?_) _⟩
+        have hxinv : |x|⁻¹ < (n : ℝ) + 1 := by
+          have hNn : (N : ℝ) ≤ (n : ℝ) := by exact_mod_cast hn
+          linarith [hN]
+        have h1 : (1 : ℝ) < |x| * ((n : ℝ) + 1) := by
+          have h2 := mul_lt_mul_of_pos_left hxinv habs
+          rwa [mul_inv_cancel₀ (ne_of_gt habs)] at h2
+        have hc_lt : ((n : ℝ) + 1)⁻¹ < |x| := by
+          rw [inv_eq_one_div, div_lt_iff₀ (Nat.cast_add_one_pos n)]; linarith [h1]
+        exact absurd hmem.2 (not_lt.mpr hc_lt.le)
+      exact (tendsto_congr' hev).mpr tendsto_const_nhds
+  have hdct := tendsto_lintegral_of_dominated_convergence (μ := ν)
+    (F := fun n x => (Set.Ioo (-1 : ℝ) 1 ∩ {y : ℝ | |y| < ((n : ℝ) + 1)⁻¹}).indicator
+      (fun y => ENNReal.ofReal (y ^ 2)) x)
+    (f := fun _ => 0)
+    (bound := (Set.Ioo (-1 : ℝ) 1).indicator fun y => ENNReal.ofReal (y ^ 2))
+    (fun n => hsqmeas.indicator (hslice_meas n))
+    (fun n => Filter.Eventually.of_forall fun x =>
+      Set.indicator_le_indicator_apply_of_subset Set.inter_subset_left zero_le)
+    (by
+      rw [lintegral_indicator measurableSet_Ioo]
+      exact (lintegral_setOf_sq_lt_top measurableSet_Ioo (subset_refl _) hν).ne)
+    (Filter.Eventually.of_forall hlim)
+  have hrw : (fun n : ℕ => ∫⁻ x,
+        (Set.Ioo (-1 : ℝ) 1 ∩ {y : ℝ | |y| < ((n : ℝ) + 1)⁻¹}).indicator
+          (fun y => ENNReal.ofReal (y ^ 2)) x ∂ν)
+      = fun n : ℕ => ∫⁻ x in Set.Ioo (-1 : ℝ) 1 ∩ {x : ℝ | |x| < ((n : ℝ) + 1)⁻¹},
+          ENNReal.ofReal (x ^ 2) ∂ν := by
+    funext n; rw [lintegral_indicator (hslice_meas n)]
+  rw [hrw] at hdct
+  simpa using hdct
+
+omit [SigmaFinite ν] in
+/-- From the vanishing tail moments, for any starting index `N` and any positive tolerance `16⁻ʲ`,
+some later annulus index `n > N` has tail second moment below the tolerance. -/
+private lemma exists_gt_lintegral_Ioo_diff_levyAnnulus_le (hν : IsLevyMeasure ν) (N j : ℕ) :
+    ∃ n, N < n ∧ (∫⁻ x in Set.Ioo (-1 : ℝ) 1 \ levyAnnulus n,
+        ENNReal.ofReal (x ^ 2) ∂ν) ≤ (16 : ℝ≥0∞)⁻¹ ^ j := by
+  have hc : (0 : ℝ≥0∞) < (16 : ℝ≥0∞)⁻¹ ^ j :=
+    ENNReal.pow_pos (ENNReal.inv_pos.mpr (by norm_num)) j
+  have hev := ((tendsto_lintegral_Ioo_diff_levyAnnulus hν).eventually
+    (Iio_mem_nhds hc)).and (eventually_gt_atTop N)
+  obtain ⟨n, hn⟩ := hev.exists
+  exact ⟨n, hn.2, hn.1.le⟩
+
+/-- The recursively-defined geometric truncation subsequence: each index is chosen strictly larger
+than the previous one so that the tail second moment over `(-1, 1) \ levyAnnulus` drops below
+`16⁻ʲ`. -/
+private noncomputable def levyTruncationAux (hν : IsLevyMeasure ν) : ℕ → ℕ
+  | 0 => (exists_gt_lintegral_Ioo_diff_levyAnnulus_le hν 0 0).choose
+  | (j + 1) =>
+      (exists_gt_lintegral_Ioo_diff_levyAnnulus_le hν (levyTruncationAux hν j) (j + 1)).choose
+
+omit [SigmaFinite ν] in
+private lemma levyTruncationAux_lt_succ (hν : IsLevyMeasure ν) (j : ℕ) :
+    levyTruncationAux hν j < levyTruncationAux hν (j + 1) :=
+  (exists_gt_lintegral_Ioo_diff_levyAnnulus_le hν (levyTruncationAux hν j) (j + 1)).choose_spec.1
+
+omit [SigmaFinite ν] in
+private lemma levyTruncationAux_lintegral_le (hν : IsLevyMeasure ν) (j : ℕ) :
+    (∫⁻ x in Set.Ioo (-1 : ℝ) 1 \ levyAnnulus (levyTruncationAux hν j),
+        ENNReal.ofReal (x ^ 2) ∂ν) ≤ (16 : ℝ≥0∞)⁻¹ ^ j := by
+  cases j with
+  | zero => exact (exists_gt_lintegral_Ioo_diff_levyAnnulus_le hν 0 0).choose_spec.2
+  | succ j =>
+      exact (exists_gt_lintegral_Ioo_diff_levyAnnulus_le hν
+        (levyTruncationAux hν j) (j + 1)).choose_spec.2
+
+omit [SigmaFinite ν] in
+private lemma exists_levyTruncationSeq (hν : IsLevyMeasure ν) :
+    ∃ φ : ℕ → ℕ, StrictMono φ ∧
+      ∀ j : ℕ, (∫⁻ x in Set.Ioo (-1 : ℝ) 1 \ levyAnnulus (φ j),
+        ENNReal.ofReal (x ^ 2) ∂ν) ≤ (16 : ℝ≥0∞)⁻¹ ^ j :=
+  ⟨levyTruncationAux hν, strictMono_nat_of_lt_succ (levyTruncationAux_lt_succ hν),
+    levyTruncationAux_lintegral_le hν⟩
+
+/-- The **geometric truncation subsequence**: a strictly increasing sequence of annulus indices along
+which the tail second moment over `(-1, 1) \ levyAnnulus` decays at least geometrically at rate
+`16⁻ʲ`. -/
+noncomputable def levyTruncationSeq (hν : IsLevyMeasure ν) : ℕ → ℕ :=
+  (exists_levyTruncationSeq hν).choose
+
+omit [SigmaFinite ν] in
+/-- The truncation subsequence is strictly monotone and its tail second moments decay like `16⁻ʲ`. -/
+theorem levyTruncationSeq_spec (hν : IsLevyMeasure ν) :
+    StrictMono (levyTruncationSeq hν) ∧
+    ∀ j : ℕ, (∫⁻ x in Set.Ioo (-1 : ℝ) 1 \ levyAnnulus (levyTruncationSeq hν j),
+        ENNReal.ofReal (x ^ 2) ∂ν) ≤ (16 : ℝ≥0∞)⁻¹ ^ j :=
+  (exists_levyTruncationSeq hν).choose_spec
+
 end ProbabilityTheory
