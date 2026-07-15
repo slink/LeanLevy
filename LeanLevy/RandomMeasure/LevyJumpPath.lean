@@ -5,6 +5,7 @@ Authors: LeanLevy Contributors
 -/
 import LeanLevy.RandomMeasure.LevyJumpLaw
 import LeanLevy.Processes.Cadlag
+import LeanLevy.Processes.LevyProcess
 import Mathlib.MeasureTheory.Function.ConvergenceInMeasure
 import Mathlib.Probability.Martingale.OptionalStopping
 
@@ -43,6 +44,10 @@ drift. Almost surely it agrees with the compensated Poisson integral of the band
   control of the annulus paths.
 * `ProbabilityTheory.levySmallJumpPath` — the compensated small-jump path, the almost-sure uniform
   limit of the compensated banded jump paths over the growing annuli (gated to the good set).
+* `ProbabilityTheory.levyJumpPath` — the càdlàg pure-jump process indexed by `ℝ≥0`: drift plus
+  large-jump sum plus the compensated small-jump path. It shares its drift and large-jump summands
+  literally with `levyJumpProcess`, differing only in the (a.e.-equal) small-jump summand, and so
+  realizes the same law while carrying a.e.-càdlàg sample paths.
 
 ## Main results
 
@@ -75,6 +80,19 @@ drift. Almost surely it agrees with the compensated Poisson integral of the band
 * `ProbabilityTheory.levySmallJumpPath_ae_eq` — for each fixed `t ≥ 0`, the compensated small-jump
   path agrees `μ`-almost everywhere with the `L²` small-jump element `levyCompensatedSmallJump`
   (a per-time modification statement; the null set may depend on `t`).
+* `ProbabilityTheory.levyJumpPath_zero` — the jump path vanishes at time zero (literal function
+  equality `= fun _ => 0`).
+* `ProbabilityTheory.measurable_levyJumpPath` — the jump path is measurable at each time.
+* `ProbabilityTheory.levyJumpPath_ae_eq` — at each fixed time the jump path agrees `μ`-almost
+  everywhere with the law-level jump process `levyJumpProcess` (they differ only in the small-jump
+  summand, which is a per-time modification of the other).
+* `ProbabilityTheory.ae_isCadlag_levyJumpPath` — almost every sample path `t ↦ levyJumpPath t ω` is
+  càdlàg (a.e. in `ω`).
+* `ProbabilityTheory.isLevyProcess_levyJumpPath` — the jump path is a genuine `IsLevyProcess` for the
+  pure-jump triple `(b, 0, ν)`: literal zero start, a.e. càdlàg paths, independent and stationary
+  increments.
+* `ProbabilityTheory.charFun_map_levyJumpPath` — the fixed-time marginal law of the jump path has
+  characteristic function `exp (t · ψ_{(b,0,ν)})`.
 -/
 
 open MeasureTheory Filter Topology
@@ -1599,5 +1617,119 @@ theorem levySmallJumpPath_ae_eq [IsProbabilityMeasure μ]
       (𝓝 (levyCompensatedSmallJump hd hν t ω)) :=
     hconv.congr fun i => (hp (ns i)).symm
   exact tendsto_nhds_unique h1 h2
+
+/-! ### The càdlàg pure-jump process
+
+Assembling the constant drift, the compound-Poisson large-jump sum, and the compensated small-jump
+*path* yields a single process `levyJumpPath` indexed by `ℝ≥0`. It shares its drift and large-jump
+summands literally with the law-level `levyJumpProcess`, replacing only the `L²` small-jump element
+by the pathwise `levySmallJumpPath` — an a.e.-equal per-time modification. The modification carries
+over the entire law-level Lévy structure (independent stationary increments, marginal characteristic
+function `exp (t · ψ)`) while adding genuine sample-path regularity: almost every path is càdlàg. The
+result is a genuine `IsLevyProcess` for the pure-jump triple `(b, 0, ν)`. -/
+
+/-- The **càdlàg pure-jump process**: drift plus large-jump sum plus the compensated small-jump path,
+indexed by `ℝ≥0`. Its drift and large-jump summands are literally those of `levyJumpProcess`; the
+small-jump summand is the pathwise `levySmallJumpPath`, an a.e. modification of the `L²` element used
+there. Unlike `levyJumpProcess`, this process has almost-surely càdlàg sample paths. -/
+noncomputable def levyJumpPath
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν)
+    (b : ℝ) (t : ℝ≥0) (ω : Ω) : ℝ :=
+  b * (t : ℝ) + levyLargeJumpSum K X (t : ℝ) ω + levySmallJumpPath hd hν (t : ℝ) ω
+
+/-- The jump path starts at zero: at `t = 0` the drift is scaled by `0`, and both the large-jump sum
+and the compensated small-jump path vanish, for *every* `ω` (a literal function equality). -/
+@[simp] theorem levyJumpPath_zero
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν) (b : ℝ) :
+    levyJumpPath hd hν b 0 = fun _ => 0 := by
+  funext ω
+  simp only [levyJumpPath, NNReal.coe_zero, mul_zero, levyLargeJumpSum_zero,
+    levySmallJumpPath_zero, Pi.zero_apply, add_zero]
+
+/-- The jump path is a measurable function of the sample point at each time. -/
+theorem measurable_levyJumpPath
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν)
+    (b : ℝ) (t : ℝ≥0) : Measurable (levyJumpPath hd hν b t) :=
+  (measurable_const.add
+    (measurable_levyLargeJumpSum hd.measurable_count hd.measurable_point)).add
+    (measurable_levySmallJumpPath hd hν _)
+
+/-- **The jump path is a modification of the jump process.** At each fixed time `t`, the pathwise
+`levyJumpPath` agrees `μ`-almost everywhere with the law-level `levyJumpProcess`: the drift and
+large-jump summands are shared syntactically, and the small-jump summands agree a.e. by
+`levySmallJumpPath_ae_eq` (the null set may depend on `t`). -/
+theorem levyJumpPath_ae_eq [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν)
+    (b : ℝ) (t : ℝ≥0) :
+    levyJumpPath hd hν b t =ᵐ[μ] levyJumpProcess hd hν b t := by
+  filter_upwards [levySmallJumpPath_ae_eq hd hν (NNReal.coe_nonneg t)] with ω hω
+  show b * (t : ℝ) + levyLargeJumpSum K X (t : ℝ) ω + levySmallJumpPath hd hν (t : ℝ) ω
+    = b * (t : ℝ) + levyLargeJumpSum K X (t : ℝ) ω + levyCompensatedSmallJump hd hν (t : ℝ) ω
+  rw [hω]
+
+/-- **Almost every sample path of the jump path is càdlàg.** On the almost-sure event where the
+large-jump sum is càdlàg, the real-time path `s ↦ b · s + (large-jump sum) + (small-jump path)` is
+càdlàg — the drift is continuous, the large-jump sum is càdlàg there, and the small-jump path is
+càdlàg for *every* `ω` — and càdlàg regularity is preserved under precomposition with the coercion
+`ℝ≥0 → ℝ`. -/
+theorem ae_isCadlag_levyJumpPath [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν) (b : ℝ) :
+    ∀ᵐ ω ∂μ, IsCadlag (fun t : ℝ≥0 => levyJumpPath hd hν b t ω) := by
+  filter_upwards [ae_isCadlag_levyLargeJumpSum hd hν] with ω hω
+  have hdrift : IsCadlag (fun s : ℝ => b * s) :=
+    (by fun_prop : Continuous fun s : ℝ => b * s).isCadlag
+  have hcadReal : IsCadlag (fun s : ℝ =>
+      b * s + levyLargeJumpSum K X s ω + levySmallJumpPath hd hν s ω) :=
+    (hdrift.add hω).add (isCadlag_levySmallJumpPath hd hν ω)
+  simpa only [levyJumpPath] using isCadlag_comp_nnrealCoe hcadReal
+
+/-- **The pure-jump process is a genuine Lévy process.** The pathwise `levyJumpPath` realizes the
+pure-jump triple `(b, 0, ν)` as a bona fide `IsLevyProcess`: it starts at the origin (literal zero
+start), has almost-surely càdlàg sample paths, and — being an a.e. modification of the law-level
+`levyJumpProcess` at every time — inherits its independent and stationary increments. Independence
+transfers along the a.e.-equal increment families (`iIndepFun_congr`); stationarity transfers because
+identical distribution is preserved under a.e. equality (`IdentDistrib.of_ae_eq` and transitivity). -/
+theorem isLevyProcess_levyJumpPath [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν)
+    (b : ℝ) : IsLevyProcess (levyJumpPath hd hν b) μ where
+  start_zero := levyJumpPath_zero hd hν b
+  indep_increments := by
+    intro n τ hτmono
+    have hae : ∀ k : Fin n,
+        increment (levyJumpProcess hd hν b) (τ k.castSucc) (τ k.succ)
+          =ᵐ[μ] increment (levyJumpPath hd hν b) (τ k.castSucc) (τ k.succ) := by
+      intro k
+      filter_upwards [levyJumpPath_ae_eq hd hν b (τ k.castSucc),
+        levyJumpPath_ae_eq hd hν b (τ k.succ)] with ω h1 h2
+      simp only [increment_apply]
+      rw [h1, h2]
+    exact (iIndepFun_congr hae).mp
+      (hasIndependentIncrements_levyJumpProcess hd hν b n τ hτmono)
+  stationary_increments := by
+    intro s h
+    have hmeas : ∀ u : ℝ≥0, Measurable (levyJumpPath hd hν b u) :=
+      fun u => measurable_levyJumpPath hd hν b u
+    have haem_incr : ∀ p q : ℝ≥0, AEMeasurable (increment (levyJumpPath hd hν b) p q) μ :=
+      fun p q => (measurable_increment (hmeas p) (hmeas q)).aemeasurable
+    have hae : ∀ p q : ℝ≥0,
+        increment (levyJumpPath hd hν b) p q =ᵐ[μ] increment (levyJumpProcess hd hν b) p q := by
+      intro p q
+      filter_upwards [levyJumpPath_ae_eq hd hν b p, levyJumpPath_ae_eq hd hν b q] with ω h1 h2
+      simp only [increment_apply]
+      rw [h1, h2]
+    exact ((IdentDistrib.of_ae_eq (haem_incr s (s + h)) (hae s (s + h))).trans
+      (hasStationaryIncrements_levyJumpProcess hd hν b s h)).trans
+      (IdentDistrib.of_ae_eq (haem_incr 0 h) (hae 0 h)).symm
+  cadlag_ae := ae_isCadlag_levyJumpPath hd hν b
+
+/-- The fixed-time marginal law of the jump path has characteristic function
+`exp (t · ψ_{(b,0,ν)})` — identical to that of `levyJumpProcess`, since the two agree in law
+at each time (`levyJumpPath_ae_eq`). -/
+theorem charFun_map_levyJumpPath [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν)
+    (b : ℝ) (t : ℝ≥0) (ξ : ℝ) :
+    charFun (μ.map (levyJumpPath hd hν b t)) ξ
+      = Complex.exp (((t : ℝ) : ℂ) * (LevyKhintchineTriple.mk b 0 ν hν).exponent ξ) := by
+  rw [Measure.map_congr (levyJumpPath_ae_eq hd hν b t), charFun_map_levyJumpProcess hd hν b t ξ]
 
 end ProbabilityTheory
