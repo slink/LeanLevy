@@ -51,6 +51,10 @@ drift. Almost surely it agrees with the compensated Poisson integral of the band
 
 ## Main results
 
+* `ProbabilityTheory.exists_isLevyProcess_pureJump` — **the headline**: every pure-jump Lévy triple
+  `(b, 0, ν)` is realized by a genuine `IsLevyProcess` — a probability space and a process with
+  literal zero start, a.e. càdlàg paths, independent and stationary increments, measurable
+  time-slices, and marginal characteristic functions `exp (t · ψ_{(b,0,ν)})`.
 * `ProbabilityTheory.bandJumpSum_zero` — the banded jump sum vanishes at time zero.
 * `ProbabilityTheory.levyLargeJumpSum_eq_bandJumpSum` — the large-jump sum is the banded jump sum on
   the mark set `{x | 1 ≤ |x|}`.
@@ -93,6 +97,8 @@ drift. Almost surely it agrees with the compensated Poisson integral of the band
   increments.
 * `ProbabilityTheory.charFun_map_levyJumpPath` — the fixed-time marginal law of the jump path has
   characteristic function `exp (t · ψ_{(b,0,ν)})`.
+* `ProbabilityTheory.charExponent_levyJumpPath` — the characteristic exponent of the jump path is the
+  Lévy–Khintchine exponent `ψ_{(b,0,ν)}` of the pure-jump triple.
 -/
 
 open MeasureTheory Filter Topology
@@ -1731,5 +1737,62 @@ theorem charFun_map_levyJumpPath [IsProbabilityMeasure μ]
     charFun (μ.map (levyJumpPath hd hν b t)) ξ
       = Complex.exp (((t : ℝ) : ℂ) * (LevyKhintchineTriple.mk b 0 ν hν).exponent ξ) := by
   rw [Measure.map_congr (levyJumpPath_ae_eq hd hν b t), charFun_map_levyJumpProcess hd hν b t ξ]
+
+/-- **Every pure-jump Lévy triple is realized by a genuine Lévy process.** For every drift `b` and
+Lévy measure `ν`, there is a probability space `(Ω, μ)` and a process `X : ℝ≥0 → Ω → ℝ` such that:
+
+* `X` is an `IsLevyProcess` for `μ` — it starts at the origin (literal zero start), has almost-surely
+  càdlàg sample paths, and has independent and stationary increments;
+* every time-slice `X t` is measurable;
+* the fixed-time marginal law of `X t` has characteristic function
+  `exp (t · ψ_{(b,0,ν)} ξ)`, the Lévy–Khintchine exponent of the pure-jump triple `(b, 0, ν)` with
+  **zero** Gaussian variance.
+
+This is the headline realization theorem for the pure-jump component. It does **not** assert the full
+Lévy–Itô decomposition, any uniqueness statement, or anything about a Brownian part. The space is the
+canonical Poisson-point family at intensity `volume.prod ν` (σ-finite via `IsLevyMeasure.sigmaFinite`),
+and `X` is the pathwise `levyJumpPath`; the four conclusions are the Task-7 theorems
+`isLevyProcess_levyJumpPath`, `measurable_levyJumpPath`, and `charFun_map_levyJumpPath`. -/
+theorem exists_isLevyProcess_pureJump (b : ℝ) {ν : Measure ℝ} (hν : IsLevyMeasure ν) :
+    ∃ (Ω : Type) (_ : MeasurableSpace Ω) (μ : Measure Ω) (X : ℝ≥0 → Ω → ℝ),
+      IsProbabilityMeasure μ ∧ IsLevyProcess X μ ∧ (∀ t, Measurable (X t)) ∧
+      ∀ (t : ℝ≥0) (ξ : ℝ), charFun (μ.map (X t)) ξ =
+        Complex.exp (((t : ℝ) : ℂ) * (LevyKhintchineTriple.mk b 0 ν hν).exponent ξ) := by
+  haveI := hν.sigmaFinite
+  obtain ⟨Ω, mΩ, μ, K, X, hprob, hd⟩ :=
+    exists_isPoissonPointFamily ((volume : Measure ℝ).prod ν)
+  exact ⟨Ω, mΩ, μ, levyJumpPath hd hν b, hprob,
+    isLevyProcess_levyJumpPath hd hν b,
+    fun t => measurable_levyJumpPath hd hν b t,
+    fun t ξ => charFun_map_levyJumpPath hd hν b t ξ⟩
+
+/-- The characteristic exponent of the jump path is the Lévy–Khintchine exponent of the pure-jump
+triple `(b, 0, ν)`. Since each marginal has characteristic function `exp (t · ψ ξ)`, for small
+`t > 0` the principal-branch logarithm collapses (`Complex.log_exp`, valid once `|t · Im ψ ξ| < π`,
+which holds eventually as `t → 0⁺`), so the defining quotient `log(φ_t ξ) / t` is eventually the
+constant `ψ ξ`. -/
+theorem charExponent_levyJumpPath [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν)
+    (b : ℝ) (ξ : ℝ) :
+    (isLevyProcess_levyJumpPath hd hν b).charExponent ξ
+      = (LevyKhintchineTriple.mk b 0 ν hν).exponent ξ := by
+  set ψ : ℂ := (LevyKhintchineTriple.mk b 0 ν hν).exponent ξ with hψ
+  simp only [IsLevyProcess.charExponent]
+  apply Filter.Tendsto.limUnder_eq
+  apply tendsto_const_nhds.congr'
+  have hcont : Filter.Tendsto (fun t : ℝ≥0 => (t : ℝ) * ψ.im) (𝓝[>] 0) (𝓝 0) := by
+    have hc : Continuous (fun t : ℝ≥0 => (t : ℝ) * ψ.im) :=
+      NNReal.continuous_coe.mul continuous_const
+    simpa using (hc.tendsto 0).mono_left nhdsWithin_le_nhds
+  filter_upwards [self_mem_nhdsWithin,
+    hcont.eventually (Metric.ball_mem_nhds (0 : ℝ) Real.pi_pos)] with t (ht : 0 < t) htim
+  have hne : ((t : ℝ) : ℂ) ≠ 0 := by
+    exact_mod_cast NNReal.coe_ne_zero.mpr (ne_of_gt ht)
+  have habs : |(t : ℝ) * ψ.im| < Real.pi := by simpa [Real.dist_eq] using htim
+  obtain ⟨h1, h2⟩ := abs_lt.mp habs
+  have him : (((t : ℝ) : ℂ) * ψ).im = (t : ℝ) * ψ.im := by simp [Complex.mul_im]
+  have hlog : Complex.log (Complex.exp (((t : ℝ) : ℂ) * ψ)) = ((t : ℝ) : ℂ) * ψ :=
+    Complex.log_exp (by rw [him]; exact h1) (by rw [him]; exact le_of_lt h2)
+  rw [charFun_map_levyJumpPath hd hν b t ξ, hlog, eq_div_iff hne]; ring
 
 end ProbabilityTheory
