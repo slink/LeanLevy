@@ -50,6 +50,9 @@ theory of the random measure with respect to that filtration:
 * `ProbabilityTheory.aestronglyMeasurable_levyLargeJumpSum_prmEvalSigma` — the large-jump sum is
   almost everywhere strongly measurable with respect to the evaluation sigma-algebra of the
   large-jump band region.
+* `ProbabilityTheory.aestronglyMeasurable_levyLargeJumpSum_sub_prmEvalSigma` — the large-jump
+  increment over `(s, t]` is almost everywhere strongly measurable with respect to the evaluation
+  sigma-algebra of its band.
 * `ProbabilityTheory.indepFun_levyLargeJumpSum_levyCompensatedSmallJump` — **the large-jump sum and
   the compensated small-jump integral at the same time are independent.**
 
