@@ -8,6 +8,7 @@ import Mathlib.Probability.IdentDistrib
 import Mathlib.MeasureTheory.Group.Arithmetic
 import Mathlib.Probability.Process.Adapted
 import Mathlib.Probability.Process.Filtration
+import Mathlib.Probability.Independence.Process.HasIndepIncrements.Basic
 
 /-!
 # Stochastic Processes
@@ -89,6 +90,11 @@ the distribution of `X(s + h) - X(s)` depends only on `h`, not on `s`. -/
 def HasStationaryIncrements [AddMonoid ι] [MeasurableSpace Ω] [MeasurableSpace E] [Sub E]
     (X : ι → Ω → E) (μ : Measure Ω) : Prop :=
   ∀ (s h : ι), IdentDistrib (increment X s (s + h)) (increment X 0 h) μ μ
+
+/-- The repo predicate coincides with mathlib's `HasIndepIncrements`. -/
+theorem hasIndependentIncrements_iff_hasIndepIncrements [Preorder ι] [MeasurableSpace Ω]
+    [MeasurableSpace E] [Sub E] {X : ι → Ω → E} {μ : Measure Ω} :
+    HasIndependentIncrements X μ ↔ HasIndepIncrements X μ := Iff.rfl
 
 section IncrementIndependence
 
