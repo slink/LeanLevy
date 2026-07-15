@@ -1,5 +1,7 @@
 # LeanLevy
 
+[![DOI](https://zenodo.org/badge/1159570063.svg)](https://zenodo.org/badge/latestdoi/1159570063)
+
 A Lean 4 formalization of Lévy processes, built on top of mathlib.
 
 ## What's here
