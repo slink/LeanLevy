@@ -497,7 +497,7 @@ private lemma aestronglyMeasurable_levyCompensatedSmallJump_prefix [IsProbabilit
 
 /-- The compensated band integral over `(s, t]` is almost-everywhere strongly measurable with
 respect to the evaluation sigma-algebra of the band region `(s, t] × ℝ`. -/
-private lemma aestronglyMeasurable_levyCompensatedSmallJump_band [IsProbabilityMeasure μ]
+theorem aestronglyMeasurable_levyCompensatedSmallJump_band [IsProbabilityMeasure μ]
     (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν)
     (s t : ℝ) :
     AEStronglyMeasurable[prmEvalSigma K X (volume.prod ν) (Set.Ioc s t ×ˢ Set.univ)]
@@ -651,6 +651,154 @@ theorem aestronglyMeasurable_levyLargeJumpSum_prmEvalSigma [IsProbabilityMeasure
       (fun _ hx => Set.indicator_of_notMem hx _)).ennreal_toReal
   exact ⟨_, (hmeas_pos.sub hmeas_neg).stronglyMeasurable,
     levyLargeJumpSum_ae_eq_toReal_sub hd hν ht⟩
+
+/-- Almost surely only finitely many pieces carry a realized point in the band
+`(s, t] × {x | 1 ≤ |x|}`. -/
+private lemma ae_finite_band_pieces [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X (volume.prod ν) μ) (hν : IsLevyMeasure ν) {s t : ℝ} :
+    ∀ᵐ ω ∂μ, {k | ∃ n ∈ Finset.range (K k ω),
+        X k n ω ∈ Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}}.Finite := by
+  have hRmeas : MeasurableSet (Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}) :=
+    measurableSet_Ioc.prod (measurableSet_le measurable_const continuous_abs.measurable)
+  have hRfin : (volume.prod ν) (Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}) < ⊤ :=
+    volume_prod_Ioc_prod_lt_top (m := ν) (hν.measure_setOf_abs_ge_lt_top one_pos)
+  have hg1 : Measurable ((Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator (fun _ : ℝ × ℝ => (1 : ℝ≥0∞))) :=
+    measurable_const.indicator hRmeas
+  filter_upwards [ae_poissonRandomMeasure_apply_lt_top hd hRmeas hRfin] with ω hω
+  have hcount : ∑' k, ∑ n ∈ Finset.range (K k ω),
+        (Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator (fun _ : ℝ × ℝ => (1 : ℝ≥0∞)) (X k n ω)
+      = poissonRandomMeasure K X ω (Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}) := by
+    rw [← lintegral_poissonRandomMeasure hg1 ω, lintegral_indicator hRmeas, setLIntegral_one]
+  have hCfin : {k | (1 : ℝ≥0∞) ≤ ∑ n ∈ Finset.range (K k ω),
+        (Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator (fun _ : ℝ × ℝ => (1 : ℝ≥0∞)) (X k n ω)}.Finite :=
+    ENNReal.finite_const_le_of_tsum_ne_top (by rw [hcount]; exact hω.ne) one_ne_zero
+  refine hCfin.subset fun k hk => ?_
+  simp only [Set.mem_setOf_eq] at hk ⊢
+  obtain ⟨n, hn, hmem⟩ := hk
+  calc (1 : ℝ≥0∞)
+      = (Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator (fun _ : ℝ × ℝ => (1 : ℝ≥0∞)) (X k n ω) := by
+        rw [Set.indicator_of_mem hmem]
+    _ ≤ _ := Finset.single_le_sum
+        (f := fun n => (Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator
+          (fun _ : ℝ × ℝ => (1 : ℝ≥0∞)) (X k n ω)) (fun _ _ => zero_le) hn
+
+/-- The large-jump increment over `(s, t]` is almost everywhere the difference of the positive and
+negative Lebesgue parts of the band test function against the random measure over
+`(s, t] × {x | 1 ≤ |x|}`. -/
+private lemma levyLargeJumpSum_sub_ae_eq_toReal_sub [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X (volume.prod ν) μ) (hν : IsLevyMeasure ν)
+    {s t : ℝ} (h0 : 0 ≤ s) (hst : s ≤ t) :
+    (fun ω => levyLargeJumpSum K X t ω - levyLargeJumpSum K X s ω) =ᵐ[μ] fun ω =>
+      (∫⁻ p, (Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator
+        (fun q => ENNReal.ofReal q.2) p ∂(poissonRandomMeasure K X ω)).toReal
+      - (∫⁻ p, (Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator
+        (fun q => ENNReal.ofReal (-q.2)) p ∂(poissonRandomMeasure K X ω)).toReal := by
+  -- the per-point real/ENNReal split of the band jump size
+  have hpt : ∀ p : ℝ × ℝ,
+      (Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator (fun q : ℝ × ℝ => q.2) p
+        = ((Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator
+            (fun q : ℝ × ℝ => ENNReal.ofReal q.2) p).toReal
+          - ((Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator
+            (fun q : ℝ × ℝ => ENNReal.ofReal (-q.2)) p).toReal := by
+    intro p
+    by_cases hp : p ∈ Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}
+    · simp only [Set.indicator_of_mem hp]
+      rcases le_total 0 p.2 with h | h
+      · rw [ENNReal.toReal_ofReal h, ENNReal.ofReal_of_nonpos (by linarith), ENNReal.toReal_zero,
+          sub_zero]
+      · rw [ENNReal.ofReal_of_nonpos h, ENNReal.toReal_zero, ENNReal.toReal_ofReal (by linarith),
+          zero_sub, neg_neg]
+    · simp only [Set.indicator_of_notMem hp, ENNReal.toReal_zero, sub_zero]
+  have hposFin : ∀ p : ℝ × ℝ, (Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator
+      (fun q : ℝ × ℝ => ENNReal.ofReal q.2) p ≠ ⊤ := by
+    intro p
+    by_cases hp : p ∈ Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}
+    · rw [Set.indicator_of_mem hp]; exact ENNReal.ofReal_ne_top
+    · rw [Set.indicator_of_notMem hp]; exact ENNReal.zero_ne_top
+  have hnegFin : ∀ p : ℝ × ℝ, (Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator
+      (fun q : ℝ × ℝ => ENNReal.ofReal (-q.2)) p ≠ ⊤ := by
+    intro p
+    by_cases hp : p ∈ Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}
+    · rw [Set.indicator_of_mem hp]; exact ENNReal.ofReal_ne_top
+    · rw [Set.indicator_of_notMem hp]; exact ENNReal.zero_ne_top
+  have hposMeas : Measurable ((Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator
+      fun q : ℝ × ℝ => ENNReal.ofReal q.2) :=
+    measurable_snd.ennreal_ofReal.indicator
+      (measurableSet_Ioc.prod (measurableSet_le measurable_const continuous_abs.measurable))
+  have hnegMeas : Measurable ((Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator
+      fun q : ℝ × ℝ => ENNReal.ofReal (-q.2)) :=
+    measurable_snd.neg.ennreal_ofReal.indicator
+      (measurableSet_Ioc.prod (measurableSet_le measurable_const continuous_abs.measurable))
+  filter_upwards [levyLargeJumpSum_sub_ae_eq hd hν h0 hst, ae_finite_band_pieces hd hν (s := s) (t := t)]
+    with ω hg hfin
+  rw [hg]
+  -- convert the three quantities to finite sums over the realized band pieces
+  rw [lintegral_poissonRandomMeasure hposMeas ω, lintegral_poissonRandomMeasure hnegMeas ω]
+  -- localize to the finite set of contributing pieces
+  set S := hfin.toFinset with hSdef
+  have hzero_off : ∀ {β : Type} [AddCommMonoid β] (F : ℝ × ℝ → β), ∀ k ∉ S,
+      ∑ n ∈ Finset.range (K k ω),
+        (Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator F (X k n ω) = 0 := by
+    intro β _ F k hk
+    refine Finset.sum_eq_zero fun n hn => ?_
+    apply Set.indicator_of_notMem
+    intro hmem
+    exact hk (hfin.mem_toFinset.mpr ⟨n, hn, hmem⟩)
+  have hposTsum : ∑' k, ∑ n ∈ Finset.range (K k ω),
+        (Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator (fun q : ℝ × ℝ => ENNReal.ofReal q.2)
+          (X k n ω)
+      = ∑ k ∈ S, ∑ n ∈ Finset.range (K k ω),
+        (Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator (fun q : ℝ × ℝ => ENNReal.ofReal q.2)
+          (X k n ω) :=
+    tsum_eq_sum (hzero_off _)
+  have hnegTsum : ∑' k, ∑ n ∈ Finset.range (K k ω),
+        (Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator (fun q : ℝ × ℝ => ENNReal.ofReal (-q.2))
+          (X k n ω)
+      = ∑ k ∈ S, ∑ n ∈ Finset.range (K k ω),
+        (Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator (fun q : ℝ × ℝ => ENNReal.ofReal (-q.2))
+          (X k n ω) :=
+    tsum_eq_sum (hzero_off _)
+  rw [hposTsum, hnegTsum,
+    ENNReal.toReal_sum (fun k _ => (ENNReal.sum_lt_top.mpr fun n _ => (hposFin _).lt_top).ne),
+    ENNReal.toReal_sum (fun k _ => (ENNReal.sum_lt_top.mpr fun n _ => (hnegFin _).lt_top).ne),
+    ← Finset.sum_sub_distrib]
+  -- the large-jump sum, as a tsum of piece sums, localizes to the same finite set
+  simp only [pieceSum]
+  rw [tsum_eq_sum (s := S) (hzero_off _)]
+  refine Finset.sum_congr rfl fun k _ => ?_
+  rw [ENNReal.toReal_sum (fun n _ => hposFin _),
+    ENNReal.toReal_sum (fun n _ => hnegFin _), ← Finset.sum_sub_distrib]
+  exact Finset.sum_congr rfl fun n _ => hpt (X k n ω)
+
+/-- **The large-jump increment over `(s, t]` is a.e. strongly measurable with respect to the
+evaluation σ-algebra of its band.** A difference of region-supported Lebesgue integrals against the
+random measure, honestly measurable in that σ-algebra, agrees with it almost everywhere. -/
+theorem aestronglyMeasurable_levyLargeJumpSum_sub_prmEvalSigma [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν)
+    {s t : ℝ} (h0 : 0 ≤ s) (hst : s ≤ t) :
+    AEStronglyMeasurable[prmEvalSigma K X ((volume : Measure ℝ).prod ν)
+        (Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|})]
+      (fun ω => levyLargeJumpSum K X t ω - levyLargeJumpSum K X s ω) μ := by
+  have hRmeas : MeasurableSet (Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}) :=
+    measurableSet_Ioc.prod (measurableSet_le measurable_const continuous_abs.measurable)
+  have hRfin : (volume.prod ν) (Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}) < ⊤ :=
+    volume_prod_Ioc_prod_lt_top (m := ν) (hν.measure_setOf_abs_ge_lt_top one_pos)
+  have hmeas_pos : Measurable[prmEvalSigma K X (volume.prod ν)
+      (Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|})]
+      fun ω => (∫⁻ p, (Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator
+        (fun q : ℝ × ℝ => ENNReal.ofReal q.2) p ∂(poissonRandomMeasure K X ω)).toReal :=
+    (measurable_lintegral_poissonRandomMeasure_prmEvalSigma hRmeas hRfin
+      (measurable_snd.ennreal_ofReal.indicator hRmeas)
+      (fun _ hx => Set.indicator_of_notMem hx _)).ennreal_toReal
+  have hmeas_neg : Measurable[prmEvalSigma K X (volume.prod ν)
+      (Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|})]
+      fun ω => (∫⁻ p, (Set.Ioc s t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator
+        (fun q : ℝ × ℝ => ENNReal.ofReal (-q.2)) p ∂(poissonRandomMeasure K X ω)).toReal :=
+    (measurable_lintegral_poissonRandomMeasure_prmEvalSigma hRmeas hRfin
+      (measurable_snd.neg.ennreal_ofReal.indicator hRmeas)
+      (fun _ hx => Set.indicator_of_notMem hx _)).ennreal_toReal
+  exact ⟨_, (hmeas_pos.sub hmeas_neg).stronglyMeasurable,
+    levyLargeJumpSum_sub_ae_eq_toReal_sub hd hν h0 hst⟩
 
 /-- **Independence of the jump components:** the large-jump sum and the compensated small-jump
 integral at the same time are independent. -/
