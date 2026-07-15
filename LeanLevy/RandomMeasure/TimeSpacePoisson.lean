@@ -186,14 +186,15 @@ private lemma eLpNorm_two_sq {α : Type*} {mα : MeasurableSpace α} {τ : Measu
     show (1 / (2 : ℝ)) * ((2 : ℕ) : ℝ) = 1 from by norm_num, ENNReal.rpow_one]
 
 omit [SigmaFinite ν] in
-/-- The pointwise square of the small-jump indicator integrates to the set-lintegral of `x²`. -/
-private lemma lintegral_enorm_rpow_smallJump (s t : ℝ) :
-    ∫⁻ p, ‖(Set.Ioc s t ×ˢ Set.Ioo (-1) 1).indicator (fun q : ℝ × ℝ => q.2) p‖ₑ ^ (2 : ℝ)
+/-- The pointwise square of a band indicator over a measurable mark set integrates to the set
+lintegral of `x²`. -/
+private lemma lintegral_enorm_rpow_band {B : Set ℝ} (hB : MeasurableSet B) (s t : ℝ) :
+    ∫⁻ p, ‖(Set.Ioc s t ×ˢ B).indicator (fun q : ℝ × ℝ => q.2) p‖ₑ ^ (2 : ℝ)
         ∂(volume.prod ν)
-      = ∫⁻ p in Set.Ioc s t ×ˢ Set.Ioo (-1) 1, ENNReal.ofReal (p.2 ^ 2) ∂(volume.prod ν) := by
-  rw [← lintegral_indicator (measurableSet_Ioc.prod measurableSet_Ioo)]
+      = ∫⁻ p in Set.Ioc s t ×ˢ B, ENNReal.ofReal (p.2 ^ 2) ∂(volume.prod ν) := by
+  rw [← lintegral_indicator (measurableSet_Ioc.prod hB)]
   refine lintegral_congr fun p => ?_
-  by_cases hp : p ∈ Set.Ioc s t ×ˢ Set.Ioo (-1 : ℝ) 1
+  by_cases hp : p ∈ Set.Ioc s t ×ˢ B
   · rw [Set.indicator_of_mem hp, Set.indicator_of_mem hp, Real.enorm_eq_ofReal_abs,
       ENNReal.ofReal_rpow_of_nonneg (abs_nonneg _) (by norm_num)]
     congr 1
@@ -201,16 +202,16 @@ private lemma lintegral_enorm_rpow_smallJump (s t : ℝ) :
   · rw [Set.indicator_of_notMem hp, Set.indicator_of_notMem hp, enorm_zero,
       ENNReal.zero_rpow_of_pos (by norm_num)]
 
-/-- Tonelli for the small-jump band: `∫_{(s,t]×(-1,1)} x² = (t - s) · ∫_{(-1,1)} x²`. -/
-private lemma setLIntegral_smallJump_snd_sq (s t : ℝ) :
-    ∫⁻ p in Set.Ioc s t ×ˢ Set.Ioo (-1) 1, ENNReal.ofReal (p.2 ^ 2) ∂(volume.prod ν)
-      = ENNReal.ofReal (t - s) * ∫⁻ x in Set.Ioo (-1) 1, ENNReal.ofReal (x ^ 2) ∂ν := by
+/-- Tonelli for a band over a measurable mark set: `∫_{(s,t]×B} x² = (t - s) · ∫_B x²`. -/
+private lemma setLIntegral_band_snd_sq {B : Set ℝ} (_hB : MeasurableSet B) (s t : ℝ) :
+    ∫⁻ p in Set.Ioc s t ×ˢ B, ENNReal.ofReal (p.2 ^ 2) ∂(volume.prod ν)
+      = ENNReal.ofReal (t - s) * ∫⁻ x in B, ENNReal.ofReal (x ^ 2) ∂ν := by
   rw [← Measure.prod_restrict,
     lintegral_prod (fun p : ℝ × ℝ => ENNReal.ofReal (p.2 ^ 2))
       (measurable_snd.pow_const 2).ennreal_ofReal.aemeasurable]
   have hinner : ∀ r : ℝ,
-      ∫⁻ x, ENNReal.ofReal ((r, x).2 ^ 2) ∂(ν.restrict (Set.Ioo (-1) 1))
-        = ∫⁻ x in Set.Ioo (-1) 1, ENNReal.ofReal (x ^ 2) ∂ν := fun _ => rfl
+      ∫⁻ x, ENNReal.ofReal ((r, x).2 ^ 2) ∂(ν.restrict B)
+        = ∫⁻ x in B, ENNReal.ofReal (x ^ 2) ∂ν := fun _ => rfl
   rw [lintegral_congr hinner, setLIntegral_const, Real.volume_Ioc, mul_comm]
 
 omit [SigmaFinite ν] in
@@ -235,7 +236,7 @@ theorem memLp_two_smallJumpBandFun (hν : IsLevyMeasure ν) (s t : ℝ) :
   rw [eLpNorm_eq_lintegral_rpow_enorm_toReal (by norm_num) (by norm_num),
     show ((2 : ℝ≥0∞).toReal) = (2 : ℝ) from by norm_num]
   refine ENNReal.rpow_lt_top_of_nonneg (by norm_num) ?_
-  rw [lintegral_enorm_rpow_smallJump s t, setLIntegral_smallJump_snd_sq s t]
+  rw [lintegral_enorm_rpow_band measurableSet_Ioo s t, setLIntegral_band_snd_sq measurableSet_Ioo s t]
   exact (ENNReal.mul_lt_top ENNReal.ofReal_lt_top (lintegral_Ioo_sq_lt_top hν)).ne
 
 /-- The small-jump test function `1_{(0,t] × (-1,1)}(u, x) · x` is square-integrable against
@@ -265,7 +266,8 @@ theorem eLpNorm_sq_levyCompensatedSmallJump [IsProbabilityMeasure μ]
       = ENNReal.ofReal t * ∫⁻ x in Set.Ioo (-1) 1, ENNReal.ofReal (x ^ 2) ∂ν := by
   rw [levyCompensatedSmallJump, eLpNorm_compensatedPoissonIntegral,
     eLpNorm_congr_ae (MemLp.coeFn_toLp _), eLpNorm_two_sq,
-    lintegral_enorm_rpow_smallJump 0 t, setLIntegral_smallJump_snd_sq 0 t, sub_zero]
+    lintegral_enorm_rpow_band measurableSet_Ioo 0 t, setLIntegral_band_snd_sq measurableSet_Ioo 0 t,
+    sub_zero]
 
 /-- The number of large jumps up to time `t` is Poisson with mean `t · ν {x | 1 ≤ |x|}`. -/
 theorem map_levyLargeJumpCount [IsProbabilityMeasure μ]
@@ -1330,35 +1332,6 @@ private lemma norm_charFun_map_sub_le [IsProbabilityMeasure μ] {V W : Ω → �
             ≤ ‖ξ * (V ω - W ω)‖ := Real.norm_exp_I_mul_ofReal_sub_one_le
           _ = |ξ| * |V ω - W ω| := by rw [Real.norm_eq_abs, abs_mul]
     _ = |ξ| * ∫ ω, |V ω - W ω| ∂μ := integral_const_mul _ _
-
-omit [SigmaFinite ν] in
-/-- The pointwise square of a band indicator over a measurable mark set integrates to the set
-lintegral of `x²`. -/
-private lemma lintegral_enorm_rpow_band {B : Set ℝ} (hB : MeasurableSet B) (s t : ℝ) :
-    ∫⁻ p, ‖(Set.Ioc s t ×ˢ B).indicator (fun q : ℝ × ℝ => q.2) p‖ₑ ^ (2 : ℝ)
-        ∂(volume.prod ν)
-      = ∫⁻ p in Set.Ioc s t ×ˢ B, ENNReal.ofReal (p.2 ^ 2) ∂(volume.prod ν) := by
-  rw [← lintegral_indicator (measurableSet_Ioc.prod hB)]
-  refine lintegral_congr fun p => ?_
-  by_cases hp : p ∈ Set.Ioc s t ×ˢ B
-  · rw [Set.indicator_of_mem hp, Set.indicator_of_mem hp, Real.enorm_eq_ofReal_abs,
-      ENNReal.ofReal_rpow_of_nonneg (abs_nonneg _) (by norm_num)]
-    congr 1
-    rw [show (2 : ℝ) = ((2 : ℕ) : ℝ) from by norm_num, Real.rpow_natCast, sq_abs]
-  · rw [Set.indicator_of_notMem hp, Set.indicator_of_notMem hp, enorm_zero,
-      ENNReal.zero_rpow_of_pos (by norm_num)]
-
-/-- Tonelli for a band over a measurable mark set: `∫_{(s,t]×B} x² = (t - s) · ∫_B x²`. -/
-private lemma setLIntegral_band_snd_sq {B : Set ℝ} (_hB : MeasurableSet B) (s t : ℝ) :
-    ∫⁻ p in Set.Ioc s t ×ˢ B, ENNReal.ofReal (p.2 ^ 2) ∂(volume.prod ν)
-      = ENNReal.ofReal (t - s) * ∫⁻ x in B, ENNReal.ofReal (x ^ 2) ∂ν := by
-  rw [← Measure.prod_restrict,
-    lintegral_prod (fun p : ℝ × ℝ => ENNReal.ofReal (p.2 ^ 2))
-      (measurable_snd.pow_const 2).ennreal_ofReal.aemeasurable]
-  have hinner : ∀ r : ℝ,
-      ∫⁻ x, ENNReal.ofReal ((r, x).2 ^ 2) ∂(ν.restrict B)
-        = ∫⁻ x in B, ENNReal.ofReal (x ^ 2) ∂ν := fun _ => rfl
-  rw [lintegral_congr hinner, setLIntegral_const, Real.volume_Ioc, mul_comm]
 
 /-- The squared `L²` seminorm of a band indicator over a measurable mark set `C`. -/
 private lemma eLpNorm_sq_bandFun {C : Set ℝ} (hC : MeasurableSet C) (s t : ℝ) :

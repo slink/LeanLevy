@@ -627,37 +627,6 @@ private lemma smallJumpFun_toLp_ae_zero_off (hν : IsLevyMeasure ν) (t : ℝ) :
   rw [hp]
   exact Set.indicator_of_notMem hpR _
 
-/-- The large-jump sum at time `t` is almost-everywhere strongly measurable with respect to the
-evaluation sigma-algebra of the large-jump band region `(0, t] × {x | 1 ≤ |x|}`: a difference of
-region-supported Lebesgue integrals against the random measure, honestly measurable in that
-sigma-algebra, agrees with it almost everywhere. -/
-theorem aestronglyMeasurable_levyLargeJumpSum_prmEvalSigma [IsProbabilityMeasure μ]
-    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν)
-    {t : ℝ} (ht : 0 ≤ t) :
-    AEStronglyMeasurable[prmEvalSigma K X ((volume : Measure ℝ).prod ν)
-      (Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|})] (levyLargeJumpSum K X t) μ := by
-  have hRmeas : MeasurableSet (Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}) :=
-    measurableSet_Ioc.prod (measurableSet_le measurable_const continuous_abs.measurable)
-  have hRfin : (volume.prod ν) (Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}) < ⊤ :=
-    volume_prod_Ioc_prod_lt_top (m := ν) (s := 0) (t := t)
-      (hν.measure_setOf_abs_ge_lt_top one_pos)
-  have hmeas_pos : Measurable[prmEvalSigma K X (volume.prod ν)
-      (Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|})]
-      fun ω => (∫⁻ p, (Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator
-        (fun q : ℝ × ℝ => ENNReal.ofReal q.2) p ∂(poissonRandomMeasure K X ω)).toReal :=
-    (measurable_lintegral_poissonRandomMeasure_prmEvalSigma hRmeas hRfin
-      (measurable_snd.ennreal_ofReal.indicator hRmeas)
-      (fun _ hx => Set.indicator_of_notMem hx _)).ennreal_toReal
-  have hmeas_neg : Measurable[prmEvalSigma K X (volume.prod ν)
-      (Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|})]
-      fun ω => (∫⁻ p, (Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|}).indicator
-        (fun q : ℝ × ℝ => ENNReal.ofReal (-q.2)) p ∂(poissonRandomMeasure K X ω)).toReal :=
-    (measurable_lintegral_poissonRandomMeasure_prmEvalSigma hRmeas hRfin
-      (measurable_snd.neg.ennreal_ofReal.indicator hRmeas)
-      (fun _ hx => Set.indicator_of_notMem hx _)).ennreal_toReal
-  exact ⟨_, (hmeas_pos.sub hmeas_neg).stronglyMeasurable,
-    levyLargeJumpSum_ae_eq_toReal_sub hd hν ht⟩
-
 /-- Almost surely only finitely many pieces carry a realized point in the band
 `(s, t] × {x | 1 ≤ |x|}`. -/
 private lemma ae_finite_band_pieces [IsProbabilityMeasure μ]
@@ -805,6 +774,20 @@ theorem aestronglyMeasurable_levyLargeJumpSum_sub_prmEvalSigma [IsProbabilityMea
       (fun _ hx => Set.indicator_of_notMem hx _)).ennreal_toReal
   exact ⟨_, (hmeas_pos.sub hmeas_neg).stronglyMeasurable,
     levyLargeJumpSum_sub_ae_eq_toReal_sub hd hν h0 hst⟩
+
+/-- The large-jump sum at time `t` is almost-everywhere strongly measurable with respect to the
+evaluation sigma-algebra of the large-jump band region `(0, t] × {x | 1 ≤ |x|}`: a difference of
+region-supported Lebesgue integrals against the random measure, honestly measurable in that
+sigma-algebra, agrees with it almost everywhere. -/
+theorem aestronglyMeasurable_levyLargeJumpSum_prmEvalSigma [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν)
+    {t : ℝ} (ht : 0 ≤ t) :
+    AEStronglyMeasurable[prmEvalSigma K X ((volume : Measure ℝ).prod ν)
+      (Set.Ioc 0 t ×ˢ {x : ℝ | 1 ≤ |x|})] (levyLargeJumpSum K X t) μ := by
+  -- The `(0, t]` region is the `s = 0` band, where the increment collapses to the value at `t`.
+  refine (aestronglyMeasurable_levyLargeJumpSum_sub_prmEvalSigma hd hν (le_refl 0) ht).congr ?_
+  filter_upwards with ω
+  rw [levyLargeJumpSum_zero, sub_zero]
 
 /-- **Independence of the jump components:** the large-jump sum and the compensated small-jump
 integral at the same time are independent. -/
