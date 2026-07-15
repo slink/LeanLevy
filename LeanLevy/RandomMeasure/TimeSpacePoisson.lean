@@ -1387,7 +1387,7 @@ private lemma eLpNorm_smallJumpBand_sub_bandFun [IsProbabilityMeasure μ]
 
 omit [SigmaFinite ν] in
 /-- As `n → ∞`, the shrinking-ball tail of `∫ x² dν` over `(-1, 1)` vanishes. -/
-private lemma tendsto_lintegral_slice_sq (hν : IsLevyMeasure ν) :
+lemma tendsto_lintegral_slice_sq (hν : IsLevyMeasure ν) :
     Tendsto (fun n : ℕ => ∫⁻ x in Set.Ioo (-1:ℝ) 1 ∩ {x : ℝ | |x| < ((n:ℝ) + 1)⁻¹},
         ENNReal.ofReal (x ^ 2) ∂ν) atTop (𝓝 0) := by
   have hslice_meas : ∀ n : ℕ,

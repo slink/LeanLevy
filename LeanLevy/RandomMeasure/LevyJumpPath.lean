@@ -74,7 +74,7 @@ drift. Almost surely it agrees with the compensated Poisson integral of the band
 -/
 
 open MeasureTheory Filter Topology
-open scoped NNReal ENNReal Classical
+open scoped NNReal ENNReal
 
 namespace ProbabilityTheory
 
@@ -778,63 +778,6 @@ lemma Ioo_diff_levyAnnulus (n : ℕ) :
   · rintro ⟨hxIoo, h⟩; exact ⟨hxIoo, fun _ => h⟩
 
 omit [SigmaFinite ν] in
-/-- As `n → ∞`, the tail second moment `∫ x² dν` over `(-1, 1) \ levyAnnulus n` vanishes. -/
-lemma tendsto_lintegral_Ioo_diff_levyAnnulus (hν : IsLevyMeasure ν) :
-    Tendsto (fun n : ℕ => ∫⁻ x in Set.Ioo (-1 : ℝ) 1 \ levyAnnulus n,
-        ENNReal.ofReal (x ^ 2) ∂ν) atTop (𝓝 0) := by
-  simp only [Ioo_diff_levyAnnulus]
-  have hslice_meas : ∀ n : ℕ,
-      MeasurableSet (Set.Ioo (-1 : ℝ) 1 ∩ {x : ℝ | |x| < ((n : ℝ) + 1)⁻¹}) :=
-    fun n => measurableSet_Ioo.inter (measurableSet_lt continuous_abs.measurable measurable_const)
-  have hsqmeas : Measurable (fun x : ℝ => ENNReal.ofReal (x ^ 2)) :=
-    ENNReal.measurable_ofReal.comp (measurable_id'.pow_const 2)
-  have hlim : ∀ x : ℝ, Tendsto (fun n : ℕ =>
-      (Set.Ioo (-1 : ℝ) 1 ∩ {y : ℝ | |y| < ((n : ℝ) + 1)⁻¹}).indicator
-        (fun y => ENNReal.ofReal (y ^ 2)) x) atTop (𝓝 0) := by
-    intro x
-    by_cases hx0 : x = 0
-    · have hz : (fun n : ℕ => (Set.Ioo (-1 : ℝ) 1 ∩ {y : ℝ | |y| < ((n : ℝ) + 1)⁻¹}).indicator
-          (fun y => ENNReal.ofReal (y ^ 2)) x) = fun _ => 0 := by
-        funext n; simp [Set.indicator_apply, hx0]
-      rw [hz]; exact tendsto_const_nhds
-    · have habs : (0 : ℝ) < |x| := abs_pos.mpr hx0
-      obtain ⟨N, hN⟩ := exists_nat_gt (|x|⁻¹)
-      have hev : ∀ᶠ (n : ℕ) in atTop, (Set.Ioo (-1 : ℝ) 1 ∩ {y : ℝ | |y| < ((n : ℝ) + 1)⁻¹}).indicator
-          (fun y => ENNReal.ofReal (y ^ 2)) x = 0 := by
-        rw [Filter.eventually_atTop]
-        refine ⟨N, fun n hn => Set.indicator_of_notMem (fun hmem => ?_) _⟩
-        have hxinv : |x|⁻¹ < (n : ℝ) + 1 := by
-          have hNn : (N : ℝ) ≤ (n : ℝ) := by exact_mod_cast hn
-          linarith [hN]
-        have h1 : (1 : ℝ) < |x| * ((n : ℝ) + 1) := by
-          have h2 := mul_lt_mul_of_pos_left hxinv habs
-          rwa [mul_inv_cancel₀ (ne_of_gt habs)] at h2
-        have hc_lt : ((n : ℝ) + 1)⁻¹ < |x| := by
-          rw [inv_eq_one_div, div_lt_iff₀ (Nat.cast_add_one_pos n)]; linarith [h1]
-        exact absurd hmem.2 (not_lt.mpr hc_lt.le)
-      exact (tendsto_congr' hev).mpr tendsto_const_nhds
-  have hdct := tendsto_lintegral_of_dominated_convergence (μ := ν)
-    (F := fun n x => (Set.Ioo (-1 : ℝ) 1 ∩ {y : ℝ | |y| < ((n : ℝ) + 1)⁻¹}).indicator
-      (fun y => ENNReal.ofReal (y ^ 2)) x)
-    (f := fun _ => 0)
-    (bound := (Set.Ioo (-1 : ℝ) 1).indicator fun y => ENNReal.ofReal (y ^ 2))
-    (fun n => hsqmeas.indicator (hslice_meas n))
-    (fun n => Filter.Eventually.of_forall fun x =>
-      Set.indicator_le_indicator_apply_of_subset Set.inter_subset_left zero_le)
-    (by
-      rw [lintegral_indicator measurableSet_Ioo]
-      exact (lintegral_setOf_sq_lt_top measurableSet_Ioo (subset_refl _) hν).ne)
-    (Filter.Eventually.of_forall hlim)
-  have hrw : (fun n : ℕ => ∫⁻ x,
-        (Set.Ioo (-1 : ℝ) 1 ∩ {y : ℝ | |y| < ((n : ℝ) + 1)⁻¹}).indicator
-          (fun y => ENNReal.ofReal (y ^ 2)) x ∂ν)
-      = fun n : ℕ => ∫⁻ x in Set.Ioo (-1 : ℝ) 1 ∩ {x : ℝ | |x| < ((n : ℝ) + 1)⁻¹},
-          ENNReal.ofReal (x ^ 2) ∂ν := by
-    funext n; rw [lintegral_indicator (hslice_meas n)]
-  rw [hrw] at hdct
-  simpa using hdct
-
-omit [SigmaFinite ν] in
 /-- From the vanishing tail moments, for any starting index `N` and any positive tolerance `16⁻ʲ`,
 some later annulus index `n > N` has tail second moment below the tolerance. -/
 private lemma exists_gt_lintegral_Ioo_diff_levyAnnulus_le (hν : IsLevyMeasure ν) (N j : ℕ) :
@@ -842,8 +785,10 @@ private lemma exists_gt_lintegral_Ioo_diff_levyAnnulus_le (hν : IsLevyMeasure �
         ENNReal.ofReal (x ^ 2) ∂ν) ≤ (16 : ℝ≥0∞)⁻¹ ^ j := by
   have hc : (0 : ℝ≥0∞) < (16 : ℝ≥0∞)⁻¹ ^ j :=
     ENNReal.pow_pos (ENNReal.inv_pos.mpr (by norm_num)) j
-  have hev := ((tendsto_lintegral_Ioo_diff_levyAnnulus hν).eventually
-    (Iio_mem_nhds hc)).and (eventually_gt_atTop N)
+  have htendsto : Tendsto (fun n : ℕ => ∫⁻ x in Set.Ioo (-1 : ℝ) 1 \ levyAnnulus n,
+      ENNReal.ofReal (x ^ 2) ∂ν) atTop (𝓝 0) := by
+    simpa only [Ioo_diff_levyAnnulus] using tendsto_lintegral_slice_sq hν
+  have hev := (htendsto.eventually (Iio_mem_nhds hc)).and (eventually_gt_atTop N)
   obtain ⟨n, hn⟩ := hev.exists
   exact ⟨n, hn.2, hn.1.le⟩
 
@@ -1388,6 +1333,7 @@ private lemma exists_tendsto_annulusPath
 over the growing annuli, gated to the good set (and to `t ≥ 0` via `max t 0`). Off the good set it is
 identically `0`; on the good set it is the genuine limit, càdlàg for every `ω`. -/
 
+open scoped Classical in
 /-- The **compensated small-jump path**: the gated `atTop` limit of the annulus paths. The `max t 0`
 guarantees the negative-time slice is constantly `0` (there the drift lines need not converge). -/
 noncomputable def levySmallJumpPath
@@ -1397,6 +1343,7 @@ noncomputable def levySmallJumpPath
     if ω ∈ levySmallJumpGoodSet hd hν
     then levyBandPath K X ν (levyAnnulus (levyTruncationSeq hν j)) (max t 0) ω else 0)
 
+open scoped Classical in
 /-- On the good set, the annulus paths at `max t 0` converge to the compensated small-jump path. -/
 private lemma tendsto_annulusPath_max_levySmallJumpPath
     (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν)
@@ -1423,6 +1370,7 @@ theorem tendsto_levyBandPath_levySmallJumpPath
   have h := tendsto_annulusPath_max_levySmallJumpPath hd hν hω t
   rwa [max_eq_left ht] at h
 
+open scoped Classical in
 /-- The compensated small-jump path vanishes at time zero: every approximant is `0` there. -/
 @[simp] theorem levySmallJumpPath_zero
     (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν) :
@@ -1438,6 +1386,7 @@ theorem tendsto_levyBandPath_levySmallJumpPath
   rw [hconst]
   exact tendsto_const_nhds.limUnder_eq
 
+open scoped Classical in
 /-- The compensated small-jump path is a measurable function of the sample point at each time: the
 gated approximants are measurable and converge pointwise for every `ω`. -/
 theorem measurable_levySmallJumpPath
@@ -1464,6 +1413,7 @@ theorem measurable_levySmallJumpPath
       exact tendsto_const_nhds
   exact measurable_of_tendsto_metrizable hgmeas (tendsto_pi_nhds.mpr htend)
 
+open scoped Classical in
 /-- **The compensated small-jump path is càdlàg for every `ω`.** Off the good set the path is
 identically `0` (hence càdlàg by `isCadlag_const`); this unconditional gating is exactly why the
 statement holds for *every* `ω`, not merely almost every one. On the good set it is the uniform-on-
