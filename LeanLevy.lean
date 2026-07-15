@@ -31,3 +31,4 @@ import LeanLevy.RandomMeasure.PoissonCompensated
 import LeanLevy.RandomMeasure.TimeSpacePoisson
 import LeanLevy.RandomMeasure.PoissonMartingale
 import LeanLevy.RandomMeasure.LevyJumpLaw
+import LeanLevy.RandomMeasure.LevyJumpPath
