@@ -19,10 +19,20 @@ When the band has finite `ν`-mass, only finitely many pieces are active in any 
 finite sum of right-continuous jump steps. Such finite step sums are càdlàg, hence so is the sample
 path. This gives the sample-path regularity of the large-jump component of a Lévy process.
 
+For a band `A ⊆ (-1, 1)` of finite `ν`-mass, the compensated **banded jump path**
+`levyBandPath K X ν A t ω = bandJumpSum K X A t ω - t · ∫_A x dν` subtracts the linear compensator
+drift. Almost surely it agrees with the compensated Poisson integral of the band test function
+`1_{(0,t] × A}(u, x) · x`, so it lies in `L²(μ)`, is càdlàg, and — through a
+`prmFiltration`-adapted representative `levyBandVersion` — is a martingale for the natural filtration.
+
 ## Main definitions
 
 * `ProbabilityTheory.bandJumpSum` — the sum of the marks of the realized points in the window
   `(0, t] × A`, as a series of piece sums.
+* `ProbabilityTheory.levyBandPath` — the compensated banded jump path
+  `bandJumpSum K X A t ω - t · ∫_A x dν`.
+* `ProbabilityTheory.levyBandVersion` — a `prmFiltration`-adapted representative of the compensated
+  band integral.
 
 ## Main results
 
@@ -35,6 +45,10 @@ path. This gives the sample-path regularity of the large-jump component of a Lé
   path `t ↦ bandJumpSum K X A t ω` is càdlàg (a.e. in `ω`, for every `t`).
 * `ProbabilityTheory.ae_isCadlag_levyLargeJumpSum` — almost every sample path of the large-jump sum
   `t ↦ levyLargeJumpSum K X t ω` is càdlàg.
+* `ProbabilityTheory.levyBandPath_ae_eq_compensated` — the compensated band path agrees almost
+  everywhere with the compensated Poisson integral of the band test function.
+* `ProbabilityTheory.martingale_levyBandVersion` — the adapted representative of the compensated band
+  integral is a martingale for the natural filtration `prmFiltration`.
 -/
 
 open MeasureTheory Filter Topology
@@ -162,5 +176,88 @@ theorem ae_isCadlag_levyLargeJumpSum [IsProbabilityMeasure μ]
     (hν.measure_setOf_abs_ge_lt_top one_pos)
   filter_upwards [h] with ω hω
   simpa only [levyLargeJumpSum_eq_bandJumpSum] using hω
+
+/-! ### The compensated banded jump path
+
+Subtracting the linear compensator drift `t · ∫_A x dν` from the banded jump sum yields the
+**compensated banded jump path** `levyBandPath`. For a band `A ⊆ (-1, 1)` of finite `ν`-mass it agrees
+almost everywhere with the compensated Poisson integral of the band test function
+`1_{(0,t] × A}(u, x) · x`, hence is square-integrable, càdlàg, and martingale-structured. -/
+
+/-- The **compensated banded jump path**: the banded jump sum with its linear compensator drift
+`t · ∫_A x dν` subtracted, so that (for a band of finite `ν`-mass) it has mean zero at each time. -/
+noncomputable def levyBandPath (K : ℕ → Ω → ℕ) (X : ℕ → ℕ → Ω → ℝ × ℝ) (ν : Measure ℝ)
+    (A : Set ℝ) (t : ℝ) (ω : Ω) : ℝ :=
+  bandJumpSum K X A t ω - t * ∫ x in A, x ∂ν
+
+omit [MeasurableSpace Ω] [SigmaFinite ν] in
+/-- The compensated banded jump path vanishes at time zero: the jump sum vanishes and the drift is
+scaled by `0`. -/
+@[simp] theorem levyBandPath_zero : levyBandPath K X ν A 0 = 0 := by
+  funext ω
+  simp [levyBandPath, bandJumpSum_zero]
+
+omit [SigmaFinite ν] in
+/-- The compensated banded jump path is a measurable function of the sample point. -/
+theorem measurable_levyBandPath (hK : ∀ k, Measurable (K k)) (hX : ∀ k n, Measurable (X k n))
+    (hA : MeasurableSet A) (t : ℝ) : Measurable (levyBandPath K X ν A t) :=
+  (measurable_bandJumpSum hK hX hA t).sub measurable_const
+
+/-- For a band `A` of finite `ν`-mass, almost every sample path of the compensated banded jump path is
+càdlàg: the banded jump sum is càdlàg (a.e.) and the compensator drift `t ↦ -(t · ∫_A x dν)` is
+continuous. -/
+theorem ae_isCadlag_levyBandPath [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ)
+    (hA : MeasurableSet A) (hAfin : ν A < ⊤) :
+    ∀ᵐ ω ∂μ, IsCadlag (fun t : ℝ => levyBandPath K X ν A t ω) := by
+  filter_upwards [ae_isCadlag_bandJumpSum hd hA hAfin] with ω hω
+  have hcont : Continuous (fun t : ℝ => -(t * ∫ x in A, x ∂ν)) := by fun_prop
+  simpa only [levyBandPath, sub_eq_add_neg] using hω.add hcont.isCadlag
+
+/-- **The `L²` anchor.** For a band `A ⊆ (-1, 1)` of finite `ν`-mass, the compensated banded jump path
+agrees almost everywhere with the compensated Poisson integral of the band test function
+`1_{(0,t] × A}(u, x) · x`. The banded jump sum matches the uncompensated Poisson sum piecewise, and the
+compensator drift `t · ∫_A x dν` equals the summed piece integrals of the band test function. -/
+theorem levyBandPath_ae_eq_compensated [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ)
+    (hA : MeasurableSet A) (hAsub : A ⊆ Set.Ioo (-1 : ℝ) 1) (hAfin : ν A < ⊤)
+    {t : ℝ} (ht : 0 ≤ t) :
+    (fun ω => levyBandPath K X ν A t ω)
+      =ᵐ[μ] compensatedPoissonIntegral hd ((memLp_two_bandFun hA hAsub hAfin 0 t).toLp _) := by
+  have hfmeas : Measurable ((Set.Ioc 0 t ×ˢ A).indicator fun p : ℝ × ℝ => p.2) :=
+    measurable_bandFun hA 0 t
+  have hf1 : Integrable ((Set.Ioc 0 t ×ˢ A).indicator fun p : ℝ × ℝ => p.2) (volume.prod ν) :=
+    integrable_bandFun hA hAsub hAfin 0 t
+  have hbandmeas : MeasurableSet (Set.Ioc 0 t ×ˢ A) := measurableSet_Ioc.prod hA
+  -- the compensator drift equals the integral of the band test function
+  have hint : (∫ p, ((Set.Ioc 0 t ×ˢ A).indicator fun p : ℝ × ℝ => p.2) p ∂(volume.prod ν))
+      = t * ∫ x in A, x ∂ν := by
+    rw [integral_indicator hbandmeas,
+      setIntegral_prod (fun z : ℝ × ℝ => z.2) ((integrable_indicator_iff hbandmeas).mp hf1)]
+    dsimp only
+    rw [setIntegral_const, measureReal_def, Real.volume_Ioc, sub_zero,
+      ENNReal.toReal_ofReal ht, smul_eq_mul]
+  -- the piece integrals sum to the integral over the whole band
+  have hHasSum : HasSum (fun k => ∫ p in prmPiece (volume.prod ν) k,
+        ((Set.Ioc 0 t ×ˢ A).indicator fun p : ℝ × ℝ => p.2) p ∂(volume.prod ν))
+      (∫ p, ((Set.Ioc 0 t ×ˢ A).indicator fun p : ℝ × ℝ => p.2) p ∂(volume.prod ν)) := by
+    have h := hasSum_integral_iUnion (μ := volume.prod ν)
+      (f := (Set.Ioc 0 t ×ˢ A).indicator fun p : ℝ × ℝ => p.2)
+      (fun k => measurableSet_prmPiece (m := volume.prod ν))
+      (pairwise_disjoint_prmPiece (m := volume.prod ν))
+      (by rw [iUnion_prmPiece]; exact hf1.integrableOn)
+    rwa [iUnion_prmPiece, setIntegral_univ] at h
+  refine EventuallyEq.trans ?_
+    (compensatedPoissonIntegral_eq_sum hd hfmeas hf1 (memLp_two_bandFun hA hAsub hAfin 0 t)).symm
+  filter_upwards [ae_finite_support_pieceSum hd hbandmeas
+    (volume_prod_Ioc_prod_lt_top (m := ν) (s := 0) (t := t) hAfin)
+    (fun p hp => Set.indicator_of_notMem hp _)] with ω hfinsupp
+  have hsummable_piece : Summable (fun k =>
+      pieceSum K X ((Set.Ioc 0 t ×ˢ A).indicator fun p : ℝ × ℝ => p.2) k ω) :=
+    summable_of_ne_finset_zero (s := hfinsupp.toFinset) fun k hk => by
+      by_contra hne
+      exact hk (hfinsupp.mem_toFinset.mpr hne)
+  simp only [levyBandPath, bandJumpSum, compensatedPoissonSum, compensatedPieceSum]
+  rw [hsummable_piece.tsum_sub hHasSum.summable, hHasSum.tsum_eq, hint]
 
 end ProbabilityTheory
