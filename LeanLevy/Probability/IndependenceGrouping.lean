@@ -84,7 +84,7 @@ theorem iIndepSets.piiUnionInter_of_pairwiseDisjoint {π : κ → Set (Set Ω)} 
     ext x
     simp only [Set.mem_iInter, Finset.mem_biUnion, hGdef]
     constructor
-    · intro h j hj i' hi'
+    · intro h j _hj i' hi'
       by_cases hji' : j ∈ p i'
       · rw [if_pos hji']
         have hxf : x ∈ f i' := h i' hi'
