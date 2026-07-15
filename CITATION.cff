@@ -18,14 +18,16 @@ keywords:
   - Lévy–Khintchine
   - Poisson random measures
   - Lévy–Itô decomposition
-version: 0.1.0
-date-released: 2026-07-14
+version: 0.2.0
+date-released: 2026-07-15
 abstract: >-
   A Lean 4 formalization of Lévy processes over mathlib: the Lévy–Khintchine
   representation theorem (representation, converse, and uniqueness), Poisson
   random measures with compensated L² integration, the time-indexed theory
-  with its martingale structure, and the jump part of the Lévy–Itô
-  decomposition — the assembled jump law at zero Gaussian variance, its
-  infinite divisibility, and the in-law realization of pure-jump Lévy triples
-  by processes with independent, stationary increments (no path regularity
-  claimed).
+  with its martingale structure, the jump part of the Lévy–Itô
+  decomposition — the assembled jump law at zero Gaussian variance and its
+  infinite divisibility — and the realization of every pure-jump Lévy triple
+  by a genuine Lévy process: a càdlàg modification with literal zero start
+  and independent, stationary increments, whose marginals realize the
+  Lévy–Khintchine exponent (nothing Brownian is claimed; the Gaussian
+  component and the full decomposition are out of scope).
