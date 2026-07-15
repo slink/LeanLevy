@@ -25,6 +25,8 @@ ordered type `ι` with values in a measurable group `E`:
   its natural filtration.
 * `ProbabilityTheory.HasIndependentIncrements.indepFun_increment` — consecutive
   non-overlapping increments are pairwise independent.
+* `ProbabilityTheory.hasIndependentIncrements_iff_hasIndepIncrements` — the predicate coincides
+  definitionally with mathlib's `HasIndepIncrements`.
 * `ProbabilityTheory.Adapted.measurable_increment` — increments of an adapted
   process are measurable w.r.t. the filtration at the later time.
 -/
