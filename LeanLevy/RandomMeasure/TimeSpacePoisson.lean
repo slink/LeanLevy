@@ -364,7 +364,7 @@ private lemma measurable_lintegralPieceSum (hd : IsPoissonPointFamily K X (volum
   exact h.comp (measurable_id.prodMk (hd.measurable_count k))
 
 /-- A.e., only finitely many pieces carry a realized point in a finite-mass region. -/
-private lemma ae_finite_pieces_mem [IsProbabilityMeasure μ]
+lemma ae_finite_pieces_mem [IsProbabilityMeasure μ]
     (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ)
     {R : Set (ℝ × ℝ)} (hR : MeasurableSet R)
     (hRfin : ((volume : Measure ℝ).prod ν) R < ⊤) :
@@ -389,7 +389,7 @@ private lemma ae_finite_pieces_mem [IsProbabilityMeasure μ]
         (fun _ _ => zero_le) hn
 
 /-- A.e., the piece sums of a function vanishing off a finite-mass region have finite support. -/
-private lemma ae_finite_support_pieceSum [IsProbabilityMeasure μ]
+lemma ae_finite_support_pieceSum [IsProbabilityMeasure μ]
     (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ)
     {R : Set (ℝ × ℝ)} (hR : MeasurableSet R)
     (hRfin : ((volume : Measure ℝ).prod ν) R < ⊤)
@@ -975,13 +975,13 @@ factors carrying the extra `−iξ ∫ f` drift, and dominated convergence toget
 piece-partition sum of the band integral pass to the limit. -/
 
 /-- The band test function `1_{(s,t] × A}(u, x) · x` is measurable. -/
-private lemma measurable_bandFun {A : Set ℝ} (hA : MeasurableSet A) (s t : ℝ) :
+lemma measurable_bandFun {A : Set ℝ} (hA : MeasurableSet A) (s t : ℝ) :
     Measurable ((Set.Ioc s t ×ˢ A).indicator fun p : ℝ × ℝ => p.2) :=
   measurable_snd.indicator (measurableSet_Ioc.prod hA)
 
 /-- The band test function is integrable against `volume.prod ν` when `A ⊆ (-1, 1)` has finite mass:
 its support has finite `volume.prod ν`-mass and `|x| ≤ 1` there. -/
-private lemma integrable_bandFun {A : Set ℝ} (hA : MeasurableSet A)
+lemma integrable_bandFun {A : Set ℝ} (hA : MeasurableSet A)
     (hAsub : A ⊆ Set.Ioo (-1) 1) (hAfin : ν A < ⊤) (s t : ℝ) :
     Integrable ((Set.Ioc s t ×ˢ A).indicator fun p : ℝ × ℝ => p.2)
       ((volume : Measure ℝ).prod ν) := by
@@ -997,7 +997,7 @@ private lemma integrable_bandFun {A : Set ℝ} (hA : MeasurableSet A)
 
 /-- The band test function lies in `L²(volume.prod ν)` when `A ⊆ (-1, 1)` has finite mass: its
 square is bounded by `1` on the finite-mass support. -/
-private lemma memLp_two_bandFun {A : Set ℝ} (hA : MeasurableSet A)
+lemma memLp_two_bandFun {A : Set ℝ} (hA : MeasurableSet A)
     (hAsub : A ⊆ Set.Ioo (-1) 1) (hAfin : ν A < ⊤) (s t : ℝ) :
     MemLp ((Set.Ioc s t ×ˢ A).indicator fun p : ℝ × ℝ => p.2) 2
       ((volume : Measure ℝ).prod ν) := by
