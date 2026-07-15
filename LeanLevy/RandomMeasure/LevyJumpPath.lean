@@ -34,6 +34,14 @@ drift. Almost surely it agrees with the compensated Poisson integral of the band
   `bandJumpSum K X A t ω - t · ∫_A x dν`.
 * `ProbabilityTheory.levyBandVersion` — a `prmFiltration`-adapted representative of the compensated
   band integral.
+* `ProbabilityTheory.levyAnnulus` — the annulus `(-1, 1) ∩ {1/(n+1) ≤ |x|}`; the annuli exhaust the
+  punctured small-jump band.
+* `ProbabilityTheory.levyTruncationSeq` — the geometric truncation subsequence of annulus indices
+  along which the tail second moments decay like `16⁻ʲ`.
+* `ProbabilityTheory.levySmallJumpGoodSet` — the measurable, almost-sure event carrying full pathwise
+  control of the annulus paths.
+* `ProbabilityTheory.levySmallJumpPath` — the compensated small-jump path, the almost-sure uniform
+  limit of the compensated banded jump paths over the growing annuli (gated to the good set).
 
 ## Main results
 
@@ -53,10 +61,20 @@ drift. Almost surely it agrees with the compensated Poisson integral of the band
 * `ProbabilityTheory.measure_countable_sup_levyBandPath_ge` — the weak-type maximal inequality for the
   compensated band path over a countable time grid: the measure of the event that the path exceeds `ε`
   in absolute value at some grid time is at most `√(T · ∫_A x² dν) / ε`.
+* `ProbabilityTheory.levyTruncationSeq_spec` — the truncation subsequence is strictly monotone with
+  geometrically-decaying (`16⁻ʲ`) tail second moments.
+* `ProbabilityTheory.measurableSet_levySmallJumpGoodSet`, `ae_mem_levySmallJumpGoodSet` — the good set
+  is measurable and almost sure.
+* `ProbabilityTheory.tendsto_levyBandPath_levySmallJumpPath` — on the good set and for `t ≥ 0`, the
+  annulus paths converge to the compensated small-jump path.
+* `ProbabilityTheory.isCadlag_levySmallJumpPath` — for *every* `ω`, the compensated small-jump path is
+  càdlàg (unconditional through the off-good-set-zero gating).
+* `ProbabilityTheory.measurable_levySmallJumpPath` — the compensated small-jump path is measurable at
+  each time.
 -/
 
 open MeasureTheory Filter Topology
-open scoped NNReal ENNReal
+open scoped NNReal ENNReal Classical
 
 namespace ProbabilityTheory
 
@@ -1090,5 +1108,389 @@ theorem ae_mem_levySmallJumpGoodSet [IsProbabilityMeasure μ]
     ext ω; simp only [levySmallJumpGoodSet, Set.mem_setOf_eq, Set.mem_compl_iff, not_not]
   rw [hset, measure_toMeasurable]
   exact ae_iff.mp (ae_levySmallJumpRaw hd hν)
+
+/-! ### Pathwise infrastructure on the good set
+
+The following lemmas reconstruct, for a single sample point `ω` in the raw good event, the pathwise
+facts that hold almost surely: window-local càdlàg regularity of the banded jump paths, disjoint-union
+additivity of the compensated band paths, and the slice-additivity of successive annulus paths. They
+feed the telescoping estimate that establishes uniform Cauchyness. -/
+
+omit [MeasurableSpace Ω] in
+/-- Window finiteness at every natural time gives window finiteness at every real time. -/
+private lemma finite_pieces_Ioc_of_forall_nat {A : Set ℝ} {ω : Ω}
+    (hfin : ∀ T : ℕ, {k | ∃ n ∈ Finset.range (K k ω),
+      X k n ω ∈ Set.Ioc 0 (T : ℝ) ×ˢ A}.Finite) (t : ℝ) :
+    {k | ∃ n ∈ Finset.range (K k ω), X k n ω ∈ Set.Ioc 0 t ×ˢ A}.Finite := by
+  obtain ⟨T, hT⟩ := exists_nat_gt t
+  refine (hfin T).subset fun k hk => ?_
+  obtain ⟨n, hn, hmem⟩ := hk
+  exact ⟨n, hn, Set.mem_prod.mpr
+    ⟨Set.Ioc_subset_Ioc (le_refl 0) hT.le (Set.mem_prod.mp hmem).1, (Set.mem_prod.mp hmem).2⟩⟩
+
+omit [MeasurableSpace Ω] in
+/-- On a window with finitely many active pieces, the band piece sums are summable. -/
+private lemma summable_pieceSum_band_of_finite {A : Set ℝ} {ω : Ω} (t : ℝ)
+    (hfin : {k | ∃ n ∈ Finset.range (K k ω), X k n ω ∈ Set.Ioc 0 t ×ˢ A}.Finite) :
+    Summable (fun k => pieceSum K X ((Set.Ioc 0 t ×ˢ A).indicator fun p : ℝ × ℝ => p.2) k ω) := by
+  refine summable_of_ne_finset_zero (s := hfin.toFinset) fun k hk => ?_
+  simp only [pieceSum]
+  refine Finset.sum_eq_zero fun n hn => ?_
+  exact Set.indicator_of_notMem (fun hmem => hk (hfin.mem_toFinset.mpr ⟨n, hn, hmem⟩)) _
+
+omit [MeasurableSpace Ω] [SigmaFinite ν] in
+/-- The identity function is `ν`-integrable on a finite-mass band `A ⊆ (-1, 1)` (it is bounded). -/
+private lemma integrableOn_id_of_subset {A : Set ℝ} (hA : MeasurableSet A)
+    (hAsub : A ⊆ Set.Ioo (-1 : ℝ) 1) (hAfin : ν A < ⊤) :
+    IntegrableOn (fun x : ℝ => x) A ν := by
+  refine IntegrableOn.of_bound hAfin measurable_id.aestronglyMeasurable 1 ?_
+  filter_upwards [ae_restrict_mem hA] with x hx
+  have hx' := hAsub hx
+  rw [Real.norm_eq_abs, abs_le]
+  exact ⟨by linarith [hx'.1], by linarith [hx'.2]⟩
+
+omit [MeasurableSpace Ω] [SigmaFinite ν] in
+/-- **Disjoint-union additivity** of the compensated band path (on a window with finitely many active
+pieces): the compensated band path over `A ∪ B` splits as the sum over `A` and over `B`. -/
+private lemma levyBandPath_union_of_finite {A B : Set ℝ} {ω : Ω} (t : ℝ)
+    (hA : MeasurableSet A) (hAsub : A ⊆ Set.Ioo (-1 : ℝ) 1) (hAfin : ν A < ⊤)
+    (hB : MeasurableSet B) (hBsub : B ⊆ Set.Ioo (-1 : ℝ) 1) (hBfin : ν B < ⊤)
+    (hAB : Disjoint A B)
+    (hfinA : {k | ∃ n ∈ Finset.range (K k ω), X k n ω ∈ Set.Ioc 0 t ×ˢ A}.Finite)
+    (hfinB : {k | ∃ n ∈ Finset.range (K k ω), X k n ω ∈ Set.Ioc 0 t ×ˢ B}.Finite) :
+    levyBandPath K X ν (A ∪ B) t ω = levyBandPath K X ν A t ω + levyBandPath K X ν B t ω := by
+  have hind : ((Set.Ioc 0 t ×ˢ (A ∪ B)).indicator fun p : ℝ × ℝ => p.2)
+      = ((Set.Ioc 0 t ×ˢ A).indicator fun p : ℝ × ℝ => p.2)
+        + ((Set.Ioc 0 t ×ˢ B).indicator fun p : ℝ × ℝ => p.2) := by
+    rw [Set.prod_union]
+    exact Set.indicator_union_of_disjoint (Set.Disjoint.set_prod_right hAB _ _) _
+  have hbjs : bandJumpSum K X (A ∪ B) t ω = bandJumpSum K X A t ω + bandJumpSum K X B t ω := by
+    simp only [bandJumpSum]
+    rw [← (summable_pieceSum_band_of_finite t hfinA).tsum_add
+      (summable_pieceSum_band_of_finite t hfinB)]
+    refine tsum_congr fun k => ?_
+    simp only [pieceSum, ← Finset.sum_add_distrib]
+    refine Finset.sum_congr rfl fun n _ => ?_
+    simpa using congrFun hind (X k n ω)
+  have hdrift : ∫ x in A ∪ B, x ∂ν = (∫ x in A, x ∂ν) + ∫ x in B, x ∂ν :=
+    setIntegral_union hAB hB (integrableOn_id_of_subset hA hAsub hAfin)
+      (integrableOn_id_of_subset hB hBsub hBfin)
+  simp only [levyBandPath, hbjs, hdrift]; ring
+
+/-- **Slice-additivity**: the compensated band path over the annulus at step `j+1` equals the path
+over the annulus at step `j` plus the path over the intervening slice. -/
+private lemma levyBandPath_annulus_succ
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν)
+    {ω : Ω} (hraw : levySmallJumpRaw hd hν ω) (j : ℕ) (t : ℝ) :
+    levyBandPath K X ν (levyAnnulus (levyTruncationSeq hν (j + 1))) t ω
+      = levyBandPath K X ν (levyAnnulus (levyTruncationSeq hν j)) t ω
+        + levyBandPath K X ν (levySlice hν j) t ω := by
+  rw [levyAnnulus_succ_eq hν j]
+  exact levyBandPath_union_of_finite t
+    (measurableSet_levyAnnulus _) (levyAnnulus_subset _)
+    (levyAnnulus_finite_mass hν _) (measurableSet_levySlice hν j)
+    (levySlice_subset hν j) (levySlice_finite_mass hν j)
+    (disjoint_levyAnnulus_levySlice hν j)
+    (finite_pieces_Ioc_of_forall_nat (fun T => hraw.1 T j) t)
+    (finite_pieces_Ioc_of_forall_nat (fun T => hraw.2.1 T j) t)
+
+omit [MeasurableSpace Ω] in
+/-- Window-local finiteness gives a càdlàg banded jump path (pointwise version of
+`ae_isCadlag_bandJumpSum`). -/
+private lemma isCadlag_bandJumpSum_of_finite {A : Set ℝ} (ω : Ω)
+    (hfin : ∀ T : ℕ, {k | ∃ n ∈ Finset.range (K k ω),
+      X k n ω ∈ Set.Ioc 0 (T : ℝ) ×ˢ A}.Finite) :
+    IsCadlag (fun t : ℝ => bandJumpSum K X A t ω) := by
+  intro t
+  obtain ⟨T, hT⟩ := exists_nat_gt t
+  refine (isCadlag_bandStepFinsetSum (K := K) (X := X) A ω (hfin T).toFinset t).congr ?_
+  filter_upwards [Iio_mem_nhds hT] with s hs
+  exact (bandJumpSum_eqOn_Iio A ω (hfin T) hs).symm
+
+omit [MeasurableSpace Ω] [SigmaFinite ν] in
+/-- Window-local finiteness gives a càdlàg compensated band path (pointwise version of
+`ae_isCadlag_levyBandPath`). -/
+private lemma isCadlag_levyBandPath_of_finite {A : Set ℝ} (ω : Ω)
+    (hfin : ∀ T : ℕ, {k | ∃ n ∈ Finset.range (K k ω),
+      X k n ω ∈ Set.Ioc 0 (T : ℝ) ×ˢ A}.Finite) :
+    IsCadlag (fun t : ℝ => levyBandPath K X ν A t ω) := by
+  have hcont : Continuous (fun t : ℝ => -(t * ∫ x in A, x ∂ν)) := by fun_prop
+  simpa only [levyBandPath, sub_eq_add_neg] using
+    (isCadlag_bandJumpSum_of_finite ω hfin).add hcont.isCadlag
+
+omit [MeasurableSpace Ω] in
+/-- A càdlàg function bounded by `c` on the rational grid of `[0, T]` is bounded by `c` on all of
+`[0, T]`: rationals descending to `t` from the right transfer the bound via right-continuity. -/
+private lemma abs_le_of_isCadlag_of_grid {g : ℝ → ℝ} {T : ℕ} {c : ℝ} (hg : IsCadlag g)
+    (hgrid : ∀ q ∈ levyGrid T, |g q| ≤ c) {t : ℝ} (ht : t ∈ Set.Icc (0 : ℝ) (T : ℝ)) :
+    |g t| ≤ c := by
+  rcases eq_or_lt_of_le ht.2 with htT | htT
+  · rw [htT]; exact hgrid (T : ℝ) (Or.inr rfl)
+  · set d : ℝ := (T : ℝ) - t with hddef
+    have hdpos : 0 < d := by rw [hddef]; linarith
+    have hex : ∀ n : ℕ, ∃ q : ℚ, t < (q : ℝ) ∧ (q : ℝ) < t + d / ((n : ℝ) + 2) := fun n =>
+      exists_rat_btwn (by
+        have hpos : (0 : ℝ) < d / ((n : ℝ) + 2) := by positivity
+        linarith)
+    choose q hq using hex
+    have hqT : ∀ n, (q n : ℝ) < (T : ℝ) := fun n => by
+      have hle : d / ((n : ℝ) + 2) ≤ d :=
+        div_le_self hdpos.le (by have := Nat.cast_nonneg (α := ℝ) n; linarith)
+      calc (q n : ℝ) < t + d / ((n : ℝ) + 2) := (hq n).2
+        _ ≤ t + d := by linarith
+        _ = (T : ℝ) := by rw [hddef]; ring
+    have hqmem : ∀ n, (q n : ℝ) ∈ levyGrid T := fun n =>
+      Or.inl ⟨⟨q n, rfl⟩, ⟨le_of_lt (lt_of_le_of_lt ht.1 (hq n).1), le_of_lt (hqT n)⟩⟩
+    have hd0 : Tendsto (fun n : ℕ => d / ((n : ℝ) + 2)) atTop (𝓝 0) :=
+      Filter.Tendsto.div_atTop tendsto_const_nhds
+        (tendsto_atTop_add_const_right atTop 2 tendsto_natCast_atTop_atTop)
+    have hqtend : Tendsto (fun n => (q n : ℝ)) atTop (𝓝 t) :=
+      tendsto_of_tendsto_of_tendsto_of_le_of_le' tendsto_const_nhds
+        (by simpa using tendsto_const_nhds.add hd0)
+        (Filter.Eventually.of_forall fun n => (hq n).1.le)
+        (Filter.Eventually.of_forall fun n => (hq n).2.le)
+    have hmem : Tendsto (fun n => (q n : ℝ)) atTop (𝓝[Set.Ici t] t) :=
+      tendsto_nhdsWithin_of_tendsto_nhds_of_eventually_within _ hqtend
+        (Filter.Eventually.of_forall fun n => (hq n).1.le)
+    have hgq : Tendsto (fun n => g (q n : ℝ)) atTop (𝓝 (g t)) :=
+      (hg.rightContinuous t).tendsto.comp hmem
+    refine le_of_tendsto ((continuous_abs.tendsto _).comp hgq) ?_
+    exact Filter.Eventually.of_forall fun n => hgrid _ (hqmem n)
+
+omit [MeasurableSpace Ω] in
+/-- A càdlàg function `f` with `f 0 = 0`, composed with `max · 0`, is again càdlàg: it equals `f` on
+`(0, ∞)` and is constantly `0` on `(-∞, 0)`, and at `0` right-continuity comes from `f` while the left
+limit is `0`. -/
+private lemma isCadlag_comp_max_zero {f : ℝ → ℝ} (hf : IsCadlag f) (h0 : f 0 = 0) :
+    IsCadlag (fun t : ℝ => f (max t 0)) := by
+  intro t
+  rcases lt_trichotomy t 0 with ht | ht | ht
+  · refine (isCadlag_const (c := f 0) t).congr ?_
+    filter_upwards [Iio_mem_nhds ht] with s hs
+    rw [max_eq_right (le_of_lt (Set.mem_Iio.mp hs))]
+  · subst ht
+    refine ⟨?_, 0, ?_⟩
+    · refine (hf.rightContinuous 0).congr (fun y hy => ?_) ?_
+      · rw [max_eq_left (Set.mem_Ici.mp hy)]
+      · rw [max_eq_left (le_refl (0 : ℝ))]
+    · have heq : (fun s => f (max s 0)) =ᶠ[𝓝[Set.Iio 0] 0] fun _ => (0 : ℝ) := by
+        filter_upwards [self_mem_nhdsWithin] with s hs
+        rw [max_eq_right (le_of_lt (Set.mem_Iio.mp hs)), h0]
+      exact tendsto_const_nhds.congr' heq.symm
+  · refine (hf t).congr ?_
+    filter_upwards [Ioi_mem_nhds ht] with s hs
+    rw [max_eq_left (le_of_lt (Set.mem_Ioi.mp hs))]
+
+/-- **Telescoping estimate.** For `m ≥ N₀` and `m ≤ n`, the gap between the annulus paths at steps `m`
+and `n` is bounded by `2 · 2⁻ᵐ` on `[0, T]`, since the successive differences are the slice paths and
+each is `≤ 2⁻ʲ` there. -/
+private lemma abs_annulusPath_sub_le
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν)
+    {ω : Ω} (hraw : levySmallJumpRaw hd hν ω) (T : ℕ) {N₀ : ℕ}
+    (hbound : ∀ j, N₀ ≤ j → ∀ y ∈ Set.Icc (0 : ℝ) (T : ℝ),
+      |levyBandPath K X ν (levySlice hν j) y ω| ≤ ((2 : ℝ)⁻¹) ^ j)
+    {m n : ℕ} (hm : N₀ ≤ m) (hmn : m ≤ n) {y : ℝ} (hy : y ∈ Set.Icc (0 : ℝ) (T : ℝ)) :
+    |levyBandPath K X ν (levyAnnulus (levyTruncationSeq hν n)) y ω
+        - levyBandPath K X ν (levyAnnulus (levyTruncationSeq hν m)) y ω| ≤ 2 * ((2 : ℝ)⁻¹) ^ m := by
+  set f : ℕ → ℝ := fun i => levyBandPath K X ν (levyAnnulus (levyTruncationSeq hν (m + i))) y ω
+    with hf
+  have htel : levyBandPath K X ν (levyAnnulus (levyTruncationSeq hν n)) y ω
+        - levyBandPath K X ν (levyAnnulus (levyTruncationSeq hν m)) y ω
+      = ∑ i ∈ Finset.range (n - m), levyBandPath K X ν (levySlice hν (m + i)) y ω := by
+    have hstep : ∀ i, f (i + 1) - f i = levyBandPath K X ν (levySlice hν (m + i)) y ω := by
+      intro i
+      simp only [hf, show m + (i + 1) = (m + i) + 1 from by ring]
+      rw [levyBandPath_annulus_succ hd hν hraw (m + i) y]; ring
+    calc levyBandPath K X ν (levyAnnulus (levyTruncationSeq hν n)) y ω
+          - levyBandPath K X ν (levyAnnulus (levyTruncationSeq hν m)) y ω
+        = f (n - m) - f 0 := by simp only [hf]; rw [Nat.add_sub_cancel' hmn, Nat.add_zero]
+      _ = ∑ i ∈ Finset.range (n - m), (f (i + 1) - f i) := (Finset.sum_range_sub f (n - m)).symm
+      _ = _ := Finset.sum_congr rfl fun i _ => hstep i
+  rw [htel]
+  have hgeo : ∑ i ∈ Finset.range (n - m), ((2 : ℝ)⁻¹) ^ i ≤ 2 :=
+    (Summable.sum_le_tsum _ (fun i _ => by positivity)
+      (summable_geometric_of_lt_one (by norm_num) (by norm_num))).trans tsum_geometric_inv_two.le
+  calc |∑ i ∈ Finset.range (n - m), levyBandPath K X ν (levySlice hν (m + i)) y ω|
+      ≤ ∑ i ∈ Finset.range (n - m), |levyBandPath K X ν (levySlice hν (m + i)) y ω| :=
+        Finset.abs_sum_le_sum_abs _ _
+    _ ≤ ∑ i ∈ Finset.range (n - m), ((2 : ℝ)⁻¹) ^ (m + i) :=
+        Finset.sum_le_sum fun i _ => hbound (m + i) (hm.trans (Nat.le_add_right m i)) y hy
+    _ = ((2 : ℝ)⁻¹) ^ m * ∑ i ∈ Finset.range (n - m), ((2 : ℝ)⁻¹) ^ i := by
+        rw [Finset.mul_sum]; exact Finset.sum_congr rfl fun i _ => pow_add _ _ _
+    _ ≤ ((2 : ℝ)⁻¹) ^ m * 2 := by
+        exact mul_le_mul_of_nonneg_left hgeo (by positivity)
+    _ = 2 * ((2 : ℝ)⁻¹) ^ m := by ring
+
+/-- **Uniform Cauchyness on compacts.** For a raw-good `ω` and each `T`, the annulus paths composed
+with `max · 0` form a uniformly Cauchy sequence on `Iic T`. -/
+private lemma uniformCauchySeqOn_annulusPath_max
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν)
+    {ω : Ω} (hraw : levySmallJumpRaw hd hν ω) (T : ℕ) :
+    UniformCauchySeqOn
+      (fun j (t : ℝ) => levyBandPath K X ν (levyAnnulus (levyTruncationSeq hν j)) (max t 0) ω)
+      atTop (Set.Iic (T : ℝ)) := by
+  rw [Metric.uniformCauchySeqOn_iff]
+  intro ε hε
+  obtain ⟨N₀, hN₀⟩ := Filter.eventually_atTop.mp (hraw.2.2 T)
+  have hbound : ∀ j, N₀ ≤ j → ∀ y ∈ Set.Icc (0 : ℝ) (T : ℝ),
+      |levyBandPath K X ν (levySlice hν j) y ω| ≤ ((2 : ℝ)⁻¹) ^ j := fun j hj y hy =>
+    abs_le_of_isCadlag_of_grid (isCadlag_levyBandPath_of_finite ω (fun T' => hraw.2.1 T' j))
+      (fun q hq => (hN₀ j hj q hq).le) hy
+  have hgeo : Tendsto (fun n : ℕ => 2 * ((2 : ℝ)⁻¹) ^ n) atTop (𝓝 0) := by
+    have := (tendsto_pow_atTop_nhds_zero_of_lt_one (by norm_num : (0 : ℝ) ≤ 2⁻¹)
+      (by norm_num)).const_mul (2 : ℝ)
+    simpa using this
+  obtain ⟨N, hNε, hNN₀⟩ :=
+    ((hgeo.eventually (Iio_mem_nhds hε)).and (eventually_ge_atTop N₀)).exists
+  refine ⟨N, fun m hm n hn x hx => ?_⟩
+  have hmax : max x 0 ∈ Set.Icc (0 : ℝ) (T : ℝ) :=
+    ⟨le_max_right _ _, max_le (Set.mem_Iic.mp hx) (Nat.cast_nonneg T)⟩
+  rw [Real.dist_eq]
+  rcases le_total m n with hmn | hnm
+  · calc |levyBandPath K X ν (levyAnnulus (levyTruncationSeq hν m)) (max x 0) ω
+            - levyBandPath K X ν (levyAnnulus (levyTruncationSeq hν n)) (max x 0) ω|
+        = |levyBandPath K X ν (levyAnnulus (levyTruncationSeq hν n)) (max x 0) ω
+            - levyBandPath K X ν (levyAnnulus (levyTruncationSeq hν m)) (max x 0) ω| :=
+          abs_sub_comm _ _
+      _ ≤ 2 * ((2 : ℝ)⁻¹) ^ m :=
+          abs_annulusPath_sub_le hd hν hraw T hbound (hNN₀.trans hm) hmn hmax
+      _ ≤ 2 * ((2 : ℝ)⁻¹) ^ N := by
+          have : ((2 : ℝ)⁻¹) ^ m ≤ ((2 : ℝ)⁻¹) ^ N :=
+            pow_le_pow_of_le_one (by norm_num) (by norm_num) hm
+          linarith [this, (by positivity : (0 : ℝ) ≤ ((2 : ℝ)⁻¹) ^ N)]
+      _ < ε := hNε
+  · calc |levyBandPath K X ν (levyAnnulus (levyTruncationSeq hν m)) (max x 0) ω
+            - levyBandPath K X ν (levyAnnulus (levyTruncationSeq hν n)) (max x 0) ω|
+        ≤ 2 * ((2 : ℝ)⁻¹) ^ n :=
+          abs_annulusPath_sub_le hd hν hraw T hbound (hNN₀.trans hn) hnm hmax
+      _ ≤ 2 * ((2 : ℝ)⁻¹) ^ N := by
+          have : ((2 : ℝ)⁻¹) ^ n ≤ ((2 : ℝ)⁻¹) ^ N :=
+            pow_le_pow_of_le_one (by norm_num) (by norm_num) hn
+          linarith [this, (by positivity : (0 : ℝ) ≤ ((2 : ℝ)⁻¹) ^ N)]
+      _ < ε := hNε
+
+/-- For a raw-good `ω` and `s ≥ 0`, the annulus paths converge at `s` (a pointwise consequence of
+uniform Cauchyness plus completeness). -/
+private lemma exists_tendsto_annulusPath
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν)
+    {ω : Ω} (hraw : levySmallJumpRaw hd hν ω) {s : ℝ} (hs : 0 ≤ s) :
+    ∃ L, Tendsto (fun j => levyBandPath K X ν (levyAnnulus (levyTruncationSeq hν j)) s ω)
+      atTop (𝓝 L) := by
+  obtain ⟨T, hT⟩ := exists_nat_gt s
+  have hcauchy := (uniformCauchySeqOn_annulusPath_max hd hν hraw T).cauchySeq
+    (Set.mem_Iic.mpr hT.le)
+  rw [max_eq_left hs] at hcauchy
+  exact cauchySeq_tendsto_of_complete hcauchy
+
+/-! ### The compensated small-jump path
+
+`levySmallJumpPath hd hν t ω` is the almost-sure uniform limit of the compensated banded jump paths
+over the growing annuli, gated to the good set (and to `t ≥ 0` via `max t 0`). Off the good set it is
+identically `0`; on the good set it is the genuine limit, càdlàg for every `ω`. -/
+
+/-- The **compensated small-jump path**: the gated `atTop` limit of the annulus paths. The `max t 0`
+guarantees the negative-time slice is constantly `0` (there the drift lines need not converge). -/
+noncomputable def levySmallJumpPath
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν)
+    (t : ℝ) (ω : Ω) : ℝ :=
+  Filter.limUnder Filter.atTop (fun j =>
+    if ω ∈ levySmallJumpGoodSet hd hν
+    then levyBandPath K X ν (levyAnnulus (levyTruncationSeq hν j)) (max t 0) ω else 0)
+
+/-- On the good set, the annulus paths at `max t 0` converge to the compensated small-jump path. -/
+private lemma tendsto_annulusPath_max_levySmallJumpPath
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν)
+    {ω : Ω} (hω : ω ∈ levySmallJumpGoodSet hd hν) (t : ℝ) :
+    Tendsto (fun j => levyBandPath K X ν (levyAnnulus (levyTruncationSeq hν j)) (max t 0) ω)
+      atTop (𝓝 (levySmallJumpPath hd hν t ω)) := by
+  obtain ⟨L, hL⟩ := exists_tendsto_annulusPath hd hν
+    (levySmallJumpRaw_of_mem_goodSet hd hν hω) (le_max_right t 0)
+  have hval : levySmallJumpPath hd hν t ω = L := by
+    simp only [levySmallJumpPath]
+    rw [show (fun j => if ω ∈ levySmallJumpGoodSet hd hν
+        then levyBandPath K X ν (levyAnnulus (levyTruncationSeq hν j)) (max t 0) ω else 0)
+        = fun j => levyBandPath K X ν (levyAnnulus (levyTruncationSeq hν j)) (max t 0) ω
+        from by funext j; rw [if_pos hω]]
+    exact hL.limUnder_eq
+  rw [hval]; exact hL
+
+/-- On the good set, the annulus paths at `t ≥ 0` converge to the compensated small-jump path. -/
+theorem tendsto_levyBandPath_levySmallJumpPath
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν)
+    {ω : Ω} (hω : ω ∈ levySmallJumpGoodSet hd hν) {t : ℝ} (ht : 0 ≤ t) :
+    Filter.Tendsto (fun j => levyBandPath K X ν (levyAnnulus (levyTruncationSeq hν j)) t ω)
+      Filter.atTop (nhds (levySmallJumpPath hd hν t ω)) := by
+  have h := tendsto_annulusPath_max_levySmallJumpPath hd hν hω t
+  rwa [max_eq_left ht] at h
+
+/-- The compensated small-jump path vanishes at time zero: every approximant is `0` there. -/
+@[simp] theorem levySmallJumpPath_zero
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν) :
+    levySmallJumpPath hd hν 0 = 0 := by
+  funext ω
+  have hconst : (fun j => if ω ∈ levySmallJumpGoodSet hd hν
+      then levyBandPath K X ν (levyAnnulus (levyTruncationSeq hν j)) (max (0 : ℝ) 0) ω else 0)
+      = fun _ => (0 : ℝ) := by
+    funext j
+    simp only [max_self]
+    split <;> simp [levyBandPath_zero]
+  simp only [levySmallJumpPath, Pi.zero_apply]
+  rw [hconst]
+  exact tendsto_const_nhds.limUnder_eq
+
+/-- The compensated small-jump path is a measurable function of the sample point at each time: the
+gated approximants are measurable and converge pointwise for every `ω`. -/
+theorem measurable_levySmallJumpPath
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν) (t : ℝ) :
+    Measurable (levySmallJumpPath hd hν t) := by
+  set g : ℕ → Ω → ℝ := fun j ω =>
+    if ω ∈ levySmallJumpGoodSet hd hν
+    then levyBandPath K X ν (levyAnnulus (levyTruncationSeq hν j)) (max t 0) ω else 0 with hg
+  have hgmeas : ∀ j, Measurable (g j) := fun j =>
+    Measurable.ite (measurableSet_levySmallJumpGoodSet hd hν)
+      (measurable_levyBandPath hd.measurable_count hd.measurable_point
+        (measurableSet_levyAnnulus _) (max t 0)) measurable_const
+  have htend : ∀ ω, Tendsto (fun j => g j ω) atTop (𝓝 (levySmallJumpPath hd hν t ω)) := by
+    intro ω
+    by_cases hω : ω ∈ levySmallJumpGoodSet hd hν
+    · simpa only [hg, if_pos hω] using tendsto_annulusPath_max_levySmallJumpPath hd hν hω t
+    · have hval : levySmallJumpPath hd hν t ω = 0 := by
+        simp only [levySmallJumpPath]
+        rw [show (fun j => if ω ∈ levySmallJumpGoodSet hd hν
+            then levyBandPath K X ν (levyAnnulus (levyTruncationSeq hν j)) (max t 0) ω else 0)
+            = fun _ => (0 : ℝ) from by funext j; rw [if_neg hω]]
+        exact tendsto_const_nhds.limUnder_eq
+      simp only [hg, if_neg hω, hval]
+      exact tendsto_const_nhds
+  exact measurable_of_tendsto_metrizable hgmeas (tendsto_pi_nhds.mpr htend)
+
+/-- **The compensated small-jump path is càdlàg for every `ω`.** Off the good set the path is
+identically `0` (hence càdlàg by `isCadlag_const`); this unconditional gating is exactly why the
+statement holds for *every* `ω`, not merely almost every one. On the good set it is the uniform-on-
+compacts limit of the càdlàg annulus paths (composed with `max · 0`), hence càdlàg by
+`isCadlag_of_tendstoUniformlyOn`. -/
+theorem isCadlag_levySmallJumpPath
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν) :
+    ∀ ω, IsCadlag (fun t : ℝ => levySmallJumpPath hd hν t ω) := by
+  intro ω
+  by_cases hω : ω ∈ levySmallJumpGoodSet hd hν
+  · have hraw := levySmallJumpRaw_of_mem_goodSet hd hν hω
+    refine isCadlag_of_tendstoUniformlyOn
+      (F := fun j t => levyBandPath K X ν (levyAnnulus (levyTruncationSeq hν j)) (max t 0) ω)
+      (fun j => ?_) (fun T => ?_)
+    · exact isCadlag_comp_max_zero (isCadlag_levyBandPath_of_finite ω (fun T => hraw.1 T j))
+        (by simp [levyBandPath_zero])
+    · obtain ⟨T', hT'⟩ := exists_nat_ge T
+      exact ((uniformCauchySeqOn_annulusPath_max hd hν hraw T').mono
+        (Set.Iic_subset_Iic.mpr hT')).tendstoUniformlyOn_of_tendsto
+        fun x _ => tendsto_annulusPath_max_levySmallJumpPath hd hν hω x
+  · have hzero : (fun t : ℝ => levySmallJumpPath hd hν t ω) = fun _ => (0 : ℝ) := by
+      funext t
+      simp only [levySmallJumpPath]
+      rw [show (fun j => if ω ∈ levySmallJumpGoodSet hd hν
+          then levyBandPath K X ν (levyAnnulus (levyTruncationSeq hν j)) (max t 0) ω else 0)
+          = fun _ => (0 : ℝ) from by funext j; rw [if_neg hω]]
+      exact tendsto_const_nhds.limUnder_eq
+    rw [hzero]; exact isCadlag_const
 
 end ProbabilityTheory
