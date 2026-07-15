@@ -874,4 +874,221 @@ theorem levyTruncationSeq_spec (hν : IsLevyMeasure ν) :
         ENNReal.ofReal (x ^ 2) ∂ν) ≤ (16 : ℝ≥0∞)⁻¹ ^ j :=
   (exists_levyTruncationSeq hν).choose_spec
 
+/-! ### The consecutive annulus slices
+
+`levySlice hν j` is the annular shell added when passing from `levyAnnulus (levyTruncationSeq hν j)`
+to `levyAnnulus (levyTruncationSeq hν (j+1))`. Its `ν`-second moment `∫ x² dν` is bounded by the tail
+moment `16⁻ʲ`, which makes the compensated band paths over successive annuli a Cauchy sequence in the
+maximal-inequality sense. -/
+
+/-- The consecutive annulus slice added between truncation steps `j` and `j+1`. -/
+noncomputable def levySlice (hν : IsLevyMeasure ν) (j : ℕ) : Set ℝ :=
+  levyAnnulus (levyTruncationSeq hν (j + 1)) \ levyAnnulus (levyTruncationSeq hν j)
+
+omit [SigmaFinite ν] in
+/-- The slice is contained in the small-jump band `(-1, 1)`. -/
+lemma levySlice_subset (hν : IsLevyMeasure ν) (j : ℕ) : levySlice hν j ⊆ Set.Ioo (-1 : ℝ) 1 :=
+  Set.sdiff_subset.trans (levyAnnulus_subset _)
+
+omit [SigmaFinite ν] in
+/-- The slice is measurable. -/
+lemma measurableSet_levySlice (hν : IsLevyMeasure ν) (j : ℕ) : MeasurableSet (levySlice hν j) :=
+  (measurableSet_levyAnnulus _).diff (measurableSet_levyAnnulus _)
+
+omit [SigmaFinite ν] in
+/-- The slice sits inside the central band complement `(-1, 1) \ levyAnnulus (levyTruncationSeq hν j)`,
+so its tail second moment is controlled by the truncation spec. -/
+lemma levySlice_subset_Ioo_diff (hν : IsLevyMeasure ν) (j : ℕ) :
+    levySlice hν j ⊆ Set.Ioo (-1 : ℝ) 1 \ levyAnnulus (levyTruncationSeq hν j) :=
+  fun _ hx => ⟨levyAnnulus_subset _ hx.1, hx.2⟩
+
+omit [SigmaFinite ν] in
+/-- The slice has finite `ν`-mass. -/
+lemma levySlice_finite_mass (hν : IsLevyMeasure ν) (j : ℕ) : ν (levySlice hν j) < ⊤ :=
+  (measure_mono Set.sdiff_subset).trans_lt (levyAnnulus_finite_mass hν _)
+
+omit [SigmaFinite ν] in
+/-- The annulus at step `j+1` is the disjoint union of the annulus at step `j` and the slice. -/
+lemma levyAnnulus_succ_eq (hν : IsLevyMeasure ν) (j : ℕ) :
+    levyAnnulus (levyTruncationSeq hν (j + 1))
+      = levyAnnulus (levyTruncationSeq hν j) ∪ levySlice hν j :=
+  (Set.union_sdiff_cancel
+    (levyAnnulus_mono ((levyTruncationSeq_spec hν).1 (Nat.lt_succ_self j)).le)).symm
+
+omit [SigmaFinite ν] in
+/-- The annulus at step `j` and the slice are disjoint. -/
+lemma disjoint_levyAnnulus_levySlice (hν : IsLevyMeasure ν) (j : ℕ) :
+    Disjoint (levyAnnulus (levyTruncationSeq hν j)) (levySlice hν j) :=
+  disjoint_sdiff_self_right
+
+omit [SigmaFinite ν] in
+/-- The `ν`-second moment of the slice is bounded by the geometric tail rate `16⁻ʲ`. -/
+lemma integral_sq_levySlice_le (hν : IsLevyMeasure ν) (j : ℕ) :
+    ∫ x in levySlice hν j, x ^ 2 ∂ν ≤ ((16 : ℝ)⁻¹) ^ j := by
+  have hlint : (∫⁻ x in levySlice hν j, ENNReal.ofReal (x ^ 2) ∂ν)
+      ≤ ∫⁻ x in Set.Ioo (-1 : ℝ) 1 \ levyAnnulus (levyTruncationSeq hν j),
+          ENNReal.ofReal (x ^ 2) ∂ν :=
+    lintegral_mono' (Measure.restrict_mono (levySlice_subset_Ioo_diff hν j) le_rfl) le_rfl
+  have hbound : (∫⁻ x in levySlice hν j, ENNReal.ofReal (x ^ 2) ∂ν) ≤ (16 : ℝ≥0∞)⁻¹ ^ j :=
+    hlint.trans ((levyTruncationSeq_spec hν).2 j)
+  have hne : (16 : ℝ≥0∞)⁻¹ ^ j ≠ ⊤ :=
+    (ENNReal.pow_lt_top (ENNReal.inv_lt_top.mpr (by norm_num))).ne
+  calc ∫ x in levySlice hν j, x ^ 2 ∂ν
+      = (ENNReal.ofReal (∫ x in levySlice hν j, x ^ 2 ∂ν)).toReal :=
+        (ENNReal.toReal_ofReal (integral_nonneg fun x => sq_nonneg x)).symm
+    _ = (∫⁻ x in levySlice hν j, ENNReal.ofReal (x ^ 2) ∂ν).toReal := by
+        rw [ofReal_integral_sq (measurableSet_levySlice hν j) (levySlice_subset hν j) hν]
+    _ ≤ ((16 : ℝ≥0∞)⁻¹ ^ j).toReal := ENNReal.toReal_mono hne hbound
+    _ = ((16 : ℝ)⁻¹) ^ j := by
+        rw [ENNReal.toReal_pow, ENNReal.toReal_inv]; norm_num
+
+/-! ### The almost-sure good event
+
+The compensated small-jump path is defined only on a measurable **good set** carved out so that every
+sample point in it enjoys the pathwise properties needed for uniform convergence: finitely many active
+pieces in each bounded window (for both the annuli and the slices, giving càdlàg approximants), and a
+Borel–Cantelli tail control of the slice paths over a countable time grid. The good set is the
+complement of a measurable hull of the (measure-zero) bad event, so it is measurable, almost sure, and
+contained in the raw event of full pathwise control. -/
+
+/-- The countable rational time grid on `[0, T]`, together with the right endpoint `T`. -/
+noncomputable def levyGrid (T : ℕ) : Set ℝ :=
+  (Set.range ((↑) : ℚ → ℝ) ∩ Set.Icc 0 (T : ℝ)) ∪ {(T : ℝ)}
+
+lemma levyGrid_countable (T : ℕ) : (levyGrid T).Countable :=
+  ((Set.countable_range _).mono Set.inter_subset_left).union (Set.countable_singleton _)
+
+lemma levyGrid_subset_Icc (T : ℕ) : levyGrid T ⊆ Set.Icc 0 (T : ℝ) :=
+  Set.union_subset Set.inter_subset_right
+    (Set.singleton_subset_iff.mpr ⟨Nat.cast_nonneg T, le_rfl⟩)
+
+/-- The **bad grid event** at slice index `j` over the window `[0, T]`: the compensated slice path
+exceeds the geometric level `2⁻ʲ` at some grid time. Borel–Cantelli sums these over `j`. -/
+noncomputable def levyBadGrid (_hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ)
+    (hν : IsLevyMeasure ν) (T j : ℕ) : Set Ω :=
+  {ω | ∃ q ∈ levyGrid T, ((2 : ℝ)⁻¹) ^ j ≤ |levyBandPath K X ν (levySlice hν j) q ω|}
+
+/-- Task-4 maximal inequality applied to the slice path: the bad-grid event has measure at most
+`√T · 2⁻ʲ`. The `√(T · ∫_slice x²) ≤ √T · 4⁻ʲ` bound, divided by the level `2⁻ʲ`, collapses to
+`√T · 2⁻ʲ`. -/
+lemma measure_levyBadGrid_le [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν)
+    (T j : ℕ) :
+    μ (levyBadGrid hd hν T j) ≤ ENNReal.ofReal (Real.sqrt (T : ℝ) * ((2 : ℝ)⁻¹) ^ j) := by
+  set ε : ℝ≥0 := ((2 : ℝ≥0)⁻¹) ^ j with hεdef
+  have hεR : (ε : ℝ) = ((2 : ℝ)⁻¹) ^ j := by rw [hεdef]; push_cast; ring
+  have hεpos : 0 < ε := by rw [hεdef]; positivity
+  have hev : levyBadGrid hd hν T j
+      = {ω | ∃ t ∈ levyGrid T, (ε : ℝ) ≤ |levyBandPath K X ν (levySlice hν j) t ω|} := by
+    simp only [levyBadGrid, hεR]
+  rw [hev]
+  refine (measure_countable_sup_levyBandPath_ge hd hν (measurableSet_levySlice hν j)
+    (levySlice_subset hν j) (levySlice_finite_mass hν j) (Nat.cast_nonneg T)
+    (levyGrid_countable T) (levyGrid_subset_Icc T) hεpos).trans ?_
+  -- the real-level bound `√(T · ∫_slice x²) / ε ≤ √T · 2⁻ʲ`
+  have hTnn : (0 : ℝ) ≤ (T : ℝ) := Nat.cast_nonneg T
+  have hIle : (∫ x in levySlice hν j, x ^ 2 ∂ν) ≤ ((16 : ℝ)⁻¹) ^ j := integral_sq_levySlice_le hν j
+  have hsqrt16 : Real.sqrt (((16 : ℝ)⁻¹) ^ j) = ((4 : ℝ)⁻¹) ^ j := by
+    have hthis : (((4 : ℝ)⁻¹) ^ j) ^ 2 = ((16 : ℝ)⁻¹) ^ j := by
+      rw [← pow_mul, mul_comm, pow_mul, show ((4 : ℝ)⁻¹) ^ 2 = (16 : ℝ)⁻¹ by norm_num]
+    rw [← hthis, Real.sqrt_sq (by positivity)]
+  have step1 : Real.sqrt ((T : ℝ) * ∫ x in levySlice hν j, x ^ 2 ∂ν)
+      ≤ Real.sqrt (T : ℝ) * ((4 : ℝ)⁻¹) ^ j := by
+    rw [← hsqrt16, ← Real.sqrt_mul hTnn]
+    exact Real.sqrt_le_sqrt (mul_le_mul_of_nonneg_left hIle hTnn)
+  have step2 : Real.sqrt (T : ℝ) * ((2 : ℝ)⁻¹) ^ j * ((2 : ℝ)⁻¹) ^ j
+      = Real.sqrt (T : ℝ) * ((4 : ℝ)⁻¹) ^ j := by
+    rw [mul_assoc, ← mul_pow, show (2 : ℝ)⁻¹ * (2 : ℝ)⁻¹ = (4 : ℝ)⁻¹ by norm_num]
+  have hreal : Real.sqrt ((T : ℝ) * ∫ x in levySlice hν j, x ^ 2 ∂ν) / (ε : ℝ)
+      ≤ Real.sqrt (T : ℝ) * ((2 : ℝ)⁻¹) ^ j := by
+    rw [hεR, div_le_iff₀ (by positivity), step2]
+    exact step1
+  calc ENNReal.ofReal (Real.sqrt ((T : ℝ) * ∫ x in levySlice hν j, x ^ 2 ∂ν)) / (ε : ℝ≥0∞)
+      = ENNReal.ofReal (Real.sqrt ((T : ℝ) * ∫ x in levySlice hν j, x ^ 2 ∂ν))
+          / ENNReal.ofReal (ε : ℝ) := by rw [ENNReal.ofReal_coe_nnreal]
+    _ = ENNReal.ofReal (Real.sqrt ((T : ℝ) * ∫ x in levySlice hν j, x ^ 2 ∂ν) / (ε : ℝ)) :=
+        (ENNReal.ofReal_div_of_pos (by rw [hεR]; positivity)).symm
+    _ ≤ ENNReal.ofReal (Real.sqrt (T : ℝ) * ((2 : ℝ)⁻¹) ^ j) := ENNReal.ofReal_le_ofReal hreal
+
+/-- The bad-grid measures are summable at each `T`: `∑ⱼ √T · 2⁻ʲ = 2√T < ∞`. -/
+lemma tsum_measure_levyBadGrid_ne_top [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν) (T : ℕ) :
+    (∑' j, μ (levyBadGrid hd hν T j)) ≠ ⊤ := by
+  have hsummable : Summable (fun j : ℕ => Real.sqrt (T : ℝ) * ((2 : ℝ)⁻¹) ^ j) :=
+    (summable_geometric_of_lt_one (by norm_num) (by norm_num)).mul_left _
+  have hle : (∑' j, μ (levyBadGrid hd hν T j))
+      ≤ ∑' j, ENNReal.ofReal (Real.sqrt (T : ℝ) * ((2 : ℝ)⁻¹) ^ j) :=
+    ENNReal.tsum_le_tsum (measure_levyBadGrid_le hd hν T)
+  rw [← ENNReal.ofReal_tsum_of_nonneg (fun j => by positivity) hsummable] at hle
+  exact ne_top_of_le_ne_top ENNReal.ofReal_ne_top hle
+
+/-- The **raw good event**: full pathwise control at `ω`. Its three clauses are (i) window finiteness
+for every annulus, (ii) window finiteness for every slice, (iii) Borel–Cantelli tail control of the
+slice paths over each grid. -/
+def levySmallJumpRaw (_hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ)
+    (hν : IsLevyMeasure ν) (ω : Ω) : Prop :=
+  (∀ T j : ℕ, {k | ∃ n ∈ Finset.range (K k ω),
+      X k n ω ∈ Set.Ioc 0 (T : ℝ) ×ˢ levyAnnulus (levyTruncationSeq hν j)}.Finite) ∧
+  (∀ T j : ℕ, {k | ∃ n ∈ Finset.range (K k ω),
+      X k n ω ∈ Set.Ioc 0 (T : ℝ) ×ˢ levySlice hν j}.Finite) ∧
+  (∀ T : ℕ, ∀ᶠ j in atTop, ∀ q ∈ levyGrid T,
+      |levyBandPath K X ν (levySlice hν j) q ω| < ((2 : ℝ)⁻¹) ^ j)
+
+/-- The raw good event holds almost surely. -/
+lemma ae_levySmallJumpRaw [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν) :
+    ∀ᵐ ω ∂μ, levySmallJumpRaw hd hν ω := by
+  have ha : ∀ᵐ ω ∂μ, ∀ T j : ℕ, {k | ∃ n ∈ Finset.range (K k ω),
+      X k n ω ∈ Set.Ioc 0 (T : ℝ) ×ˢ levyAnnulus (levyTruncationSeq hν j)}.Finite := by
+    rw [ae_all_iff]; intro T; rw [ae_all_iff]; intro j
+    exact ae_finite_pieces_mem hd (measurableSet_Ioc.prod (measurableSet_levyAnnulus _))
+      (volume_prod_Ioc_prod_lt_top (m := ν) (s := 0) (t := (T : ℝ))
+        (levyAnnulus_finite_mass hν (levyTruncationSeq hν j)))
+  have hb : ∀ᵐ ω ∂μ, ∀ T j : ℕ, {k | ∃ n ∈ Finset.range (K k ω),
+      X k n ω ∈ Set.Ioc 0 (T : ℝ) ×ˢ levySlice hν j}.Finite := by
+    rw [ae_all_iff]; intro T; rw [ae_all_iff]; intro j
+    exact ae_finite_pieces_mem hd (measurableSet_Ioc.prod (measurableSet_levySlice hν j))
+      (volume_prod_Ioc_prod_lt_top (m := ν) (s := 0) (t := (T : ℝ)) (levySlice_finite_mass hν j))
+  have hc : ∀ᵐ ω ∂μ, ∀ T : ℕ, ∀ᶠ j in atTop, ∀ q ∈ levyGrid T,
+      |levyBandPath K X ν (levySlice hν j) q ω| < ((2 : ℝ)⁻¹) ^ j := by
+    rw [ae_all_iff]; intro T
+    filter_upwards [ae_eventually_notMem (tsum_measure_levyBadGrid_ne_top hd hν T)] with ω hω
+    filter_upwards [hω] with j hj
+    intro q hq
+    by_contra hle
+    exact hj ⟨q, hq, not_lt.mp hle⟩
+  filter_upwards [ha, hb, hc] with ω h1 h2 h3
+  exact ⟨h1, h2, h3⟩
+
+/-- The **good set** for the compensated small-jump path: the complement of a measurable hull of the
+measure-zero bad event. It is measurable, almost sure, and every point in it satisfies the raw
+pathwise-control event. -/
+noncomputable def levySmallJumpGoodSet
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν) : Set Ω :=
+  (MeasureTheory.toMeasurable μ {ω | ¬ levySmallJumpRaw hd hν ω})ᶜ
+
+/-- The good set is measurable. -/
+theorem measurableSet_levySmallJumpGoodSet
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν) :
+    MeasurableSet (levySmallJumpGoodSet hd hν) :=
+  (measurableSet_toMeasurable _ _).compl
+
+/-- Every sample point in the good set satisfies the raw pathwise-control event. -/
+lemma levySmallJumpRaw_of_mem_goodSet
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν)
+    {ω : Ω} (hω : ω ∈ levySmallJumpGoodSet hd hν) : levySmallJumpRaw hd hν ω := by
+  by_contra h
+  exact hω (subset_toMeasurable μ {ω | ¬ levySmallJumpRaw hd hν ω} h)
+
+/-- The good set is almost sure. -/
+theorem ae_mem_levySmallJumpGoodSet [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν) :
+    ∀ᵐ ω ∂μ, ω ∈ levySmallJumpGoodSet hd hν := by
+  rw [ae_iff]
+  have hset : {ω | ω ∉ levySmallJumpGoodSet hd hν}
+      = MeasureTheory.toMeasurable μ {ω | ¬ levySmallJumpRaw hd hν ω} := by
+    ext ω; simp only [levySmallJumpGoodSet, Set.mem_setOf_eq, Set.mem_compl_iff, not_not]
+  rw [hset, measure_toMeasurable]
+  exact ae_iff.mp (ae_levySmallJumpRaw hd hν)
+
 end ProbabilityTheory
