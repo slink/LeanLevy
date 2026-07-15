@@ -72,6 +72,9 @@ drift. Almost surely it agrees with the compensated Poisson integral of the band
   càdlàg (unconditional through the off-good-set-zero gating).
 * `ProbabilityTheory.measurable_levySmallJumpPath` — the compensated small-jump path is measurable at
   each time.
+* `ProbabilityTheory.levySmallJumpPath_ae_eq` — for each fixed `t ≥ 0`, the compensated small-jump
+  path agrees `μ`-almost everywhere with the `L²` small-jump element `levyCompensatedSmallJump`
+  (a per-time modification statement; the null set may depend on `t`).
 -/
 
 open MeasureTheory Filter Topology
@@ -1556,5 +1559,45 @@ private lemma tendsto_eLpNorm_levyAnnulusElement_sub [IsProbabilityMeasure μ]
       - ⇑(levyCompensatedSmallJump hd hν t)) 2 μ).toReal) atTop (𝓝 0) :=
     squeeze_zero (fun j => ENNReal.toReal_nonneg) htoReal_le hgeo
   exact (ENNReal.tendsto_toReal_iff hne (by simp)).mp (by simpa using htoReal)
+
+/-- **The compensated small-jump path is a modification of the small-jump integral.** For each
+fixed time `t ≥ 0`, the compensated small-jump path `levySmallJumpPath hd hν t` agrees
+`μ`-almost everywhere with the `L²` small-jump element `levyCompensatedSmallJump hd hν t`.
+
+This is a per-time almost-everywhere identification: the null set may depend on `t`, and no
+process-level (uniform-in-`t`) statement is claimed. The truncation elements converge to the
+small-jump element in `L²(μ)`, hence in measure, hence almost everywhere along a subsequence
+`ns`; on the intersection of the good set with the countably many almost-sure events, the annulus
+paths along `ns` converge to both `levySmallJumpPath hd hν t ω` and
+`levyCompensatedSmallJump hd hν t ω`, and limits in `ℝ` are unique. -/
+theorem levySmallJumpPath_ae_eq [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν)
+    {t : ℝ} (ht : 0 ≤ t) :
+    levySmallJumpPath hd hν t =ᵐ[μ] levyCompensatedSmallJump hd hν t := by
+  -- `L²` convergence upgrades to convergence in measure, hence a.e. along a subsequence
+  have hTIM : TendstoInMeasure μ (fun j => ⇑(levyAnnulusElement hd hν t j)) atTop
+      ⇑(levyCompensatedSmallJump hd hν t) :=
+    tendstoInMeasure_of_tendsto_eLpNorm (p := 2) (by norm_num)
+      (fun j => Lp.aestronglyMeasurable _) (Lp.aestronglyMeasurable _)
+      (tendsto_eLpNorm_levyAnnulusElement_sub hd hν ht)
+  obtain ⟨ns, hns, hae⟩ := hTIM.exists_seq_tendsto_ae
+  -- glue the countably many almost-sure events
+  have hpath : ∀ᵐ ω ∂μ, ∀ j : ℕ,
+      levyBandPath K X ν (levyAnnulus (levyTruncationSeq hν j)) t ω
+        = levyAnnulusElement hd hν t j ω := by
+    rw [ae_all_iff]
+    exact fun j => levyBandPath_ae_eq_levyAnnulusElement hd hν ht j
+  filter_upwards [ae_mem_levySmallJumpGoodSet hd hν, hpath, hae] with ω hgood hp hconv
+  -- the annulus paths along the subsequence converge to the compensated small-jump path ...
+  have h1 : Tendsto (fun i => levyBandPath K X ν
+      (levyAnnulus (levyTruncationSeq hν (ns i))) t ω) atTop
+      (𝓝 (levySmallJumpPath hd hν t ω)) :=
+    (tendsto_levyBandPath_levySmallJumpPath hd hν hgood ht).comp hns.tendsto_atTop
+  -- ... and to the small-jump element, through the per-`j` a.e. identifications
+  have h2 : Tendsto (fun i => levyBandPath K X ν
+      (levyAnnulus (levyTruncationSeq hν (ns i))) t ω) atTop
+      (𝓝 (levyCompensatedSmallJump hd hν t ω)) :=
+    hconv.congr fun i => (hp (ns i)).symm
+  exact tendsto_nhds_unique h1 h2
 
 end ProbabilityTheory
