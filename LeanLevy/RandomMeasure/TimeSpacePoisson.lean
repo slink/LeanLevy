@@ -1342,7 +1342,7 @@ lemma eLpNorm_sq_bandFun {C : Set ℝ} (hC : MeasurableSet C) (s t : ℝ) :
 /-- The `L²(μ)` distance between the compensated small-jump band integral over `(s, t]` and its
 truncation to a mark set `B ⊆ (-1, 1)` of finite mass equals the `L²(volume.prod ν)` seminorm of the
 band indicator over the complementary slice `(s, t] × ((-1, 1) \ B)`. -/
-private lemma eLpNorm_smallJumpBand_sub_bandFun [IsProbabilityMeasure μ]
+lemma eLpNorm_smallJumpBand_sub_bandFun [IsProbabilityMeasure μ]
     (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν)
     (s t : ℝ) {B : Set ℝ} (hB : MeasurableSet B) (hBsub : B ⊆ Set.Ioo (-1) 1) (hBfin : ν B < ⊤) :
     eLpNorm (compensatedPoissonIntegral hd ((memLp_two_smallJumpBandFun hν s t).toLp

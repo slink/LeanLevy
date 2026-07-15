@@ -5,6 +5,7 @@ Authors: LeanLevy Contributors
 -/
 import LeanLevy.RandomMeasure.LevyJumpLaw
 import LeanLevy.Processes.Cadlag
+import Mathlib.MeasureTheory.Function.ConvergenceInMeasure
 import Mathlib.Probability.Martingale.OptionalStopping
 
 /-!
@@ -1442,5 +1443,118 @@ theorem isCadlag_levySmallJumpPath
           = fun _ => (0 : ℝ) from by funext j; rw [if_neg hω]]
       exact tendsto_const_nhds.limUnder_eq
     rw [hzero]; exact isCadlag_const
+
+/-! ### The limit path is a modification of the small-jump integral
+
+The truncation elements — the compensated Poisson integrals of the band test functions over
+`(0, t] × levyAnnulus (levyTruncationSeq hν j)` — converge in `L²(μ)` to the compensated
+small-jump integral `levyCompensatedSmallJump hd hν t`: the distance is the complementary-slice
+seminorm (`eLpNorm_smallJumpBand_sub_bandFun`), whose square is at most `t · 16⁻ʲ` by the
+truncation spec. `L²` convergence upgrades to convergence in measure and hence to almost-everywhere
+convergence along a subsequence; along it the pathwise annulus approximants converge to both the
+compensated small-jump path (the pointwise limit on the good set) and the `L²` element, so the two
+agree almost everywhere at each fixed time `t ≥ 0`. -/
+
+/-- The **truncation element** at annulus step `j`: the compensated Poisson integral of the band
+test function over `(0, t] × levyAnnulus (levyTruncationSeq hν j)`, as an element of `L²(μ)`. -/
+private noncomputable def levyAnnulusElement [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν)
+    (t : ℝ) (j : ℕ) : Lp ℝ 2 μ :=
+  compensatedPoissonIntegral hd ((memLp_two_bandFun
+    (measurableSet_levyAnnulus (levyTruncationSeq hν j))
+    (levyAnnulus_subset (levyTruncationSeq hν j))
+    (levyAnnulus_finite_mass hν (levyTruncationSeq hν j)) 0 t).toLp _)
+
+/-- The pathwise annulus approximant agrees almost everywhere with the truncation element (the
+Task-3 `L²` anchor at the annulus band). -/
+private lemma levyBandPath_ae_eq_levyAnnulusElement [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν)
+    {t : ℝ} (ht : 0 ≤ t) (j : ℕ) :
+    (fun ω => levyBandPath K X ν (levyAnnulus (levyTruncationSeq hν j)) t ω)
+      =ᵐ[μ] levyAnnulusElement hd hν t j :=
+  levyBandPath_ae_eq_compensated hd (measurableSet_levyAnnulus (levyTruncationSeq hν j))
+    (levyAnnulus_subset (levyTruncationSeq hν j))
+    (levyAnnulus_finite_mass hν (levyTruncationSeq hν j)) ht
+
+/-- **`L²` convergence of the truncation elements.** The `L²(μ)` distance from the truncation
+element at step `j` to the compensated small-jump integral is the seminorm of the band indicator
+over the complementary slice `(0, t] × ((-1, 1) \ levyAnnulus (levyTruncationSeq hν j))`, whose
+square is at most `t · 16⁻ʲ`; hence the distance vanishes as `j → ∞`. -/
+private lemma tendsto_eLpNorm_levyAnnulusElement_sub [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν)
+    {t : ℝ} (ht : 0 ≤ t) :
+    Tendsto (fun j => eLpNorm
+        (⇑(levyAnnulusElement hd hν t j) - ⇑(levyCompensatedSmallJump hd hν t)) 2 μ)
+      atTop (𝓝 0) := by
+  -- the distance flips to the `Lp` difference of the elements
+  have hcoe : ∀ j : ℕ,
+      eLpNorm (⇑(levyAnnulusElement hd hν t j) - ⇑(levyCompensatedSmallJump hd hν t)) 2 μ
+        = eLpNorm (⇑(levyCompensatedSmallJump hd hν t - levyAnnulusElement hd hν t j)) 2 μ := by
+    intro j
+    rw [← neg_sub (⇑(levyCompensatedSmallJump hd hν t)) (⇑(levyAnnulusElement hd hν t j)),
+      eLpNorm_neg]
+    exact (eLpNorm_congr_ae (Lp.coeFn_sub _ _)).symm
+  -- the `Lp` distance is the complementary-slice seminorm
+  have hdist : ∀ j : ℕ,
+      eLpNorm (⇑(levyCompensatedSmallJump hd hν t - levyAnnulusElement hd hν t j)) 2 μ
+        = eLpNorm ((Set.Ioc 0 t ×ˢ (Set.Ioo (-1 : ℝ) 1
+              \ levyAnnulus (levyTruncationSeq hν j))).indicator fun p : ℝ × ℝ => p.2) 2
+            (volume.prod ν) := fun j =>
+    eLpNorm_smallJumpBand_sub_bandFun hd hν 0 t
+      (measurableSet_levyAnnulus (levyTruncationSeq hν j))
+      (levyAnnulus_subset (levyTruncationSeq hν j))
+      (levyAnnulus_finite_mass hν (levyTruncationSeq hν j))
+  -- squared distance bounded by the geometric tail moment
+  have hsq_le : ∀ j : ℕ,
+      (eLpNorm (⇑(levyAnnulusElement hd hν t j)
+          - ⇑(levyCompensatedSmallJump hd hν t)) 2 μ) ^ 2
+        ≤ ENNReal.ofReal t * (16 : ℝ≥0∞)⁻¹ ^ j := by
+    intro j
+    rw [hcoe j, hdist j,
+      eLpNorm_sq_bandFun (measurableSet_Ioo.diff (measurableSet_levyAnnulus _)) 0 t, sub_zero]
+    exact mul_le_mul_right ((levyTruncationSeq_spec hν).2 j) _
+  have hne : ∀ j : ℕ,
+      eLpNorm (⇑(levyAnnulusElement hd hν t j) - ⇑(levyCompensatedSmallJump hd hν t)) 2 μ ≠ ⊤ :=
+    fun j => by rw [hcoe j]; exact Lp.eLpNorm_ne_top _
+  -- the real-valued distances are squeezed by the geometric envelope `√t · 4⁻ʲ`
+  have htoReal_le : ∀ j : ℕ,
+      (eLpNorm (⇑(levyAnnulusElement hd hν t j)
+          - ⇑(levyCompensatedSmallJump hd hν t)) 2 μ).toReal
+        ≤ Real.sqrt t * ((4 : ℝ)⁻¹) ^ j := by
+    intro j
+    have hbne : ENNReal.ofReal t * (16 : ℝ≥0∞)⁻¹ ^ j ≠ ⊤ :=
+      ENNReal.mul_ne_top ENNReal.ofReal_ne_top
+        (ENNReal.pow_lt_top (ENNReal.inv_lt_top.mpr (by norm_num))).ne
+    have hsq' : ((eLpNorm (⇑(levyAnnulusElement hd hν t j)
+          - ⇑(levyCompensatedSmallJump hd hν t)) 2 μ).toReal) ^ 2
+        ≤ t * ((16 : ℝ)⁻¹) ^ j := by
+      rw [← ENNReal.toReal_pow]
+      calc ((eLpNorm (⇑(levyAnnulusElement hd hν t j)
+              - ⇑(levyCompensatedSmallJump hd hν t)) 2 μ) ^ 2).toReal
+          ≤ (ENNReal.ofReal t * (16 : ℝ≥0∞)⁻¹ ^ j).toReal :=
+            ENNReal.toReal_mono hbne (hsq_le j)
+        _ = t * ((16 : ℝ)⁻¹) ^ j := by
+            rw [ENNReal.toReal_mul, ENNReal.toReal_ofReal ht, ENNReal.toReal_pow,
+              ENNReal.toReal_inv]
+            norm_num
+    have hsqrt16 : Real.sqrt (((16 : ℝ)⁻¹) ^ j) = ((4 : ℝ)⁻¹) ^ j := by
+      have h4 : (((4 : ℝ)⁻¹) ^ j) ^ 2 = ((16 : ℝ)⁻¹) ^ j := by
+        rw [← pow_mul, mul_comm, pow_mul, show ((4 : ℝ)⁻¹) ^ 2 = (16 : ℝ)⁻¹ by norm_num]
+      rw [← h4, Real.sqrt_sq (by positivity)]
+    calc (eLpNorm (⇑(levyAnnulusElement hd hν t j)
+            - ⇑(levyCompensatedSmallJump hd hν t)) 2 μ).toReal
+        = Real.sqrt (((eLpNorm (⇑(levyAnnulusElement hd hν t j)
+            - ⇑(levyCompensatedSmallJump hd hν t)) 2 μ).toReal) ^ 2) :=
+          (Real.sqrt_sq ENNReal.toReal_nonneg).symm
+      _ ≤ Real.sqrt (t * ((16 : ℝ)⁻¹) ^ j) := Real.sqrt_le_sqrt hsq'
+      _ = Real.sqrt t * ((4 : ℝ)⁻¹) ^ j := by rw [Real.sqrt_mul ht, hsqrt16]
+  have hgeo : Tendsto (fun j : ℕ => Real.sqrt t * ((4 : ℝ)⁻¹) ^ j) atTop (𝓝 0) := by
+    have h := (tendsto_pow_atTop_nhds_zero_of_lt_one
+      (by norm_num : (0 : ℝ) ≤ (4 : ℝ)⁻¹) (by norm_num)).const_mul (Real.sqrt t)
+    simpa using h
+  have htoReal : Tendsto (fun j => (eLpNorm (⇑(levyAnnulusElement hd hν t j)
+      - ⇑(levyCompensatedSmallJump hd hν t)) 2 μ).toReal) atTop (𝓝 0) :=
+    squeeze_zero (fun j => ENNReal.toReal_nonneg) htoReal_le hgeo
+  exact (ENNReal.tendsto_toReal_iff hne (by simp)).mp (by simpa using htoReal)
 
 end ProbabilityTheory
