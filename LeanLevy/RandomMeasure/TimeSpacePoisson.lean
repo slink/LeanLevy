@@ -1334,7 +1334,7 @@ private lemma norm_charFun_map_sub_le [IsProbabilityMeasure μ] {V W : Ω → �
     _ = |ξ| * ∫ ω, |V ω - W ω| ∂μ := integral_const_mul _ _
 
 /-- The squared `L²` seminorm of a band indicator over a measurable mark set `C`. -/
-private lemma eLpNorm_sq_bandFun {C : Set ℝ} (hC : MeasurableSet C) (s t : ℝ) :
+lemma eLpNorm_sq_bandFun {C : Set ℝ} (hC : MeasurableSet C) (s t : ℝ) :
     (eLpNorm ((Set.Ioc s t ×ˢ C).indicator fun p : ℝ × ℝ => p.2) 2 (volume.prod ν)) ^ 2
       = ENNReal.ofReal (t - s) * ∫⁻ x in C, ENNReal.ofReal (x ^ 2) ∂ν := by
   rw [eLpNorm_two_sq, lintegral_enorm_rpow_band hC, setLIntegral_band_snd_sq hC]
