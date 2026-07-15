@@ -1,0 +1,31 @@
+cff-version: 1.2.0
+message: "If you use this formalization, please cite it as below."
+title: "LeanLevy: Lévy processes in Lean 4"
+type: software
+authors:
+  - family-names: Link
+    given-names: Shmuel
+    orcid: "https://orcid.org/0000-0002-2343-0471"
+    alias: slink
+license: MIT
+repository-code: "https://github.com/slink/LeanLevy"
+keywords:
+  - Lean 4
+  - mathlib
+  - formalized mathematics
+  - probability theory
+  - Lévy processes
+  - Lévy–Khintchine
+  - Poisson random measures
+  - Lévy–Itô decomposition
+version: 0.1.0
+date-released: 2026-07-14
+abstract: >-
+  A Lean 4 formalization of Lévy processes over mathlib: the Lévy–Khintchine
+  representation theorem (representation, converse, and uniqueness), Poisson
+  random measures with compensated L² integration, the time-indexed theory
+  with its martingale structure, and the jump part of the Lévy–Itô
+  decomposition — the assembled jump law at zero Gaussian variance, its
+  infinite divisibility, and the in-law realization of pure-jump Lévy triples
+  by processes with independent, stationary increments (no path regularity
+  claimed).
