@@ -52,6 +52,7 @@ drift. Almost surely it agrees with the compensated Poisson integral of the band
 -/
 
 open MeasureTheory Filter Topology
+open scoped NNReal ENNReal
 
 namespace ProbabilityTheory
 
@@ -259,5 +260,176 @@ theorem levyBandPath_ae_eq_compensated [IsProbabilityMeasure μ]
       exact hk (hfinsupp.mem_toFinset.mpr hne)
   simp only [levyBandPath, bandJumpSum, compensatedPoissonSum, compensatedPieceSum]
   rw [hsummable_piece.tsum_sub hHasSum.summable, hHasSum.tsum_eq, hint]
+
+/-! ### The compensated band martingale
+
+For a band `A ⊆ (-1, 1)` of finite `ν`-mass the compensated band integral (an element of `L²(μ)`) is
+a martingale for the natural filtration `prmFiltration`. The increment over a time step `(s, t]` is
+the compensated Poisson integral of the band test function `1_{(s,t] × A}(r, x) · x`, supported in the
+disjoint band region `(s, t] × ℝ`; hence it is independent of the prefix `(-∞, s] × ℝ` and has mean
+zero, so its conditional expectation given the past vanishes. -/
+
+/-- The band test function `1_{(s,t] × A}(r, x) · x`, viewed in `L²`, vanishes almost everywhere
+outside any product region `B ×ˢ univ` whose time factor contains `(s, t]`. -/
+private lemma bandFun_toLp_ae_zero_off (hA : MeasurableSet A) (hAsub : A ⊆ Set.Ioo (-1 : ℝ) 1)
+    (hAfin : ν A < ⊤) {s t : ℝ} {B : Set ℝ} (hB : Set.Ioc s t ⊆ B) :
+    ∀ᵐ p ∂((volume : Measure ℝ).prod ν), p ∉ B ×ˢ (Set.univ : Set ℝ) →
+      (memLp_two_bandFun hA hAsub hAfin s t).toLp
+          ((Set.Ioc s t ×ˢ A).indicator fun q : ℝ × ℝ => q.2) p = 0 := by
+  filter_upwards [MemLp.coeFn_toLp (memLp_two_bandFun hA hAsub hAfin s t)] with p hp hpB
+  rw [hp]
+  apply Set.indicator_of_notMem
+  intro hmem
+  exact hpB ⟨hB hmem.1, Set.mem_univ _⟩
+
+/-- The compensated band integral over `(0, t]` is almost-everywhere strongly measurable with respect
+to the evaluation sigma-algebra of the prefix region `(-∞, t] × ℝ`. -/
+private lemma aestronglyMeasurable_levyBandPath_prefix [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ)
+    (hA : MeasurableSet A) (hAsub : A ⊆ Set.Ioo (-1 : ℝ) 1) (hAfin : ν A < ⊤) (t : ℝ≥0) :
+    AEStronglyMeasurable[prmEvalSigma K X (volume.prod ν) (Set.Iic (t : ℝ) ×ˢ Set.univ)]
+      (compensatedPoissonIntegral hd ((memLp_two_bandFun hA hAsub hAfin 0 (t : ℝ)).toLp _)) μ :=
+  aestronglyMeasurable_compensatedPoissonIntegral_prmEvalSigma hd
+    (measurableSet_Iic.prod MeasurableSet.univ)
+    (bandFun_toLp_ae_zero_off hA hAsub hAfin Set.Ioc_subset_Iic_self)
+
+/-- The compensated band integral over `(s, t]` is almost-everywhere strongly measurable with respect
+to the evaluation sigma-algebra of the band region `(s, t] × ℝ`. -/
+theorem aestronglyMeasurable_levyBandPath_band [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ)
+    (hA : MeasurableSet A) (hAsub : A ⊆ Set.Ioo (-1 : ℝ) 1) (hAfin : ν A < ⊤) (s t : ℝ) :
+    AEStronglyMeasurable[prmEvalSigma K X (volume.prod ν) (Set.Ioc s t ×ˢ Set.univ)]
+      (compensatedPoissonIntegral hd ((memLp_two_bandFun hA hAsub hAfin s t).toLp _)) μ :=
+  aestronglyMeasurable_compensatedPoissonIntegral_prmEvalSigma hd
+    (measurableSet_Ioc.prod MeasurableSet.univ)
+    (bandFun_toLp_ae_zero_off hA hAsub hAfin (subset_refl _))
+
+/-- The increment of the compensated band integral over a time step `(s, t]` is the compensated
+integral of the band test function `1_{(s,t] × A}(r, x) · x`. -/
+private lemma compensatedBand_sub [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ)
+    (hA : MeasurableSet A) (hAsub : A ⊆ Set.Ioo (-1 : ℝ) 1) (hAfin : ν A < ⊤) {s t : ℝ}
+    (h0 : 0 ≤ s) (hst : s ≤ t) :
+    compensatedPoissonIntegral hd ((memLp_two_bandFun hA hAsub hAfin 0 t).toLp _)
+        - compensatedPoissonIntegral hd ((memLp_two_bandFun hA hAsub hAfin 0 s).toLp _)
+      = compensatedPoissonIntegral hd ((memLp_two_bandFun hA hAsub hAfin s t).toLp _) := by
+  have hdisj : Disjoint (Set.Ioc 0 s ×ˢ A) (Set.Ioc s t ×ˢ A) :=
+    Set.Disjoint.set_prod_left (Set.Ioc_disjoint_Ioc_of_le (le_refl s)) _ _
+  have hfun : ((Set.Ioc 0 t ×ˢ A).indicator fun p : ℝ × ℝ => p.2)
+      = (Set.Ioc 0 s ×ˢ A).indicator (fun p : ℝ × ℝ => p.2)
+        + (Set.Ioc s t ×ˢ A).indicator (fun p : ℝ × ℝ => p.2) := by
+    rw [← Set.Ioc_union_Ioc_eq_Ioc h0 hst, Set.union_prod, Set.indicator_union_of_disjoint hdisj]
+    rfl
+  have htoLp : (memLp_two_bandFun hA hAsub hAfin 0 t).toLp
+        ((Set.Ioc 0 t ×ˢ A).indicator fun p : ℝ × ℝ => p.2)
+      = (memLp_two_bandFun hA hAsub hAfin 0 s).toLp
+          ((Set.Ioc 0 s ×ˢ A).indicator fun p : ℝ × ℝ => p.2)
+        + (memLp_two_bandFun hA hAsub hAfin s t).toLp
+          ((Set.Ioc s t ×ˢ A).indicator fun p : ℝ × ℝ => p.2) := by
+    rw [← MemLp.toLp_add]
+    exact MemLp.toLp_congr _ _ (Filter.EventuallyEq.of_eq hfun)
+  rw [htoLp, compensatedPoissonIntegral_add, add_sub_cancel_left]
+
+/-- A `prmFiltration`-adapted representative of the compensated band integral over `(0, t]`. -/
+noncomputable def levyBandVersion [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (_hν : IsLevyMeasure ν)
+    (hA : MeasurableSet A) (hAsub : A ⊆ Set.Ioo (-1 : ℝ) 1) (hAfin : ν A < ⊤) (t : ℝ≥0) : Ω → ℝ :=
+  (aestronglyMeasurable_levyBandPath_prefix hd hA hAsub hAfin t).mk _
+
+/-- The adapted representative agrees almost everywhere with the compensated banded jump path. -/
+theorem levyBandVersion_ae_eq [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν)
+    (hA : MeasurableSet A) (hAsub : A ⊆ Set.Ioo (-1 : ℝ) 1) (hAfin : ν A < ⊤) (t : ℝ≥0) :
+    levyBandVersion hd hν hA hAsub hAfin t =ᵐ[μ] fun ω => levyBandPath K X ν A (t : ℝ) ω := by
+  simp only [levyBandVersion]
+  refine (aestronglyMeasurable_levyBandPath_prefix hd hA hAsub hAfin t).ae_eq_mk.symm.trans ?_
+  exact (levyBandPath_ae_eq_compensated hd hA hAsub hAfin (NNReal.coe_nonneg t)).symm
+
+/-- The adapted representative is strongly measurable with respect to the prefix-region evaluation
+sigma-algebra. -/
+private lemma stronglyMeasurable_levyBandVersion [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν)
+    (hA : MeasurableSet A) (hAsub : A ⊆ Set.Ioo (-1 : ℝ) 1) (hAfin : ν A < ⊤) (t : ℝ≥0) :
+    StronglyMeasurable[prmEvalSigma K X (volume.prod ν) (Set.Iic (t : ℝ) ×ˢ Set.univ)]
+      (levyBandVersion hd hν hA hAsub hAfin t) :=
+  (aestronglyMeasurable_levyBandPath_prefix hd hA hAsub hAfin t).stronglyMeasurable_mk
+
+/-- The adapted representative is integrable at each time. -/
+private lemma integrable_levyBandVersion [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν)
+    (hA : MeasurableSet A) (hAsub : A ⊆ Set.Ioo (-1 : ℝ) 1) (hAfin : ν A < ⊤) (t : ℝ≥0) :
+    Integrable (levyBandVersion hd hν hA hAsub hAfin t) μ := by
+  simp only [levyBandVersion]
+  exact ((Lp.memLp (compensatedPoissonIntegral hd
+    ((memLp_two_bandFun hA hAsub hAfin 0 (t : ℝ)).toLp _))).integrable one_le_two).congr
+    (aestronglyMeasurable_levyBandPath_prefix hd hA hAsub hAfin t).ae_eq_mk
+
+/-- **The compensated band integral is a martingale.** For a band `A ⊆ (-1, 1)` of finite `ν`-mass and
+the natural filtration `prmFiltration`, the adapted representative of the compensated band integral is
+a martingale: the increment over `(s, t]` is the compensated integral of the band test function, which
+is independent of the past and has mean zero. -/
+theorem martingale_levyBandVersion [IsProbabilityMeasure μ]
+    (hd : IsPoissonPointFamily K X ((volume : Measure ℝ).prod ν) μ) (hν : IsLevyMeasure ν)
+    (hA : MeasurableSet A) (hAsub : A ⊆ Set.Ioo (-1 : ℝ) 1) (hAfin : ν A < ⊤) :
+    MeasureTheory.Martingale (levyBandVersion hd hν hA hAsub hAfin)
+      (prmFiltration K X ν hd.measurable_count hd.measurable_point) μ := by
+  refine ⟨fun u => ?_, fun s t hst => ?_⟩
+  · exact stronglyMeasurable_levyBandVersion hd hν hA hAsub hAfin u
+  simp only [prmFiltration_apply]
+  have hband := aestronglyMeasurable_levyBandPath_band hd hA hAsub hAfin (s : ℝ) (t : ℝ)
+  set cb : Ω → ℝ := hband.mk _ with hcbdef
+  have hcb_sm : StronglyMeasurable[prmEvalSigma K X (volume.prod ν)
+      (Set.Ioc (s : ℝ) (t : ℝ) ×ˢ Set.univ)] cb := hband.stronglyMeasurable_mk
+  have hcb_ae : cb =ᵐ[μ]
+      ⇑(compensatedPoissonIntegral hd ((memLp_two_bandFun hA hAsub hAfin (s : ℝ) (t : ℝ)).toLp _)) :=
+    hband.ae_eq_mk.symm
+  -- the increment identity `Version t = Version s + cb` (a.e.)
+  have hincr : levyBandVersion hd hν hA hAsub hAfin t
+      =ᵐ[μ] levyBandVersion hd hν hA hAsub hAfin s + cb := by
+    have hlpsub :
+        ⇑(compensatedPoissonIntegral hd ((memLp_two_bandFun hA hAsub hAfin 0 (t : ℝ)).toLp _))
+          - ⇑(compensatedPoissonIntegral hd ((memLp_two_bandFun hA hAsub hAfin 0 (s : ℝ)).toLp _))
+        =ᵐ[μ] cb := by
+      refine (Lp.coeFn_sub _ _).symm.trans ?_
+      rw [compensatedBand_sub hd hA hAsub hAfin (NNReal.coe_nonneg s) (by exact_mod_cast hst)]
+      exact hcb_ae.symm
+    filter_upwards [(aestronglyMeasurable_levyBandPath_prefix hd hA hAsub hAfin t).ae_eq_mk,
+      (aestronglyMeasurable_levyBandPath_prefix hd hA hAsub hAfin s).ae_eq_mk, hlpsub]
+      with ω hVt hVs hlp
+    simp only [levyBandVersion, Pi.add_apply, Pi.sub_apply] at *
+    rw [← hVt, ← hVs, ← hlp]
+    ring
+  -- region sub-sigma-algebras and their finiteness for the conditional expectation
+  have hle_s := prmEvalSigma_le (m := volume.prod ν) hd.measurable_count hd.measurable_point
+    (Set.Iic (s : ℝ) ×ˢ Set.univ)
+  have hle_band := prmEvalSigma_le (m := volume.prod ν) hd.measurable_count hd.measurable_point
+    (Set.Ioc (s : ℝ) (t : ℝ) ×ˢ Set.univ)
+  haveI : IsFiniteMeasure (μ.trim hle_s) := isFiniteMeasure_trim hle_s
+  -- the band increment is measurable in the disjoint band region, hence independent of the past
+  have hindep : Indep (prmEvalSigma K X (volume.prod ν) (Set.Ioc (s : ℝ) (t : ℝ) ×ˢ Set.univ))
+      (prmEvalSigma K X (volume.prod ν) (Set.Iic (s : ℝ) ×ˢ Set.univ)) μ :=
+    indep_prmEvalSigma hd
+      (Set.Disjoint.set_prod_left (Set.Iic_disjoint_Ioc (le_refl (s : ℝ))).symm Set.univ Set.univ)
+  -- the band increment has mean zero
+  have hmean : (∫ ω, cb ω ∂μ) = 0 := by
+    rw [integral_congr_ae hcb_ae]
+    exact integral_compensatedPoissonIntegral hd _
+  -- the conditional expectation of the increment collapses to its (zero) mean
+  have hcb0 : μ[cb | prmEvalSigma K X (volume.prod ν) (Set.Iic (s : ℝ) ×ˢ Set.univ)] =ᵐ[μ] 0 := by
+    have hkey := condExp_indep_eq hle_band hle_s hcb_sm hindep
+    simp only [hmean] at hkey
+    exact hkey
+  -- assemble: `Version t = Version s + increment`, and both pieces resolve
+  refine (condExp_congr_ae hincr).trans ?_
+  refine (condExp_add (integrable_levyBandVersion hd hν hA hAsub hAfin s)
+    (((Lp.memLp _).integrable one_le_two).congr hcb_ae.symm) _).trans ?_
+  rw [condExp_of_stronglyMeasurable hle_s
+    (stronglyMeasurable_levyBandVersion hd hν hA hAsub hAfin s)
+    (integrable_levyBandVersion hd hν hA hAsub hAfin s)]
+  calc levyBandVersion hd hν hA hAsub hAfin s
+        + μ[cb | prmEvalSigma K X (volume.prod ν) (Set.Iic (s : ℝ) ×ˢ Set.univ)]
+      =ᵐ[μ] levyBandVersion hd hν hA hAsub hAfin s + (0 : Ω → ℝ) :=
+        EventuallyEq.add EventuallyEq.rfl hcb0
+    _ = levyBandVersion hd hν hA hAsub hAfin s := add_zero _
 
 end ProbabilityTheory
